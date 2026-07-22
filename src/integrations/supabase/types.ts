@@ -14,7 +14,176 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      attendance: {
+        Row: {
+          created_at: string
+          date: string
+          group_id: string | null
+          id: string
+          note: string | null
+          status: string
+          student_id: string
+        }
+        Insert: {
+          created_at?: string
+          date?: string
+          group_id?: string | null
+          id?: string
+          note?: string | null
+          status?: string
+          student_id: string
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          group_id?: string | null
+          id?: string
+          note?: string | null
+          status?: string
+          student_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attendance_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attendance_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      groups: {
+        Row: {
+          color: string | null
+          created_at: string
+          days: string | null
+          grade: string | null
+          id: string
+          max_students: number | null
+          name: string
+          room: string | null
+          subject: string | null
+          teacher_name: string | null
+          time: string | null
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string
+          days?: string | null
+          grade?: string | null
+          id?: string
+          max_students?: number | null
+          name: string
+          room?: string | null
+          subject?: string | null
+          teacher_name?: string | null
+          time?: string | null
+        }
+        Update: {
+          color?: string | null
+          created_at?: string
+          days?: string | null
+          grade?: string | null
+          id?: string
+          max_students?: number | null
+          name?: string
+          room?: string | null
+          subject?: string | null
+          teacher_name?: string | null
+          time?: string | null
+        }
+        Relationships: []
+      }
+      students: {
+        Row: {
+          active: boolean
+          address: string | null
+          birth_date: string | null
+          code: string
+          created_at: string
+          education_dept: string | null
+          full_name: string
+          gender: string | null
+          governorate: string | null
+          grade: string | null
+          group_id: string | null
+          id: string
+          national_id: string | null
+          notes: string | null
+          parent_phone: string | null
+          phone: string | null
+          photo_url: string | null
+          registration_date: string | null
+          school: string | null
+          section: string | null
+          subject: string | null
+          teacher_name: string | null
+        }
+        Insert: {
+          active?: boolean
+          address?: string | null
+          birth_date?: string | null
+          code?: string
+          created_at?: string
+          education_dept?: string | null
+          full_name: string
+          gender?: string | null
+          governorate?: string | null
+          grade?: string | null
+          group_id?: string | null
+          id?: string
+          national_id?: string | null
+          notes?: string | null
+          parent_phone?: string | null
+          phone?: string | null
+          photo_url?: string | null
+          registration_date?: string | null
+          school?: string | null
+          section?: string | null
+          subject?: string | null
+          teacher_name?: string | null
+        }
+        Update: {
+          active?: boolean
+          address?: string | null
+          birth_date?: string | null
+          code?: string
+          created_at?: string
+          education_dept?: string | null
+          full_name?: string
+          gender?: string | null
+          governorate?: string | null
+          grade?: string | null
+          group_id?: string | null
+          id?: string
+          national_id?: string | null
+          notes?: string | null
+          parent_phone?: string | null
+          phone?: string | null
+          photo_url?: string | null
+          registration_date?: string | null
+          school?: string | null
+          section?: string | null
+          subject?: string | null
+          teacher_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "students_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
