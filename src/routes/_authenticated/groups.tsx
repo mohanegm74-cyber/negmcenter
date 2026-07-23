@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Plus, Trash2, Boxes } from "lucide-react";
+import { Plus, Trash2, Pencil, Boxes, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/_authenticated/groups")({
@@ -9,10 +9,15 @@ export const Route = createFileRoute("/_authenticated/groups")({
   component: GroupsPage,
 });
 
-type Group = { id: string; name: string; subject: string | null; grade: string | null; teacher_name: string | null; color: string; days: string | null; time: string | null; room: string | null; max_students: number };
+type Group = {
+  id: string; name: string; subject: string | null; grade: string | null; teacher_name: string | null;
+  color: string; days: string | null; time: string | null; room: string | null; max_students: number;
+  monthly_fee: number;
+};
 
 function GroupsPage() {
   const [groups, setGroups] = useState<Group[]>([]);
+  const [editing, setEditing] = useState<Group | null>(null);
   const [open, setOpen] = useState(false);
 
   async function load() {
@@ -21,47 +26,59 @@ function GroupsPage() {
   }
   useEffect(() => { load(); }, []);
 
-  async function createGroup(e: React.FormEvent<HTMLFormElement>) {
+  async function save(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
-    const payload: any = {};
-    fd.forEach((v, k) => { const s = String(v).trim(); if (s) payload[k] = s; });
+    const payload: any = { color: "#1e40af" };
+    fd.forEach((v, k) => { const s = String(v).trim(); if (s !== "") payload[k] = s; });
     if (payload.max_students) payload.max_students = Number(payload.max_students);
-    const { error } = await supabase.from("groups").insert(payload);
+    if (payload.monthly_fee) payload.monthly_fee = Number(payload.monthly_fee);
+    const q = editing
+      ? supabase.from("groups").update(payload).eq("id", editing.id)
+      : supabase.from("groups").insert(payload);
+    const { error } = await q;
     if (error) toast.error(error.message);
-    else { toast.success("تم إنشاء المجموعة"); setOpen(false); load(); }
+    else { toast.success(editing ? "تم التعديل" : "تم إنشاء المجموعة"); setOpen(false); setEditing(null); load(); }
   }
 
   async function remove(id: string) {
-    if (!confirm("حذف هذه المجموعة؟")) return;
+    if (!confirm("حذف هذه المجموعة؟ سيتم فك ارتباط الطلاب بها.")) return;
     const { error } = await supabase.from("groups").delete().eq("id", id);
     if (error) toast.error(error.message); else { toast.success("تم الحذف"); load(); }
   }
 
+  function startEdit(g: Group) { setEditing(g); setOpen(true); }
+  function startCreate() { setEditing(null); setOpen(true); }
+
   return (
     <div>
       <div className="mb-4 flex items-center justify-between">
-        <h1 className="text-2xl font-black">المجموعات</h1>
-        <button onClick={() => setOpen(!open)} className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-primary-foreground"><Plus className="h-4 w-4" /> إنشاء مجموعة</button>
+        <h1 className="text-2xl font-black">المجموعات <span className="text-sm font-normal text-muted-foreground">({groups.length})</span></h1>
+        <button onClick={startCreate} className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-primary-foreground"><Plus className="h-4 w-4" /> إنشاء مجموعة</button>
       </div>
 
       {open && (
-        <form onSubmit={createGroup} className="mb-6 rounded-2xl bg-white p-5 shadow-sm">
+        <form key={editing?.id || "new"} onSubmit={save} className="mb-6 rounded-2xl bg-white p-5 shadow-sm">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-lg font-bold">{editing ? `تعديل: ${editing.name}` : "مجموعة جديدة"}</h2>
+            <button type="button" onClick={() => { setOpen(false); setEditing(null); }} className="rounded p-1 hover:bg-accent"><X className="h-4 w-4" /></button>
+          </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <F name="name" label="اسم المجموعة *" required />
-            <F name="subject" label="المادة" />
-            <F name="grade" label="الصف" />
-            <F name="teacher_name" label="المعلم" />
-            <F name="days" label="أيام الدراسة" placeholder="السبت، الاثنين" />
-            <F name="time" label="الميعاد" placeholder="4:00 – 6:00 م" />
-            <F name="room" label="القاعة" />
-            <F name="max_students" label="الحد الأقصى" type="number" />
+            <F name="name" label="اسم المجموعة *" required defaultValue={editing?.name} />
+            <F name="subject" label="المادة" defaultValue={editing?.subject ?? ""} />
+            <F name="grade" label="الصف" defaultValue={editing?.grade ?? ""} />
+            <F name="teacher_name" label="المعلم" defaultValue={editing?.teacher_name ?? ""} />
+            <F name="days" label="أيام الدراسة" placeholder="السبت، الاثنين" defaultValue={editing?.days ?? ""} />
+            <F name="time" label="الميعاد" placeholder="4:00 – 6:00 م" defaultValue={editing?.time ?? ""} />
+            <F name="room" label="القاعة" defaultValue={editing?.room ?? ""} />
+            <F name="max_students" label="الحد الأقصى" type="number" defaultValue={editing?.max_students ? String(editing.max_students) : ""} />
+            <F name="monthly_fee" label="الرسوم الشهرية (ج.م)" type="number" defaultValue={editing?.monthly_fee ? String(editing.monthly_fee) : ""} />
             <div>
               <label className="mb-1.5 block text-sm font-semibold">اللون</label>
-              <input type="color" name="color" defaultValue="#1e40af" className="h-[42px] w-full rounded-lg border border-input" />
+              <input type="color" name="color" defaultValue={editing?.color || "#1e40af"} className="h-[42px] w-full rounded-lg border border-input" />
             </div>
           </div>
-          <button type="submit" className="mt-4 rounded-lg bg-secondary px-5 py-2 text-sm font-bold text-secondary-foreground">حفظ</button>
+          <button type="submit" className="mt-4 rounded-lg bg-secondary px-5 py-2 text-sm font-bold text-secondary-foreground">{editing ? "تحديث" : "حفظ"}</button>
         </form>
       )}
 
@@ -74,19 +91,23 @@ function GroupsPage() {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {groups.map((g) => (
             <div key={g.id} className="rounded-2xl bg-white p-5 shadow-sm" style={{ borderInlineStartWidth: 6, borderInlineStartColor: g.color }}>
-              <div className="flex items-start justify-between">
+              <div className="flex items-start justify-between gap-2">
                 <div>
                   <h3 className="text-lg font-bold">{g.name}</h3>
                   <p className="text-xs text-muted-foreground">{g.subject || "—"} · {g.grade || "—"}</p>
                 </div>
-                <button onClick={() => remove(g.id)} className="rounded-lg p-1.5 text-destructive hover:bg-destructive/10"><Trash2 className="h-4 w-4" /></button>
+                <div className="flex gap-1">
+                  <button onClick={() => startEdit(g)} className="rounded-lg p-1.5 text-primary hover:bg-primary/10"><Pencil className="h-4 w-4" /></button>
+                  <button onClick={() => remove(g.id)} className="rounded-lg p-1.5 text-destructive hover:bg-destructive/10"><Trash2 className="h-4 w-4" /></button>
+                </div>
               </div>
               <dl className="mt-4 space-y-1 text-sm">
                 <Row k="المعلم" v={g.teacher_name} />
                 <Row k="الأيام" v={g.days} />
                 <Row k="الميعاد" v={g.time} />
                 <Row k="القاعة" v={g.room} />
-                <Row k="الحد الأقصى" v={String(g.max_students)} />
+                <Row k="الحد الأقصى" v={String(g.max_students ?? "—")} />
+                <Row k="الرسوم الشهرية" v={g.monthly_fee ? `${g.monthly_fee} ج.م` : "—"} />
               </dl>
             </div>
           ))}
@@ -96,11 +117,11 @@ function GroupsPage() {
   );
 }
 
-function F({ name, label, type = "text", required = false, placeholder }: { name: string; label: string; type?: string; required?: boolean; placeholder?: string }) {
+function F({ name, label, type = "text", required = false, placeholder, defaultValue }: { name: string; label: string; type?: string; required?: boolean; placeholder?: string; defaultValue?: string }) {
   return (
     <div>
       <label className="mb-1.5 block text-sm font-semibold">{label}</label>
-      <input name={name} type={type} required={required} placeholder={placeholder} className="w-full rounded-lg border border-input px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" />
+      <input name={name} type={type} required={required} placeholder={placeholder} defaultValue={defaultValue} className="w-full rounded-lg border border-input px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" />
     </div>
   );
 }
