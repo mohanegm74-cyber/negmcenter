@@ -67,6 +67,7 @@ export type Database = {
           grade: string | null
           id: string
           max_students: number | null
+          monthly_fee: number
           name: string
           room: string | null
           subject: string | null
@@ -80,6 +81,7 @@ export type Database = {
           grade?: string | null
           id?: string
           max_students?: number | null
+          monthly_fee?: number
           name: string
           room?: string | null
           subject?: string | null
@@ -93,6 +95,7 @@ export type Database = {
           grade?: string | null
           id?: string
           max_students?: number | null
+          monthly_fee?: number
           name?: string
           room?: string | null
           subject?: string | null
@@ -100,6 +103,143 @@ export type Database = {
           time?: string | null
         }
         Relationships: []
+      }
+      homework: {
+        Row: {
+          created_at: string
+          description: string | null
+          due_date: string | null
+          group_id: string | null
+          id: string
+          max_score: number | null
+          title: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          due_date?: string | null
+          group_id?: string | null
+          id?: string
+          max_score?: number | null
+          title: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          due_date?: string | null
+          group_id?: string | null
+          id?: string
+          max_score?: number | null
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "homework_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      homework_submissions: {
+        Row: {
+          homework_id: string
+          id: string
+          note: string | null
+          score: number | null
+          status: string
+          student_id: string
+          submitted_at: string | null
+        }
+        Insert: {
+          homework_id: string
+          id?: string
+          note?: string | null
+          score?: number | null
+          status?: string
+          student_id: string
+          submitted_at?: string | null
+        }
+        Update: {
+          homework_id?: string
+          id?: string
+          note?: string | null
+          score?: number | null
+          status?: string
+          student_id?: string
+          submitted_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "homework_submissions_homework_id_fkey"
+            columns: ["homework_id"]
+            isOneToOne: false
+            referencedRelation: "homework"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "homework_submissions_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payments: {
+        Row: {
+          amount: number
+          created_at: string
+          group_id: string | null
+          id: string
+          kind: string
+          method: string | null
+          month: string | null
+          note: string | null
+          paid_at: string
+          student_id: string
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          group_id?: string | null
+          id?: string
+          kind?: string
+          method?: string | null
+          month?: string | null
+          note?: string | null
+          paid_at?: string
+          student_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          group_id?: string | null
+          id?: string
+          kind?: string
+          method?: string | null
+          month?: string | null
+          note?: string | null
+          paid_at?: string
+          student_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payments_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payments_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       students: {
         Row: {
