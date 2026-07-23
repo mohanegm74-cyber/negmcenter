@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { toast, Toaster } from "sonner";
 import { ArrowRight, LogIn, UserPlus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { BrandLogo } from "@/components/BrandLogo";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({ meta: [{ title: "دخول الأستاذ — سنتر الأستاذ محمد نجم" }, { name: "description", content: "تسجيل دخول الأستاذ إلى لوحة التحكم." }] }),
@@ -41,7 +42,8 @@ function AuthPage() {
       <div className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6 py-10">
         <Link to="/" className="mb-6 inline-flex items-center gap-2 self-start text-sm font-semibold text-white/90 hover:text-white"><ArrowRight className="h-4 w-4" /> الرئيسية</Link>
         <div className="rounded-2xl bg-white p-8 shadow-2xl">
-          <h1 className="text-center text-2xl font-black text-primary">لوحة الأستاذ</h1>
+          <div className="flex justify-center"><BrandLogo size={88} className="!shadow-md" /></div>
+          <h1 className="mt-4 text-center text-2xl font-black text-primary">لوحة الأستاذ</h1>
           <p className="mt-1 text-center text-sm text-muted-foreground">سنتر الأستاذ محمد نجم</p>
 
           <div className="mt-6 grid grid-cols-2 rounded-lg bg-muted p-1 text-sm font-bold">
