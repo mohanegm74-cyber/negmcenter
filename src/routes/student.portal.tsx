@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import QRCode from "qrcode";
 import { ArrowRight, LogOut, CalendarCheck, XCircle, Search } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { BrandLogo } from "@/components/BrandLogo";
 
 export const Route = createFileRoute("/student/portal")({
   head: () => ({ meta: [{ title: "صفحة الطالب — سنتر الأستاذ محمد نجم" }, { name: "description", content: "بيانات الطالب، الجدول، الحضور، وكود QR." }] }),
@@ -98,11 +99,14 @@ function Portal() {
   return (
     <div className="min-h-screen bg-muted/30">
       <header className="border-b bg-white">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
+        <div className="mx-auto flex max-w-5xl items-center justify-between gap-2 px-6 py-3">
           <Link to="/" className="inline-flex items-center gap-2 text-sm font-semibold text-primary hover:underline"><ArrowRight className="h-4 w-4" /> الرئيسية</Link>
-          <div className="text-center">
-            <h1 className="text-lg font-bold">{student.full_name}</h1>
-            <p className="font-mono text-xs text-muted-foreground">{student.code}</p>
+          <div className="flex items-center gap-3 text-center">
+            <BrandLogo size={44} className="!shadow-none" />
+            <div>
+              <h1 className="text-lg font-bold">{student.full_name}</h1>
+              <p className="font-mono text-xs text-muted-foreground">{student.code}</p>
+            </div>
           </div>
           <button onClick={logout} className="inline-flex items-center gap-1.5 rounded-lg border border-input px-3 py-1.5 text-sm hover:bg-accent"><LogOut className="h-4 w-4" /> خروج</button>
         </div>
