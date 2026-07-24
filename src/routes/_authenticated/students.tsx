@@ -24,6 +24,32 @@ function StudentsPage() {
   const [gradeFilter, setGradeFilter] = useState("");
   const [groupFilter, setGroupFilter] = useState("");
   const [editing, setEditing] = useState<Student | null>(null);
+  const [notesFor, setNotesFor] = useState<Student | null>(null);
+  const [notes, setNotes] = useState<{ id: string; title: string | null; body: string; created_at: string }[]>([]);
+
+  async function loadNotes(id: string) {
+    const { data } = await supabase.from("student_notes").select("*").eq("student_id", id).order("created_at", { ascending: false });
+    setNotes((data as any[]) || []);
+  }
+  async function addNote(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!notesFor) return;
+    const fd = new FormData(e.currentTarget);
+    const body = String(fd.get("body") || "").trim();
+    if (!body) return;
+    const { error } = await supabase.from("student_notes").insert({
+      student_id: notesFor.id,
+      title: String(fd.get("title") || "").trim() || null,
+      body,
+    });
+    if (error) toast.error(error.message);
+    else { toast.success("تم حفظ الملاحظة"); (e.target as HTMLFormElement).reset(); loadNotes(notesFor.id); }
+  }
+  async function delNote(id: string) {
+    if (!confirm("حذف الملاحظة؟")) return;
+    const { error } = await supabase.from("student_notes").delete().eq("id", id);
+    if (error) toast.error(error.message); else { if (notesFor) loadNotes(notesFor.id); }
+  }
 
   async function load() {
     const [{ data: s }, { data: g }] = await Promise.all([
