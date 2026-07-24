@@ -209,6 +209,26 @@ function FinancePage() {
 
       <div className="mt-6 rounded-2xl bg-white p-4 shadow-sm">
         <h2 className="mb-3 text-lg font-bold">آخر الحركات</h2>
+        {editing && (
+          <form onSubmit={saveEdit} className="mb-3 rounded-xl border bg-muted/10 p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <div className="text-xs text-muted-foreground">تعديل الحركة</div>
+              <button type="button" onClick={() => setEditing(null)} className="rounded p-1 hover:bg-accent"><X className="h-4 w-4" /></button>
+            </div>
+            <div className="grid grid-cols-2 gap-2 md:grid-cols-6">
+              <select name="kind" defaultValue={editing.kind} className="rounded-lg border border-input bg-white px-3 py-2 text-sm">
+                <option value="payment">مدفوع</option>
+                <option value="charge">رسم / مستحق</option>
+              </select>
+              <input name="amount" type="number" step="0.01" defaultValue={editing.amount} required className="rounded-lg border border-input px-3 py-2 text-sm" />
+              <input name="method" defaultValue={editing.method || ""} placeholder="طريقة الدفع" className="rounded-lg border border-input px-3 py-2 text-sm" />
+              <input name="month" defaultValue={editing.month || ""} placeholder="الشهر" className="rounded-lg border border-input px-3 py-2 text-sm" />
+              <input name="paid_at" type="date" defaultValue={editing.paid_at} className="rounded-lg border border-input px-3 py-2 text-sm" />
+              <input name="note" defaultValue={editing.note || ""} placeholder="ملاحظة" className="rounded-lg border border-input px-3 py-2 text-sm" />
+            </div>
+            <button type="submit" className="mt-2 inline-flex items-center gap-1 rounded-lg bg-primary px-4 py-1.5 text-sm font-bold text-primary-foreground"><Save className="h-3.5 w-3.5" /> حفظ التعديل</button>
+          </form>
+        )}
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-muted/50 text-right"><tr><th className="p-2">التاريخ</th><th className="p-2">الطالب</th><th className="p-2">النوع</th><th className="p-2">المبلغ</th><th className="p-2">الشهر</th><th className="p-2">ملاحظة</th><th className="p-2"></th></tr></thead>
@@ -223,7 +243,12 @@ function FinancePage() {
                     <td className="p-2 font-bold">{Number(p.amount).toLocaleString("ar-EG")}</td>
                     <td className="p-2">{p.month || "—"}</td>
                     <td className="p-2">{p.note || "—"}</td>
-                    <td className="p-2 text-left"><button onClick={() => remove(p.id)} className="rounded p-1 text-destructive hover:bg-destructive/10"><Trash2 className="h-3.5 w-3.5" /></button></td>
+                    <td className="p-2 text-left">
+                      <div className="flex justify-end gap-1">
+                        <button onClick={() => setEditing(p)} className="rounded p-1 text-primary hover:bg-primary/10"><Pencil className="h-3.5 w-3.5" /></button>
+                        <button onClick={() => remove(p.id)} className="rounded p-1 text-destructive hover:bg-destructive/10"><Trash2 className="h-3.5 w-3.5" /></button>
+                      </div>
+                    </td>
                   </tr>
                 );
               })}
