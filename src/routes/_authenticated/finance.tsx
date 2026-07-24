@@ -24,6 +24,24 @@ function FinancePage() {
   const [groupFilter, setGroupFilter] = useState("");
   const [month, setMonth] = useState(currentMonth());
   const [addingFor, setAddingFor] = useState<Student | null>(null);
+  const [editing, setEditing] = useState<Payment | null>(null);
+
+  async function saveEdit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!editing) return;
+    const fd = new FormData(e.currentTarget);
+    const payload: any = {
+      amount: Number(fd.get("amount")),
+      kind: String(fd.get("kind")),
+      method: String(fd.get("method") || "") || null,
+      note: String(fd.get("note") || "") || null,
+      month: String(fd.get("month") || "") || null,
+      paid_at: String(fd.get("paid_at")),
+    };
+    const { error } = await supabase.from("payments").update(payload).eq("id", editing.id);
+    if (error) toast.error(error.message);
+    else { toast.success("تم التحديث"); setEditing(null); load(); }
+  }
 
   async function load() {
     const [s, g, p] = await Promise.all([
