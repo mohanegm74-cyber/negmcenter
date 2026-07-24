@@ -144,6 +144,7 @@ export type Database = {
       }
       homework_submissions: {
         Row: {
+          file_url: string | null
           homework_id: string
           id: string
           note: string | null
@@ -153,6 +154,7 @@ export type Database = {
           submitted_at: string | null
         }
         Insert: {
+          file_url?: string | null
           homework_id: string
           id?: string
           note?: string | null
@@ -162,6 +164,7 @@ export type Database = {
           submitted_at?: string | null
         }
         Update: {
+          file_url?: string | null
           homework_id?: string
           id?: string
           note?: string | null
@@ -240,6 +243,60 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      questions: {
+        Row: {
+          answer: string | null
+          answered_at: string | null
+          body: string
+          created_at: string
+          id: string
+          is_read: boolean
+          student_id: string
+        }
+        Insert: {
+          answer?: string | null
+          answered_at?: string | null
+          body: string
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          student_id: string
+        }
+        Update: {
+          answer?: string | null
+          answered_at?: string | null
+          body?: string
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          student_id?: string
+        }
+        Relationships: []
+      }
+      student_notes: {
+        Row: {
+          body: string
+          created_at: string
+          id: string
+          student_id: string
+          title: string | null
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          id?: string
+          student_id: string
+          title?: string | null
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          id?: string
+          student_id?: string
+          title?: string | null
+        }
+        Relationships: []
       }
       students: {
         Row: {

@@ -1,7 +1,7 @@
 import { createFileRoute, Outlet, Link, redirect, useNavigate, useRouterState } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { LayoutDashboard, Users, Boxes, ClipboardCheck, ScanLine, LogOut, Home, Wallet, BookOpen, FileBarChart, IdCard, Award } from "lucide-react";
+import { LayoutDashboard, Users, Boxes, ClipboardCheck, ScanLine, LogOut, Home, Wallet, BookOpen, FileBarChart, IdCard, Award, MessageCircleQuestion } from "lucide-react";
 import { Toaster } from "sonner";
 import { BrandLogo } from "@/components/BrandLogo";
 
@@ -22,6 +22,7 @@ const NAV = [
   { to: "/scan", label: "مسح QR", icon: ScanLine },
   { to: "/finance", label: "الماليات", icon: Wallet },
   { to: "/homework", label: "الواجبات", icon: BookOpen },
+  { to: "/questions", label: "أسئلة الطلاب", icon: MessageCircleQuestion },
   { to: "/reports", label: "التقارير", icon: FileBarChart },
   { to: "/cards", label: "كروت الطلاب", icon: IdCard },
   { to: "/certificates", label: "شهادات التقدير", icon: Award },
@@ -30,6 +31,7 @@ const NAV = [
 function TeacherShell() {
   const navigate = useNavigate();
   const path = useRouterState({ select: (s) => s.location.pathname });
+  const [unread, setUnread] = useState(0);
 
   useEffect(() => {
     const { data } = supabase.auth.onAuthStateChange((event) => {
@@ -37,6 +39,18 @@ function TeacherShell() {
     });
     return () => data.subscription.unsubscribe();
   }, [navigate]);
+
+  useEffect(() => {
+    let alive = true;
+    async function load() {
+      const { count } = await supabase.from("questions").select("id", { count: "exact", head: true }).eq("is_read", false);
+      if (alive) setUnread(count || 0);
+    }
+    load();
+    const ch = supabase.channel("q-unread").on("postgres_changes", { event: "*", schema: "public", table: "questions" }, load).subscribe();
+    const t = setInterval(load, 30000);
+    return () => { alive = false; supabase.removeChannel(ch); clearInterval(t); };
+  }, []);
 
   async function signOut() { await supabase.auth.signOut(); navigate({ to: "/auth" }); }
 
@@ -60,9 +74,11 @@ function TeacherShell() {
         <nav className="mx-auto flex max-w-7xl gap-1 overflow-x-auto px-4 pb-2">
           {NAV.map(({ to, label, icon: Icon }) => {
             const active = path === to;
+            const badge = to === "/questions" && unread > 0;
             return (
-              <Link key={to} to={to} className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold transition ${active ? "bg-primary text-primary-foreground shadow" : "text-foreground hover:bg-accent"}`}>
+              <Link key={to} to={to} className={`relative inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold transition ${active ? "bg-primary text-primary-foreground shadow" : "text-foreground hover:bg-accent"}`}>
                 <Icon className="h-4 w-4" /> {label}
+                {badge && <span className="absolute -top-1 -left-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground">{unread}</span>}
               </Link>
             );
           })}

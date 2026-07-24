@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Search, Trash2, Pencil, Users, X, Printer } from "lucide-react";
+import { Search, Trash2, Pencil, Users, X, Printer, StickyNote } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { openPrint, esc } from "@/lib/print";
 
@@ -24,6 +24,32 @@ function StudentsPage() {
   const [gradeFilter, setGradeFilter] = useState("");
   const [groupFilter, setGroupFilter] = useState("");
   const [editing, setEditing] = useState<Student | null>(null);
+  const [notesFor, setNotesFor] = useState<Student | null>(null);
+  const [notes, setNotes] = useState<{ id: string; title: string | null; body: string; created_at: string }[]>([]);
+
+  async function loadNotes(id: string) {
+    const { data } = await supabase.from("student_notes").select("*").eq("student_id", id).order("created_at", { ascending: false });
+    setNotes((data as any[]) || []);
+  }
+  async function addNote(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!notesFor) return;
+    const fd = new FormData(e.currentTarget);
+    const body = String(fd.get("body") || "").trim();
+    if (!body) return;
+    const { error } = await supabase.from("student_notes").insert({
+      student_id: notesFor.id,
+      title: String(fd.get("title") || "").trim() || null,
+      body,
+    });
+    if (error) toast.error(error.message);
+    else { toast.success("تم حفظ الملاحظة"); (e.target as HTMLFormElement).reset(); loadNotes(notesFor.id); }
+  }
+  async function delNote(id: string) {
+    if (!confirm("حذف الملاحظة؟")) return;
+    const { error } = await supabase.from("student_notes").delete().eq("id", id);
+    if (error) toast.error(error.message); else { if (notesFor) loadNotes(notesFor.id); }
+  }
 
   async function load() {
     const [{ data: s }, { data: g }] = await Promise.all([
@@ -142,6 +168,7 @@ function StudentsPage() {
                   <th className="p-3">الاسم</th>
                   <th className="p-3">الكود</th>
                   <th className="p-3">الصف</th>
+                  <th className="p-3">الشعبة</th>
                   <th className="p-3">الهاتف</th>
                   <th className="p-3">ولي الأمر</th>
                   <th className="p-3">المجموعة</th>
@@ -155,6 +182,11 @@ function StudentsPage() {
                     <td className="p-3 font-semibold">{s.full_name}</td>
                     <td className="p-3 font-mono text-xs">{s.code}</td>
                     <td className="p-3">{s.grade || "—"}</td>
+                    <td className="p-3">
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${s.section ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>
+                        {s.section || "—"}
+                      </span>
+                    </td>
                     <td className="p-3" dir="ltr">{s.phone || "—"}</td>
                     <td className="p-3" dir="ltr">{s.parent_phone || "—"}</td>
                     <td className="p-3">
@@ -170,6 +202,7 @@ function StudentsPage() {
                     </td>
                     <td className="p-3 text-left">
                       <div className="flex justify-end gap-1">
+                        <button title="ملاحظات لولي الأمر" onClick={() => { setNotesFor(s); loadNotes(s.id); }} className="rounded-lg p-1.5 text-gold hover:bg-gold/10"><StickyNote className="h-4 w-4" /></button>
                         <button onClick={() => setEditing(s)} className="rounded-lg p-1.5 text-primary hover:bg-primary/10"><Pencil className="h-4 w-4" /></button>
                         <button onClick={() => remove(s.id)} className="rounded-lg p-1.5 text-destructive hover:bg-destructive/10"><Trash2 className="h-4 w-4" /></button>
                       </div>
@@ -178,6 +211,41 @@ function StudentsPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {notesFor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setNotesFor(null)}>
+          <div className="max-h-[85vh] w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b p-4">
+              <h2 className="text-lg font-bold flex items-center gap-2"><StickyNote className="h-5 w-5 text-gold" /> ملاحظات {notesFor.full_name}</h2>
+              <button onClick={() => setNotesFor(null)} className="rounded p-1 hover:bg-accent"><X className="h-5 w-5" /></button>
+            </div>
+            <div className="max-h-[70vh] overflow-y-auto p-4">
+              <form onSubmit={addNote} className="mb-4 rounded-xl border bg-muted/10 p-3">
+                <div className="text-xs text-muted-foreground mb-2">ستظهر هذه الملاحظة في صفحة الطالب لمتابعة ولي الأمر.</div>
+                <input name="title" placeholder="عنوان (اختياري)" className="mb-2 w-full rounded-lg border border-input px-3 py-2 text-sm" />
+                <textarea name="body" rows={3} required placeholder="اكتب الملاحظة..." className="w-full rounded-lg border border-input px-3 py-2 text-sm" />
+                <button type="submit" className="mt-2 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-primary-foreground">إضافة ملاحظة</button>
+              </form>
+              {notes.length === 0 ? <p className="text-center text-sm text-muted-foreground">لا توجد ملاحظات.</p> : (
+                <div className="space-y-2">
+                  {notes.map(n => (
+                    <div key={n.id} className="rounded-xl border-r-4 border-r-primary bg-muted/10 p-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1">
+                          {n.title && <div className="font-bold text-primary">{n.title}</div>}
+                          <p className="whitespace-pre-wrap text-sm">{n.body}</p>
+                          <div className="mt-1 text-xs text-muted-foreground">{new Date(n.created_at).toLocaleString("ar-EG")}</div>
+                        </div>
+                        <button onClick={() => delNote(n.id)} className="rounded p-1 text-destructive hover:bg-destructive/10"><Trash2 className="h-4 w-4" /></button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
