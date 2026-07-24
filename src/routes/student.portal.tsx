@@ -54,7 +54,7 @@ function Portal() {
     if (e1 || !s) { setError("لم يتم العثور على الطالب"); return; }
     setStudent(s as Student);
 
-    const promises: Promise<any>[] = [
+    const promises: any[] = [
       supabase.from("attendance").select("id,date,status").eq("student_id", s.id).order("date", { ascending: false }).limit(100),
       supabase.from("homework_submissions").select("*").eq("student_id", s.id),
       supabase.from("payments").select("*").eq("student_id", s.id).order("paid_at", { ascending: false }),

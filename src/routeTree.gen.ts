@@ -17,6 +17,7 @@ import { Route as StudentPortalRouteImport } from './routes/student.portal'
 import { Route as AuthenticatedStudentsRouteImport } from './routes/_authenticated/students'
 import { Route as AuthenticatedScanRouteImport } from './routes/_authenticated/scan'
 import { Route as AuthenticatedReportsRouteImport } from './routes/_authenticated/reports'
+import { Route as AuthenticatedQuestionsRouteImport } from './routes/_authenticated/questions'
 import { Route as AuthenticatedHomeworkRouteImport } from './routes/_authenticated/homework'
 import { Route as AuthenticatedGroupsRouteImport } from './routes/_authenticated/groups'
 import { Route as AuthenticatedFinanceRouteImport } from './routes/_authenticated/finance'
@@ -62,6 +63,11 @@ const AuthenticatedScanRoute = AuthenticatedScanRouteImport.update({
 const AuthenticatedReportsRoute = AuthenticatedReportsRouteImport.update({
   id: '/reports',
   path: '/reports',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedQuestionsRoute = AuthenticatedQuestionsRouteImport.update({
+  id: '/questions',
+  path: '/questions',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedHomeworkRoute = AuthenticatedHomeworkRouteImport.update({
@@ -111,6 +117,7 @@ export interface FileRoutesByFullPath {
   '/finance': typeof AuthenticatedFinanceRoute
   '/groups': typeof AuthenticatedGroupsRoute
   '/homework': typeof AuthenticatedHomeworkRoute
+  '/questions': typeof AuthenticatedQuestionsRoute
   '/reports': typeof AuthenticatedReportsRoute
   '/scan': typeof AuthenticatedScanRoute
   '/students': typeof AuthenticatedStudentsRoute
@@ -127,6 +134,7 @@ export interface FileRoutesByTo {
   '/finance': typeof AuthenticatedFinanceRoute
   '/groups': typeof AuthenticatedGroupsRoute
   '/homework': typeof AuthenticatedHomeworkRoute
+  '/questions': typeof AuthenticatedQuestionsRoute
   '/reports': typeof AuthenticatedReportsRoute
   '/scan': typeof AuthenticatedScanRoute
   '/students': typeof AuthenticatedStudentsRoute
@@ -145,6 +153,7 @@ export interface FileRoutesById {
   '/_authenticated/finance': typeof AuthenticatedFinanceRoute
   '/_authenticated/groups': typeof AuthenticatedGroupsRoute
   '/_authenticated/homework': typeof AuthenticatedHomeworkRoute
+  '/_authenticated/questions': typeof AuthenticatedQuestionsRoute
   '/_authenticated/reports': typeof AuthenticatedReportsRoute
   '/_authenticated/scan': typeof AuthenticatedScanRoute
   '/_authenticated/students': typeof AuthenticatedStudentsRoute
@@ -163,6 +172,7 @@ export interface FileRouteTypes {
     | '/finance'
     | '/groups'
     | '/homework'
+    | '/questions'
     | '/reports'
     | '/scan'
     | '/students'
@@ -179,6 +189,7 @@ export interface FileRouteTypes {
     | '/finance'
     | '/groups'
     | '/homework'
+    | '/questions'
     | '/reports'
     | '/scan'
     | '/students'
@@ -196,6 +207,7 @@ export interface FileRouteTypes {
     | '/_authenticated/finance'
     | '/_authenticated/groups'
     | '/_authenticated/homework'
+    | '/_authenticated/questions'
     | '/_authenticated/reports'
     | '/_authenticated/scan'
     | '/_authenticated/students'
@@ -269,6 +281,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedReportsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/questions': {
+      id: '/_authenticated/questions'
+      path: '/questions'
+      fullPath: '/questions'
+      preLoaderRoute: typeof AuthenticatedQuestionsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/homework': {
       id: '/_authenticated/homework'
       path: '/homework'
@@ -329,6 +348,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedFinanceRoute: typeof AuthenticatedFinanceRoute
   AuthenticatedGroupsRoute: typeof AuthenticatedGroupsRoute
   AuthenticatedHomeworkRoute: typeof AuthenticatedHomeworkRoute
+  AuthenticatedQuestionsRoute: typeof AuthenticatedQuestionsRoute
   AuthenticatedReportsRoute: typeof AuthenticatedReportsRoute
   AuthenticatedScanRoute: typeof AuthenticatedScanRoute
   AuthenticatedStudentsRoute: typeof AuthenticatedStudentsRoute
@@ -342,6 +362,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedFinanceRoute: AuthenticatedFinanceRoute,
   AuthenticatedGroupsRoute: AuthenticatedGroupsRoute,
   AuthenticatedHomeworkRoute: AuthenticatedHomeworkRoute,
+  AuthenticatedQuestionsRoute: AuthenticatedQuestionsRoute,
   AuthenticatedReportsRoute: AuthenticatedReportsRoute,
   AuthenticatedScanRoute: AuthenticatedScanRoute,
   AuthenticatedStudentsRoute: AuthenticatedStudentsRoute,
