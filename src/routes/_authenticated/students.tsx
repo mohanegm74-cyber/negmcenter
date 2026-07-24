@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Search, Trash2, Pencil, Users, X, Printer } from "lucide-react";
+import { Search, Trash2, Pencil, Users, X, Printer, StickyNote } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { openPrint, esc } from "@/lib/print";
 
