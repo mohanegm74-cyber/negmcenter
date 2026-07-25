@@ -17,7 +17,7 @@ type Student = { id: string; code: string; full_name: string; grade: string | nu
 type Group = { id: string; name: string; days: string | null; time: string | null; room: string | null; teacher_name: string | null; color: string | null; monthly_fee: number };
 type Att = { id: string; date: string; status: string };
 type HW = { id: string; group_id: string | null; title: string; description: string | null; due_date: string | null; max_score: number };
-type Sub = { id: string; homework_id: string; student_id: string; score: number | null; status: string; note: string | null; file_url: string | null };
+type Sub = { id: string; homework_id: string; student_id: string; score: number | null; status: string; note: string | null; file_url: string | null; answer_text: string | null };
 type Payment = { id: string; amount: number; kind: string; method: string | null; note: string | null; month: string | null; paid_at: string };
 type Note = { id: string; title: string | null; body: string; created_at: string };
 type Q = { id: string; body: string; answer: string | null; created_at: string; answered_at: string | null };
@@ -324,6 +324,8 @@ function Portal() {
 
 function HomeworkTab({ student, homework, subs, reload }: { student: Student; homework: HW[]; subs: Sub[]; reload: () => void }) {
   const [uploading, setUploading] = useState<string | null>(null);
+  const [savingText, setSavingText] = useState<string | null>(null);
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
 
   async function upload(hw: HW, file: File) {
     setUploading(hw.id);
@@ -340,6 +342,23 @@ function HomeworkTab({ student, homework, subs, reload }: { student: Student; ho
       reload();
     } catch (err: any) { toast.error(err.message || "فشل الرفع"); }
     finally { setUploading(null); }
+  }
+
+  async function saveText(hw: HW) {
+    const text = (drafts[hw.id] ?? "").trim();
+    if (!text) { toast.error("اكتب حل الواجب أو ملاحظتك أولاً"); return; }
+    setSavingText(hw.id);
+    try {
+      const existing = subs.find(x => x.homework_id === hw.id && x.student_id === student.id);
+      const body: any = { homework_id: hw.id, student_id: student.id, answer_text: text, status: "submitted" };
+      if (existing) body.id = existing.id;
+      const { error } = await supabase.from("homework_submissions").upsert(body, { onConflict: "homework_id,student_id" });
+      if (error) throw error;
+      toast.success("تم إرسال حلك للأستاذ");
+      setDrafts(d => ({ ...d, [hw.id]: "" }));
+      reload();
+    } catch (err: any) { toast.error(err.message || "فشل الحفظ"); }
+    finally { setSavingText(null); }
   }
 
   async function viewFile(path: string) {
@@ -364,13 +383,38 @@ function HomeworkTab({ student, homework, subs, reload }: { student: Student; ho
                 </div>
                 {hw.description && <p className="mt-1 text-sm text-muted-foreground">{hw.description}</p>}
                 {hw.due_date && <p className="mt-1 text-xs text-muted-foreground">تاريخ التسليم: {hw.due_date}</p>}
+
+                <div className="mt-3 space-y-2">
+                  <label className="block text-xs font-bold text-primary">اكتب حلك أو ملاحظتك للأستاذ</label>
+                  <textarea
+                    rows={3}
+                    value={drafts[hw.id] ?? sub?.answer_text ?? ""}
+                    onChange={e => setDrafts(d => ({ ...d, [hw.id]: e.target.value }))}
+                    placeholder="اكتب هنا حل الواجب أو ملاحظاتك للأستاذ..."
+                    className="w-full rounded-lg border border-input bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                  />
+                  <button
+                    onClick={() => saveText(hw)}
+                    disabled={savingText === hw.id}
+                    className="inline-flex items-center gap-1 rounded-lg bg-secondary px-3 py-1.5 text-xs font-bold text-secondary-foreground disabled:opacity-50"
+                  >
+                    {savingText === hw.id ? "جارٍ الإرسال..." : "إرسال الحل النصي"}
+                  </button>
+                </div>
+
                 <div className="mt-3 flex items-center gap-2">
                   <label className={`inline-flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-xs font-bold text-primary-foreground ${uploading === hw.id ? "opacity-50" : ""}`}>
-                    <Upload className="h-4 w-4" /> {uploading === hw.id ? "جارٍ الرفع..." : sub?.file_url ? "استبدال الحل" : "رفع حل الواجب"}
+                    <Upload className="h-4 w-4" /> {uploading === hw.id ? "جارٍ الرفع..." : sub?.file_url ? "استبدال الصورة" : "أو ارفع صورة الحل"}
                     <input type="file" accept="image/*,application/pdf" className="hidden" disabled={uploading === hw.id} onChange={e => { const f = e.target.files?.[0]; if (f) upload(hw, f); }} />
                   </label>
                   {sub?.file_url && <button onClick={() => viewFile(sub.file_url!)} className="rounded-lg bg-muted px-3 py-2 text-xs font-bold">عرض حلي</button>}
                 </div>
+
+                {sub?.answer_text && !drafts[hw.id] && (
+                  <div className="mt-2 rounded-lg bg-primary/5 p-2 text-xs">
+                    <b>حلك المُرسَل:</b> <span className="whitespace-pre-wrap">{sub.answer_text}</span>
+                  </div>
+                )}
                 {sub?.note && <div className="mt-2 rounded-lg bg-gold/10 p-2 text-xs"><b>ملاحظة الأستاذ:</b> {sub.note}</div>}
               </div>
             );
@@ -380,6 +424,7 @@ function HomeworkTab({ student, homework, subs, reload }: { student: Student; ho
     </section>
   );
 }
+
 
 function AskTab({ studentId, questions, reload }: { studentId: string; questions: Q[]; reload: () => void }) {
   const [body, setBody] = useState("");
@@ -500,7 +545,16 @@ function EditTab({ student, reload }: { student: Student; reload: () => void }) 
         <F name="phone" label="الهاتف" defaultValue={student.phone ?? ""} />
         <F name="parent_phone" label="هاتف ولي الأمر" defaultValue={student.parent_phone ?? ""} />
         <F name="school" label="المدرسة" defaultValue={student.school ?? ""} />
-        <F name="section" label="الشعبة" defaultValue={student.section ?? ""} />
+        <div>
+          <label className="mb-1.5 block text-sm font-semibold">الشعبة</label>
+          <select name="section" defaultValue={student.section ?? ""} className="w-full rounded-lg border border-input bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring">
+            <option value="">—</option>
+            <option value="عام">عام</option>
+            <option value="خاص فردي">خاص فردي</option>
+            <option value="خاص بالاشتراك">خاص بالاشتراك</option>
+          </select>
+        </div>
+
         <F name="address" label="العنوان" defaultValue={student.address ?? ""} />
         <div className="sm:col-span-2">
           <button disabled={saving} type="submit" className="rounded-lg bg-primary px-5 py-2 text-sm font-bold text-primary-foreground disabled:opacity-50">{saving ? "جارٍ الحفظ..." : "حفظ التعديلات"}</button>
