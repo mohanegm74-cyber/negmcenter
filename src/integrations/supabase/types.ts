@@ -144,6 +144,7 @@ export type Database = {
       }
       homework_submissions: {
         Row: {
+          answer_text: string | null
           file_url: string | null
           homework_id: string
           id: string
@@ -154,6 +155,7 @@ export type Database = {
           submitted_at: string | null
         }
         Insert: {
+          answer_text?: string | null
           file_url?: string | null
           homework_id: string
           id?: string
@@ -164,6 +166,7 @@ export type Database = {
           submitted_at?: string | null
         }
         Update: {
+          answer_text?: string | null
           file_url?: string | null
           homework_id?: string
           id?: string

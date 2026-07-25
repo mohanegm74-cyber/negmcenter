@@ -1,0 +1,1 @@
+ALTER TABLE public.homework_submissions ADD COLUMN IF NOT EXISTS answer_text text;
