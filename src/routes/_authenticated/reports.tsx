@@ -1,8 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { Printer, FileBarChart } from "lucide-react";
+import { Printer, FileBarChart, Sparkles, X } from "lucide-react";
+import { toast } from "sonner";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { openPrint, esc } from "@/lib/print";
+import { generateCenterReport } from "@/lib/ai-report.functions";
+
 
 export const Route = createFileRoute("/_authenticated/reports")({
   head: () => ({ meta: [{ title: "التقارير — الأستاذ" }, { name: "description", content: "تقارير شاملة مصنفة حسب الصف والمجموعة." }] }),
@@ -111,17 +115,82 @@ function ReportsPage() {
     }
   }
 
+  const [aiOpen, setAiOpen] = useState(false);
+  const [aiText, setAiText] = useState<string | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const genCenter = useServerFn(generateCenterReport);
+
+  async function runCenterAI() {
+    setAiOpen(true); setAiLoading(true); setAiText(null);
+    try {
+      const income = pay.filter(p => p.kind === "payment").reduce((a, b) => a + Number(b.amount), 0);
+      const dues = pay.filter(p => p.kind === "charge").reduce((a, b) => a + Number(b.amount), 0);
+      const topAbsent = attReport.filter(r => r.absent > 0).slice(0, 10).map(r => ({ name: r.student.full_name, absent: r.absent }));
+      const r = await genCenter({ data: {
+        totals: { students: students.length, groups: groups.length, income, dues, outstanding: Math.max(0, dues - income) },
+        attendance: {
+          present: att.filter(a => a.status === "present").length,
+          absent: att.filter(a => a.status === "absent").length,
+          late: att.filter(a => a.status === "late").length,
+        },
+        topAbsent,
+        gradeStats: byGrade.map(g => ({ grade: g.grade, students: g.students, present: g.present, absent: g.absent })),
+        groupStats: byGroup.map(g => ({ group: g.group.name, students: g.students, income: g.income, dues: g.dues })),
+      }});
+      setAiText(r.text);
+    } catch (e: any) { toast.error(e.message || "فشل التحليل"); setAiOpen(false); }
+    finally { setAiLoading(false); }
+  }
+
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-black flex items-center gap-2"><FileBarChart className="h-6 w-6 text-primary" /> التقارير</h1>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="rounded-lg border border-input bg-white px-3 py-2 text-sm" />
           <span className="text-sm text-muted-foreground">إلى</span>
           <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="rounded-lg border border-input bg-white px-3 py-2 text-sm" />
+          <button onClick={runCenterAI} className="inline-flex items-center gap-1 rounded-lg bg-gold px-3 py-2 text-sm font-bold text-gold-foreground"><Sparkles className="h-4 w-4" /> تقرير AI شامل</button>
           <button onClick={printCurrent} className="inline-flex items-center gap-1 rounded-lg bg-primary px-3 py-2 text-sm font-bold text-primary-foreground"><Printer className="h-4 w-4" /> طباعة</button>
         </div>
       </div>
+
+      {aiOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setAiOpen(false)}>
+          <div className="max-h-[85vh] w-full max-w-3xl overflow-hidden rounded-2xl bg-white shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b p-4">
+              <h2 className="text-lg font-bold flex items-center gap-2"><Sparkles className="h-5 w-5 text-gold" /> تقرير الذكاء الاصطناعي — السنتر</h2>
+              <button onClick={() => setAiOpen(false)} className="rounded p-1 hover:bg-accent"><X className="h-5 w-5" /></button>
+            </div>
+            <div className="max-h-[70vh] overflow-y-auto p-5">
+              {aiLoading ? <p className="text-center text-muted-foreground">جارٍ التحليل والتوليد...</p> :
+                aiText ? <div className="whitespace-pre-wrap text-sm leading-loose">{aiText}</div> : null}
+              {aiText && (
+                <button
+                  onClick={() => {
+                    const w = window.open("", "_blank"); if (!w) return;
+                    w.document.write(`<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/><title>تقرير السنتر</title>
+                      <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet">
+                      <style>body{font-family:'Cairo',sans-serif;padding:40px;max-width:800px;margin:auto;line-height:1.9;color:#0f172a}
+                      h1{color:#1e3a8a;border-bottom:3px double #c9a227;padding-bottom:10px}
+                      .body{white-space:pre-wrap;font-size:15px}
+                      button{background:#1e3a8a;color:#fff;border:0;padding:8px 16px;border-radius:8px;font-family:inherit;font-weight:700;cursor:pointer}
+                      @media print{button{display:none}}
+                      </style></head><body>
+                      <button onclick="window.print()">🖨️ طباعة / حفظ PDF</button>
+                      <h1>تقرير الذكاء الاصطناعي — سنتر الأستاذ محمد نجم</h1>
+                      <div class="body">${aiText.replace(/</g, "&lt;")}</div>
+                      </body></html>`);
+                    w.document.close();
+                  }}
+                  className="mt-4 rounded-lg bg-gold px-4 py-2 text-sm font-bold text-gold-foreground"
+                >طباعة / PDF</button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
 
       <div className="mb-4 flex gap-2 rounded-2xl bg-white p-1.5 shadow-sm">
         {(["grade", "group", "attendance"] as const).map(t => (

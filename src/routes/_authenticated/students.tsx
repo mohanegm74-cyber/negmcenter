@@ -1,9 +1,12 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Search, Trash2, Pencil, Users, X, Printer, StickyNote } from "lucide-react";
+import { Search, Trash2, Pencil, Users, X, Printer, StickyNote, Sparkles } from "lucide-react";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { openPrint, esc } from "@/lib/print";
+import { generateStudentReport } from "@/lib/ai-report.functions";
+
 
 export const Route = createFileRoute("/_authenticated/students")({
   head: () => ({ meta: [{ title: "الطلاب — الأستاذ" }, { name: "description", content: "إدارة طلاب السنتر." }] }),
@@ -26,6 +29,49 @@ function StudentsPage() {
   const [editing, setEditing] = useState<Student | null>(null);
   const [notesFor, setNotesFor] = useState<Student | null>(null);
   const [notes, setNotes] = useState<{ id: string; title: string | null; body: string; created_at: string }[]>([]);
+  const [aiFor, setAiFor] = useState<Student | null>(null);
+  const [aiText, setAiText] = useState<string | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const genReport = useServerFn(generateStudentReport);
+
+  async function runAI(s: Student) {
+    setAiFor(s); setAiText(null); setAiLoading(true);
+    try {
+      const [att, hw, subs, pays, sNotes, grp] = await Promise.all([
+        supabase.from("attendance").select("status").eq("student_id", s.id),
+        s.group_id ? supabase.from("homework").select("id,title,max_score").eq("group_id", s.group_id) : Promise.resolve({ data: [] as any[] }),
+        supabase.from("homework_submissions").select("homework_id,score,status").eq("student_id", s.id),
+        supabase.from("payments").select("amount,kind").eq("student_id", s.id),
+        supabase.from("student_notes").select("body").eq("student_id", s.id),
+        s.group_id ? supabase.from("groups").select("name,monthly_fee").eq("id", s.group_id).maybeSingle() : Promise.resolve({ data: null as any }),
+      ]);
+      const a = (att.data as any[]) || [];
+      const hwList = (hw.data as any[]) || [];
+      const subList = (subs.data as any[]) || [];
+      const payList = (pays.data as any[]) || [];
+      const paid = payList.filter(p => p.kind === "payment").reduce((x, y) => x + Number(y.amount), 0);
+      const charges = payList.filter(p => p.kind === "charge").reduce((x, y) => x + Number(y.amount), 0);
+      const fee = Number((grp as any)?.data?.monthly_fee || 0);
+      const due = Math.max(charges, fee);
+      const r = await genReport({ data: {
+        student: { full_name: s.full_name, grade: s.grade, group: (grp as any)?.data?.name || null },
+        attendance: {
+          present: a.filter((x: any) => x.status === "present").length,
+          absent: a.filter((x: any) => x.status === "absent").length,
+          late: a.filter((x: any) => x.status === "late").length,
+        },
+        homework: hwList.map((h: any) => {
+          const sub = subList.find((x: any) => x.homework_id === h.id);
+          return { title: h.title, score: sub?.score ?? null, max_score: h.max_score, status: sub?.status || "لم يُسلَّم" };
+        }),
+        finance: { due, paid, balance: due - paid },
+        notes: ((sNotes.data as any[]) || []).map(n => n.body),
+      }});
+      setAiText(r.text);
+    } catch (e: any) { toast.error(e.message || "فشل التوليد"); }
+    finally { setAiLoading(false); }
+  }
+
 
   async function loadNotes(id: string) {
     const { data } = await supabase.from("student_notes").select("*").eq("student_id", id).order("created_at", { ascending: false });
@@ -202,11 +248,13 @@ function StudentsPage() {
                     </td>
                     <td className="p-3 text-left">
                       <div className="flex justify-end gap-1">
-                        <button title="ملاحظات لولي الأمر" onClick={() => { setNotesFor(s); loadNotes(s.id); }} className="rounded-lg p-1.5 text-gold hover:bg-gold/10"><StickyNote className="h-4 w-4" /></button>
+                        <button title="تقرير AI عن الطالب" onClick={() => runAI(s)} className="rounded-lg p-1.5 text-gold hover:bg-gold/10"><Sparkles className="h-4 w-4" /></button>
+                        <button title="ملاحظات لولي الأمر" onClick={() => { setNotesFor(s); loadNotes(s.id); }} className="rounded-lg p-1.5 text-secondary hover:bg-secondary/10"><StickyNote className="h-4 w-4" /></button>
                         <button onClick={() => setEditing(s)} className="rounded-lg p-1.5 text-primary hover:bg-primary/10"><Pencil className="h-4 w-4" /></button>
                         <button onClick={() => remove(s.id)} className="rounded-lg p-1.5 text-destructive hover:bg-destructive/10"><Trash2 className="h-4 w-4" /></button>
                       </div>
                     </td>
+
                   </tr>
                 ))}
               </tbody>
@@ -249,6 +297,39 @@ function StudentsPage() {
           </div>
         </div>
       )}
+
+      {aiFor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setAiFor(null)}>
+          <div className="max-h-[85vh] w-full max-w-3xl overflow-hidden rounded-2xl bg-white shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b p-4">
+              <h2 className="text-lg font-bold flex items-center gap-2"><Sparkles className="h-5 w-5 text-gold" /> تقرير AI — {aiFor.full_name}</h2>
+              <button onClick={() => setAiFor(null)} className="rounded p-1 hover:bg-accent"><X className="h-5 w-5" /></button>
+            </div>
+            <div className="max-h-[70vh] overflow-y-auto p-5">
+              {aiLoading ? <p className="text-center text-muted-foreground">جارٍ التحليل...</p> :
+                aiText ? <div className="whitespace-pre-wrap text-sm leading-loose">{aiText}</div> : null}
+              {aiText && (
+                <button
+                  onClick={() => {
+                    const w = window.open("", "_blank"); if (!w) return;
+                    w.document.write(`<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/><title>تقرير ${aiFor!.full_name}</title>
+                      <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet">
+                      <style>body{font-family:'Cairo',sans-serif;padding:40px;max-width:800px;margin:auto;line-height:1.9;color:#0f172a}
+                      h1{color:#1e3a8a;border-bottom:3px double #c9a227;padding-bottom:10px}.body{white-space:pre-wrap;font-size:15px}
+                      button{background:#1e3a8a;color:#fff;border:0;padding:8px 16px;border-radius:8px;font-family:inherit;font-weight:700;cursor:pointer}
+                      @media print{button{display:none}}</style></head><body>
+                      <button onclick="window.print()">🖨️ طباعة / حفظ PDF</button>
+                      <h1>تقرير تحليلي — ${aiFor!.full_name}</h1>
+                      <div class="body">${aiText.replace(/</g, "&lt;")}</div></body></html>`);
+                    w.document.close();
+                  }}
+                  className="mt-4 rounded-lg bg-gold px-4 py-2 text-sm font-bold text-gold-foreground">طباعة / PDF</button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
