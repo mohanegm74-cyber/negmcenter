@@ -59,6 +59,271 @@ export type Database = {
           },
         ]
       }
+      exam_answers: {
+        Row: {
+          answer: Json | null
+          attempt_id: string
+          created_at: string
+          feedback: string | null
+          id: string
+          is_correct: boolean | null
+          question_id: string
+          score: number
+          time_spent_seconds: number
+        }
+        Insert: {
+          answer?: Json | null
+          attempt_id: string
+          created_at?: string
+          feedback?: string | null
+          id?: string
+          is_correct?: boolean | null
+          question_id: string
+          score?: number
+          time_spent_seconds?: number
+        }
+        Update: {
+          answer?: Json | null
+          attempt_id?: string
+          created_at?: string
+          feedback?: string | null
+          id?: string
+          is_correct?: boolean | null
+          question_id?: string
+          score?: number
+          time_spent_seconds?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exam_answers_attempt_id_fkey"
+            columns: ["attempt_id"]
+            isOneToOne: false
+            referencedRelation: "exam_attempts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "exam_answers_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "exam_questions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      exam_attempts: {
+        Row: {
+          analysis: string | null
+          attempt_no: number
+          created_at: string
+          exam_id: string
+          id: string
+          max_score: number
+          percentage: number
+          remedial_plan: string | null
+          score: number
+          started_at: string
+          status: string
+          strengths: Json
+          student_id: string
+          submitted_at: string | null
+          time_spent_seconds: number
+          weaknesses: Json
+        }
+        Insert: {
+          analysis?: string | null
+          attempt_no?: number
+          created_at?: string
+          exam_id: string
+          id?: string
+          max_score?: number
+          percentage?: number
+          remedial_plan?: string | null
+          score?: number
+          started_at?: string
+          status?: string
+          strengths?: Json
+          student_id: string
+          submitted_at?: string | null
+          time_spent_seconds?: number
+          weaknesses?: Json
+        }
+        Update: {
+          analysis?: string | null
+          attempt_no?: number
+          created_at?: string
+          exam_id?: string
+          id?: string
+          max_score?: number
+          percentage?: number
+          remedial_plan?: string | null
+          score?: number
+          started_at?: string
+          status?: string
+          strengths?: Json
+          student_id?: string
+          submitted_at?: string | null
+          time_spent_seconds?: number
+          weaknesses?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exam_attempts_exam_id_fkey"
+            columns: ["exam_id"]
+            isOneToOne: false
+            referencedRelation: "exams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "exam_attempts_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      exam_questions: {
+        Row: {
+          correct_answer: Json | null
+          created_at: string
+          difficulty: string
+          distractor_explanations: Json
+          exam_id: string
+          expected_seconds: number
+          id: string
+          kind: string
+          learning_outcome: string | null
+          options: Json
+          passage: string | null
+          position: number
+          prompt: string
+          rationale: string | null
+          score: number
+          skill: string | null
+          source_ref: string | null
+        }
+        Insert: {
+          correct_answer?: Json | null
+          created_at?: string
+          difficulty?: string
+          distractor_explanations?: Json
+          exam_id: string
+          expected_seconds?: number
+          id?: string
+          kind?: string
+          learning_outcome?: string | null
+          options?: Json
+          passage?: string | null
+          position?: number
+          prompt: string
+          rationale?: string | null
+          score?: number
+          skill?: string | null
+          source_ref?: string | null
+        }
+        Update: {
+          correct_answer?: Json | null
+          created_at?: string
+          difficulty?: string
+          distractor_explanations?: Json
+          exam_id?: string
+          expected_seconds?: number
+          id?: string
+          kind?: string
+          learning_outcome?: string | null
+          options?: Json
+          passage?: string | null
+          position?: number
+          prompt?: string
+          rationale?: string | null
+          score?: number
+          skill?: string | null
+          source_ref?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exam_questions_exam_id_fkey"
+            columns: ["exam_id"]
+            isOneToOne: false
+            referencedRelation: "exams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      exams: {
+        Row: {
+          adaptive: boolean
+          created_at: string
+          difficulty: string
+          duration_minutes: number
+          grade: string | null
+          group_id: string | null
+          id: string
+          lesson: string | null
+          notes: string | null
+          question_count: number
+          question_types: string[]
+          sources: Json
+          status: string
+          subject: string | null
+          term: string | null
+          title: string
+          total_score: number
+          unit: string | null
+          updated_at: string
+        }
+        Insert: {
+          adaptive?: boolean
+          created_at?: string
+          difficulty?: string
+          duration_minutes?: number
+          grade?: string | null
+          group_id?: string | null
+          id?: string
+          lesson?: string | null
+          notes?: string | null
+          question_count?: number
+          question_types?: string[]
+          sources?: Json
+          status?: string
+          subject?: string | null
+          term?: string | null
+          title: string
+          total_score?: number
+          unit?: string | null
+          updated_at?: string
+        }
+        Update: {
+          adaptive?: boolean
+          created_at?: string
+          difficulty?: string
+          duration_minutes?: number
+          grade?: string | null
+          group_id?: string | null
+          id?: string
+          lesson?: string | null
+          notes?: string | null
+          question_count?: number
+          question_types?: string[]
+          sources?: Json
+          status?: string
+          subject?: string | null
+          term?: string | null
+          title?: string
+          total_score?: number
+          unit?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exams_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       groups: {
         Row: {
           color: string | null
