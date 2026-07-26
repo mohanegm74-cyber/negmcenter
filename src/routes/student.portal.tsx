@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { ArrowRight, LogOut, CalendarCheck, XCircle, Search, User, BookOpen, Wallet, MessageCircleQuestion, Sparkles, Save, Upload, FileText } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { BrandLogo } from "@/components/BrandLogo";
+import { ExamsTab } from "@/components/ExamsTab";
 import { generateStudentReport } from "@/lib/ai-report.functions";
 import { useServerFn } from "@tanstack/react-start";
 
@@ -22,7 +23,7 @@ type Payment = { id: string; amount: number; kind: string; method: string | null
 type Note = { id: string; title: string | null; body: string; created_at: string };
 type Q = { id: string; body: string; answer: string | null; created_at: string; answered_at: string | null };
 
-type Tab = "info" | "schedule" | "attendance" | "homework" | "grades" | "finance" | "notes" | "ask" | "ai" | "edit";
+type Tab = "info" | "schedule" | "attendance" | "exams" | "homework" | "grades" | "finance" | "notes" | "ask" | "ai" | "edit";
 
 function Portal() {
   const [student, setStudent] = useState<Student | null>(null);
@@ -140,6 +141,7 @@ function Portal() {
     { id: "info", label: "بياناتي", icon: User },
     { id: "schedule", label: "جدولي", icon: CalendarCheck },
     { id: "attendance", label: "الحضور", icon: CalendarCheck },
+    { id: "exams", label: "الاختبارات الذكية", icon: Sparkles },
     { id: "homework", label: "الواجبات", icon: BookOpen },
     { id: "grades", label: "درجاتي", icon: FileText },
     { id: "finance", label: "الماليات", icon: Wallet },
@@ -239,6 +241,8 @@ function Portal() {
             </div>
           </section>
         )}
+
+        {tab === "exams" && <ExamsTab student={student} />}
 
         {tab === "homework" && <HomeworkTab student={student} homework={homework} subs={subs} reload={() => loadStudent(student.id)} />}
 
