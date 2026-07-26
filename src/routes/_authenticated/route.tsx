@@ -1,7 +1,7 @@
 import { createFileRoute, Outlet, Link, redirect, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { LayoutDashboard, Users, Boxes, ClipboardCheck, ScanLine, LogOut, Home, Wallet, BookOpen, FileBarChart, IdCard, Award, MessageCircleQuestion } from "lucide-react";
+import { LayoutDashboard, Users, Boxes, ClipboardCheck, ScanLine, LogOut, Home, Wallet, BookOpen, FileBarChart, IdCard, Award, MessageCircleQuestion, FileQuestion } from "lucide-react";
 import { Toaster } from "sonner";
 import { BrandLogo } from "@/components/BrandLogo";
 
@@ -22,6 +22,7 @@ const NAV = [
   { to: "/scan", label: "مسح QR", icon: ScanLine },
   { to: "/finance", label: "الماليات", icon: Wallet },
   { to: "/homework", label: "الواجبات", icon: BookOpen },
+  { to: "/exams", label: "الاختبارات الذكية", icon: FileQuestion },
   { to: "/questions", label: "أسئلة الطلاب", icon: MessageCircleQuestion },
   { to: "/reports", label: "التقارير", icon: FileBarChart },
   { to: "/cards", label: "كروت الطلاب", icon: IdCard },
