@@ -1,7 +1,7 @@
 import { createFileRoute, Outlet, Link, redirect, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { LayoutDashboard, Users, Boxes, ClipboardCheck, ScanLine, LogOut, Home, Wallet, BookOpen, FileBarChart, IdCard, Award, MessageCircleQuestion, FileQuestion } from "lucide-react";
+import { LayoutDashboard, Users, Boxes, ClipboardCheck, ScanLine, LogOut, Home, Wallet, BookOpen, FileBarChart, IdCard, Award, MessageCircleQuestion, FileQuestion, DatabaseBackup } from "lucide-react";
 import { Toaster } from "sonner";
 import { BrandLogo } from "@/components/BrandLogo";
 
@@ -27,6 +27,7 @@ const NAV = [
   { to: "/reports", label: "التقارير", icon: FileBarChart },
   { to: "/cards", label: "كروت الطلاب", icon: IdCard },
   { to: "/certificates", label: "شهادات التقدير", icon: Award },
+  { to: "/backup", label: "النسخ الاحتياطي", icon: DatabaseBackup },
 ] as const;
 
 function TeacherShell() {
