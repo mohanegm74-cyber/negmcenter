@@ -4,7 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { Loader2, Timer, Play, CheckCircle2, Sparkles } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { gradeAttempt } from "@/lib/exams.functions";
-import { isAuto, answerToText } from "@/lib/exam-constants";
+import { isAuto, answerToText, gradeMatches } from "@/lib/exam-constants";
 
 type Exam = {
   id: string; title: string; grade: string | null; term: string | null; group_id: string | null;
