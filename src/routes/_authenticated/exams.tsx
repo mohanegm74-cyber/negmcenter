@@ -41,6 +41,7 @@ function ExamsPage() {
   const [groups, setGroups] = useState<Group[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [exams, setExams] = useState<Exam[]>([]);
+  const [allAttempts, setAllAttempts] = useState<Attempt[]>([]);
   const [busy, setBusy] = useState(false);
   const [detail, setDetail] = useState<Exam | null>(null);
   const gen = useServerFn(generateExam);
@@ -52,11 +53,13 @@ function ExamsPage() {
   const [kinds, setKinds] = useState<string[]>(["اختيار من متعدد", "صح أو خطأ", "أكمل"]);
 
   async function load() {
-    const [g, s, e] = await Promise.all([
+    const [g, s, e, at] = await Promise.all([
       supabase.from("groups").select("id,name,grade,subject").order("name"),
       supabase.from("students").select("id,full_name,code,group_id,grade").order("full_name"),
       supabase.from("exams").select("*").order("created_at", { ascending: false }),
+      supabase.from("exam_attempts").select("*").eq("status", "submitted"),
     ]);
+    setAllAttempts((at.data as Attempt[]) || []);
     setGroups((g.data as Group[]) || []);
     setStudents((s.data as Student[]) || []);
     setExams((e.data as Exam[]) || []);
@@ -240,6 +243,38 @@ function ExamsPage() {
                   </td>
                 </tr>
               ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border bg-white shadow-sm">
+        <div className="border-b px-5 py-3 text-sm font-black">درجات الطلاب في الاختبارات</div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-right text-sm">
+            <thead className="bg-muted/50 text-xs text-muted-foreground"><tr>
+              <th className="p-3">الطالب</th><th className="p-3">الكود</th><th className="p-3">المجموعة</th>
+              <th className="p-3">عدد الاختبارات</th><th className="p-3">أفضل نتيجة</th><th className="p-3">المتوسط</th><th className="p-3">آخر اختبار</th>
+            </tr></thead>
+            <tbody>
+              {students.length === 0 && <tr><td colSpan={7} className="p-6 text-center text-muted-foreground">لا يوجد طلاب</td></tr>}
+              {students.map((st) => {
+                const mine = allAttempts.filter((a) => a.student_id === st.id);
+                const avg = mine.length ? Math.round(mine.reduce((x, a) => x + Number(a.percentage), 0) / mine.length) : null;
+                const best = mine.length ? Math.max(...mine.map((a) => Number(a.percentage))) : null;
+                const last = [...mine].sort((a, b) => String(b.submitted_at).localeCompare(String(a.submitted_at)))[0];
+                return (
+                  <tr key={st.id} className="border-t">
+                    <td className="p-3 font-semibold">{st.full_name}</td>
+                    <td className="p-3 font-mono text-xs">{st.code}</td>
+                    <td className="p-3">{groups.find((g) => g.id === st.group_id)?.name || "—"}</td>
+                    <td className="p-3">{mine.length}</td>
+                    <td className="p-3 font-bold">{best != null ? `${best}%` : "—"}</td>
+                    <td className="p-3">{avg != null ? `${avg}%` : "—"}</td>
+                    <td className="p-3 text-xs">{last ? `${exams.find((e) => e.id === last.exam_id)?.title || "—"} — ${Number(last.score)}/${Number(last.max_score)}` : "—"}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
