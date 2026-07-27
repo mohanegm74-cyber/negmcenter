@@ -27,11 +27,11 @@ function AuthPage() {
     if (mode === "signup") {
       const { error } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo: window.location.origin + "/dashboard" } });
       if (error) toast.error(error.message);
-      else { toast.success("تم إنشاء الحساب. تم تسجيل الدخول."); navigate({ to: "/dashboard" }); }
+      else { await supabase.rpc("claim_teacher_role"); toast.success("تم إنشاء الحساب. تم تسجيل الدخول."); navigate({ to: "/dashboard" }); }
     } else {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) toast.error(error.message);
-      else { toast.success("مرحباً بعودتك"); navigate({ to: "/dashboard" }); }
+      else { await supabase.rpc("claim_teacher_role"); toast.success("مرحباً بعودتك"); navigate({ to: "/dashboard" }); }
     }
     setLoading(false);
   }
