@@ -25,6 +25,7 @@ import { Route as AuthenticatedExamsRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedCertificatesRouteImport } from './routes/_authenticated/certificates'
 import { Route as AuthenticatedCardsRouteImport } from './routes/_authenticated/cards'
+import { Route as AuthenticatedBackupRouteImport } from './routes/_authenticated/backup'
 import { Route as AuthenticatedAttendanceRouteImport } from './routes/_authenticated/attendance'
 
 const AuthRoute = AuthRouteImport.update({
@@ -107,6 +108,11 @@ const AuthenticatedCardsRoute = AuthenticatedCardsRouteImport.update({
   path: '/cards',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedBackupRoute = AuthenticatedBackupRouteImport.update({
+  id: '/backup',
+  path: '/backup',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedAttendanceRoute = AuthenticatedAttendanceRouteImport.update({
   id: '/attendance',
   path: '/attendance',
@@ -117,6 +123,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/attendance': typeof AuthenticatedAttendanceRoute
+  '/backup': typeof AuthenticatedBackupRoute
   '/cards': typeof AuthenticatedCardsRoute
   '/certificates': typeof AuthenticatedCertificatesRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
@@ -135,6 +142,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/attendance': typeof AuthenticatedAttendanceRoute
+  '/backup': typeof AuthenticatedBackupRoute
   '/cards': typeof AuthenticatedCardsRoute
   '/certificates': typeof AuthenticatedCertificatesRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
@@ -155,6 +163,7 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
   '/_authenticated/attendance': typeof AuthenticatedAttendanceRoute
+  '/_authenticated/backup': typeof AuthenticatedBackupRoute
   '/_authenticated/cards': typeof AuthenticatedCardsRoute
   '/_authenticated/certificates': typeof AuthenticatedCertificatesRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
@@ -175,6 +184,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/attendance'
+    | '/backup'
     | '/cards'
     | '/certificates'
     | '/dashboard'
@@ -193,6 +203,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/attendance'
+    | '/backup'
     | '/cards'
     | '/certificates'
     | '/dashboard'
@@ -212,6 +223,7 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/auth'
     | '/_authenticated/attendance'
+    | '/_authenticated/backup'
     | '/_authenticated/cards'
     | '/_authenticated/certificates'
     | '/_authenticated/dashboard'
@@ -349,6 +361,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedCardsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/backup': {
+      id: '/_authenticated/backup'
+      path: '/backup'
+      fullPath: '/backup'
+      preLoaderRoute: typeof AuthenticatedBackupRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/attendance': {
       id: '/_authenticated/attendance'
       path: '/attendance'
@@ -361,6 +380,7 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAttendanceRoute: typeof AuthenticatedAttendanceRoute
+  AuthenticatedBackupRoute: typeof AuthenticatedBackupRoute
   AuthenticatedCardsRoute: typeof AuthenticatedCardsRoute
   AuthenticatedCertificatesRoute: typeof AuthenticatedCertificatesRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
@@ -376,6 +396,7 @@ interface AuthenticatedRouteRouteChildren {
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAttendanceRoute: AuthenticatedAttendanceRoute,
+  AuthenticatedBackupRoute: AuthenticatedBackupRoute,
   AuthenticatedCardsRoute: AuthenticatedCardsRoute,
   AuthenticatedCertificatesRoute: AuthenticatedCertificatesRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
