@@ -4,7 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { Loader2, Timer, Play, CheckCircle2, Sparkles } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { gradeAttempt } from "@/lib/exams.functions";
-import { isAuto, answerToText } from "@/lib/exam-constants";
+import { isAuto, answerToText, gradeMatches } from "@/lib/exam-constants";
 
 type Exam = {
   id: string; title: string; grade: string | null; term: string | null; group_id: string | null;
@@ -31,7 +31,9 @@ export function ExamsTab({ student }: { student: { id: string; full_name: string
   async function load() {
     const { data: ex } = await supabase.from("exams").select("*").eq("status", "published").order("created_at", { ascending: false });
     const mine = ((ex as Exam[]) || []).filter(
-      (e) => (e.group_id ? e.group_id === student.group_id : e.grade ? e.grade === student.grade : true),
+      (e) =>
+        (!e.group_id || !student.group_id || e.group_id === student.group_id) &&
+        gradeMatches(e.grade, student.grade),
     );
     setExams(mine);
     const { data: at } = await supabase.from("exam_attempts").select("*").eq("student_id", student.id);

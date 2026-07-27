@@ -2,10 +2,10 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
-import { Sparkles, Trash2, Send, BarChart3, X, Loader2, FileQuestion, Printer } from "lucide-react";
+import { Sparkles, Trash2, Send, BarChart3, X, Loader2, FileQuestion, Printer, Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { generateExam } from "@/lib/exams.functions";
-import { QUESTION_KINDS, DIFFICULTIES, TERMS, answerToText } from "@/lib/exam-constants";
+import { QUESTION_KINDS, DIFFICULTIES, TERMS, GRADES, answerToText } from "@/lib/exam-constants";
 import { openPrint, esc } from "@/lib/print";
 
 export const Route = createFileRoute("/_authenticated/exams")({
@@ -41,22 +41,25 @@ function ExamsPage() {
   const [groups, setGroups] = useState<Group[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [exams, setExams] = useState<Exam[]>([]);
+  const [allAttempts, setAllAttempts] = useState<Attempt[]>([]);
   const [busy, setBusy] = useState(false);
   const [detail, setDetail] = useState<Exam | null>(null);
   const gen = useServerFn(generateExam);
 
   const [form, setForm] = useState({
-    grade: "", term: TERMS[0], group_id: "", subject: "", unit: "", lesson: "",
+    grade: GRADES[0], term: TERMS[0], group_id: "", subject: "", lesson: "",
     question_count: 10, duration_minutes: 20, total_score: 100, difficulty: "medium", adaptive: false,
   });
   const [kinds, setKinds] = useState<string[]>(["اختيار من متعدد", "صح أو خطأ", "أكمل"]);
 
   async function load() {
-    const [g, s, e] = await Promise.all([
+    const [g, s, e, at] = await Promise.all([
       supabase.from("groups").select("id,name,grade,subject").order("name"),
       supabase.from("students").select("id,full_name,code,group_id,grade").order("full_name"),
       supabase.from("exams").select("*").order("created_at", { ascending: false }),
+      supabase.from("exam_attempts").select("*").eq("status", "submitted"),
     ]);
+    setAllAttempts((at.data as Attempt[]) || []);
     setGroups((g.data as Group[]) || []);
     setStudents((s.data as Student[]) || []);
     setExams((e.data as Exam[]) || []);
@@ -76,7 +79,7 @@ function ExamsPage() {
       const res = await gen({
         data: {
           grade: form.grade, term: form.term, subject: form.subject || "—",
-          unit: form.unit || "—", lesson: form.lesson,
+          unit: "—", lesson: form.lesson,
           questionCount: Number(form.question_count), totalScore: Number(form.total_score),
           difficulty: form.difficulty, kinds,
         },
@@ -84,7 +87,7 @@ function ExamsPage() {
       const title = `${form.subject || "اختبار"} — ${form.lesson} (${form.grade})`;
       const { data: exam, error } = await supabase.from("exams").insert({
         title, grade: form.grade, term: form.term, group_id: form.group_id || null,
-        subject: form.subject || null, unit: form.unit || null, lesson: form.lesson,
+        subject: form.subject || null, unit: null, lesson: form.lesson,
         question_count: res.questions.length, duration_minutes: Number(form.duration_minutes),
         total_score: Number(form.total_score), difficulty: form.difficulty,
         question_types: kinds, adaptive: form.adaptive, status: "draft", sources: res.sources,
@@ -107,6 +110,23 @@ function ExamsPage() {
     } catch (err: any) {
       toast.error(err?.message || "فشل إنشاء الاختبار", { id: t });
     } finally { setBusy(false); toast.dismiss(t); }
+  }
+
+  /** إنشاء اختبار يدوي فارغ يضيف المعلم أسئلته بنفسه */
+  async function createManual() {
+    if (!form.lesson.trim()) { toast.error("أدخل اسم الدرس"); return; }
+    const title = `${form.subject || "اختبار"} — ${form.lesson} (${form.grade})`;
+    const { data: exam, error } = await supabase.from("exams").insert({
+      title, grade: form.grade, term: form.term, group_id: form.group_id || null,
+      subject: form.subject || null, unit: null, lesson: form.lesson,
+      question_count: 0, duration_minutes: Number(form.duration_minutes),
+      total_score: Number(form.total_score), difficulty: form.difficulty,
+      question_types: kinds, adaptive: form.adaptive, status: "draft", sources: [],
+    }).select().single();
+    if (error) return toast.error(error.message);
+    toast.success("تم إنشاء اختبار يدوي — أضف الأسئلة من «بنك الأسئلة»");
+    await load();
+    setDetail(exam as Exam);
   }
 
   async function setStatus(ex: Exam, status: string) {
@@ -133,7 +153,11 @@ function ExamsPage() {
       <section className="rounded-2xl border bg-white p-5 shadow-sm">
         <h2 className="mb-4 flex items-center gap-2 text-sm font-black text-primary"><Sparkles className="h-4 w-4" /> إنشاء اختبار جديد بالذكاء الاصطناعي</h2>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Field label="الصف"><input className={inp} value={form.grade} onChange={(e) => setForm({ ...form, grade: e.target.value })} placeholder="مثال: الصف الثالث الإعدادي" /></Field>
+          <Field label="الصف">
+            <select className={inp} value={form.grade} onChange={(e) => setForm({ ...form, grade: e.target.value })}>
+              {GRADES.map((g) => <option key={g}>{g}</option>)}
+            </select>
+          </Field>
           <Field label="الفصل الدراسي">
             <select className={inp} value={form.term} onChange={(e) => setForm({ ...form, term: e.target.value })}>
               {TERMS.map((t) => <option key={t}>{t}</option>)}
@@ -146,7 +170,6 @@ function ExamsPage() {
             </select>
           </Field>
           <Field label="المادة"><input className={inp} value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} placeholder="اللغة العربية" /></Field>
-          <Field label="الوحدة"><input className={inp} value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} /></Field>
           <Field label="الدرس"><input className={inp} value={form.lesson} onChange={(e) => setForm({ ...form, lesson: e.target.value })} /></Field>
           <Field label="عدد الأسئلة"><input type="number" min={1} max={40} className={inp} value={form.question_count} onChange={(e) => setForm({ ...form, question_count: +e.target.value })} /></Field>
           <Field label="زمن الاختبار (دقيقة)"><input type="number" min={1} className={inp} value={form.duration_minutes} onChange={(e) => setForm({ ...form, duration_minutes: +e.target.value })} /></Field>
@@ -176,7 +199,11 @@ function ExamsPage() {
 
         <button onClick={create} disabled={busy}
           className="mt-5 inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-black text-primary-foreground shadow disabled:opacity-60">
-          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />} ابدأ بناء الاختبار
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />} بناء الاختبار بالذكاء الاصطناعي
+        </button>
+        <button onClick={createManual} disabled={busy}
+          className="mt-5 mr-2 inline-flex items-center gap-2 rounded-xl border border-primary px-5 py-2.5 text-sm font-black text-primary disabled:opacity-60">
+          <Plus className="h-4 w-4" /> إنشاء اختبار يدوي
         </button>
       </section>
 
@@ -221,6 +248,38 @@ function ExamsPage() {
         </div>
       </section>
 
+      <section className="rounded-2xl border bg-white shadow-sm">
+        <div className="border-b px-5 py-3 text-sm font-black">درجات الطلاب في الاختبارات</div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-right text-sm">
+            <thead className="bg-muted/50 text-xs text-muted-foreground"><tr>
+              <th className="p-3">الطالب</th><th className="p-3">الكود</th><th className="p-3">المجموعة</th>
+              <th className="p-3">عدد الاختبارات</th><th className="p-3">أفضل نتيجة</th><th className="p-3">المتوسط</th><th className="p-3">آخر اختبار</th>
+            </tr></thead>
+            <tbody>
+              {students.length === 0 && <tr><td colSpan={7} className="p-6 text-center text-muted-foreground">لا يوجد طلاب</td></tr>}
+              {students.map((st) => {
+                const mine = allAttempts.filter((a) => a.student_id === st.id);
+                const avg = mine.length ? Math.round(mine.reduce((x, a) => x + Number(a.percentage), 0) / mine.length) : null;
+                const best = mine.length ? Math.max(...mine.map((a) => Number(a.percentage))) : null;
+                const last = [...mine].sort((a, b) => String(b.submitted_at).localeCompare(String(a.submitted_at)))[0];
+                return (
+                  <tr key={st.id} className="border-t">
+                    <td className="p-3 font-semibold">{st.full_name}</td>
+                    <td className="p-3 font-mono text-xs">{st.code}</td>
+                    <td className="p-3">{groups.find((g) => g.id === st.group_id)?.name || "—"}</td>
+                    <td className="p-3">{mine.length}</td>
+                    <td className="p-3 font-bold">{best != null ? `${best}%` : "—"}</td>
+                    <td className="p-3">{avg != null ? `${avg}%` : "—"}</td>
+                    <td className="p-3 text-xs">{last ? `${exams.find((e) => e.id === last.exam_id)?.title || "—"} — ${Number(last.score)}/${Number(last.max_score)}` : "—"}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
       {detail && <ExamDetail exam={detail} students={students} onClose={() => setDetail(null)} />}
     </div>
   );
@@ -252,6 +311,20 @@ function ExamDetail({ exam, students, onClose }: { exam: Exam; students: Student
       }
     })();
   }, [exam.id]);
+
+  async function reloadQuestions() {
+    const { data } = await supabase.from("exam_questions").select("*").eq("exam_id", exam.id).order("position");
+    const list = (data as Q[]) || [];
+    setQuestions(list);
+    await supabase.from("exams").update({ question_count: list.length }).eq("id", exam.id);
+  }
+  async function removeQuestion(id: string) {
+    if (!confirm("حذف هذا السؤال؟")) return;
+    const { error } = await supabase.from("exam_questions").delete().eq("id", id);
+    if (error) return toast.error(error.message);
+    toast.success("تم حذف السؤال");
+    reloadQuestions();
+  }
 
   const eligible = useMemo(
     () => students.filter((s) => (exam.group_id ? s.group_id === exam.group_id : exam.grade ? s.grade === exam.grade : true)),
@@ -370,9 +443,13 @@ function ExamDetail({ exam, students, onClose }: { exam: Exam; students: Student
 
         {view === "bank" && (
           <div className="space-y-3">
+            <ManualQuestion examId={exam.id} nextPos={questions.length + 1} onAdded={reloadQuestions} />
             {questions.map((q) => (
               <div key={q.id} className="rounded-xl border p-3 text-sm">
-                <div className="font-bold">{q.position}. {q.prompt}</div>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="font-bold">{q.position}. {q.prompt}</div>
+                  <button onClick={() => removeQuestion(q.id)} className="rounded-lg bg-destructive/10 p-1 text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
+                </div>
                 {q.passage && <div className="mt-1 rounded bg-muted/50 p-2 text-xs">{q.passage}</div>}
                 {Array.isArray(q.options) && (q.options as string[]).length > 0 && (
                   <ul className="mt-1 list-disc pr-5 text-xs text-muted-foreground">{(q.options as string[]).map((o, i) => <li key={i}>{o}</li>)}</ul>
@@ -398,6 +475,60 @@ function Kpi({ label, value }: { label: string; value: any }) {
     <div className="rounded-xl border bg-muted/30 p-3 text-center">
       <div className="text-lg font-black text-primary">{value}</div>
       <div className="text-[11px] text-muted-foreground">{label}</div>
+    </div>
+  );
+}
+
+/** إضافة سؤال يدوياً إلى بنك أسئلة الاختبار */
+function ManualQuestion({ examId, nextPos, onAdded }: { examId: string; nextPos: number; onAdded: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState({ kind: QUESTION_KINDS[0] as string, prompt: "", options: "", correct: "", rationale: "", skill: "", difficulty: "medium", score: 5 });
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    if (!q.prompt.trim() || !q.correct.trim()) { toast.error("اكتب السؤال والإجابة الصحيحة"); return; }
+    setSaving(true);
+    const { error } = await supabase.from("exam_questions").insert({
+      exam_id: examId, position: nextPos, kind: q.kind, prompt: q.prompt,
+      options: q.options.split("\n").map((o) => o.trim()).filter(Boolean),
+      correct_answer: q.correct, rationale: q.rationale || null, skill: q.skill || null,
+      difficulty: q.difficulty, score: Number(q.score) || 1,
+    });
+    setSaving(false);
+    if (error) return toast.error(error.message);
+    toast.success("تمت إضافة السؤال");
+    setQ({ ...q, prompt: "", options: "", correct: "", rationale: "" });
+    onAdded();
+  }
+
+  if (!open) {
+    return (
+      <button onClick={() => setOpen(true)} className="inline-flex items-center gap-1.5 rounded-xl border border-primary px-4 py-2 text-xs font-black text-primary">
+        <Plus className="h-4 w-4" /> إضافة سؤال يدوياً
+      </button>
+    );
+  }
+  return (
+    <div className="space-y-2 rounded-xl border bg-muted/20 p-3">
+      <div className="grid gap-2 sm:grid-cols-3">
+        <Field label="نوع السؤال">
+          <select className={inp} value={q.kind} onChange={(e) => setQ({ ...q, kind: e.target.value })}>
+            {QUESTION_KINDS.map((k) => <option key={k}>{k}</option>)}
+          </select>
+        </Field>
+        <Field label="المهارة"><input className={inp} value={q.skill} onChange={(e) => setQ({ ...q, skill: e.target.value })} /></Field>
+        <Field label="الدرجة"><input type="number" min={1} className={inp} value={q.score} onChange={(e) => setQ({ ...q, score: +e.target.value })} /></Field>
+      </div>
+      <Field label="نص السؤال"><textarea rows={2} className={inp} value={q.prompt} onChange={(e) => setQ({ ...q, prompt: e.target.value })} /></Field>
+      <Field label="الاختيارات (اختياري — كل اختيار في سطر)"><textarea rows={3} className={inp} value={q.options} onChange={(e) => setQ({ ...q, options: e.target.value })} /></Field>
+      <div className="grid gap-2 sm:grid-cols-2">
+        <Field label="الإجابة الصحيحة"><input className={inp} value={q.correct} onChange={(e) => setQ({ ...q, correct: e.target.value })} /></Field>
+        <Field label="سبب الإجابة (اختياري)"><input className={inp} value={q.rationale} onChange={(e) => setQ({ ...q, rationale: e.target.value })} /></Field>
+      </div>
+      <div className="flex gap-2">
+        <button onClick={save} disabled={saving} className="rounded-lg bg-primary px-4 py-2 text-xs font-black text-primary-foreground disabled:opacity-60">حفظ السؤال</button>
+        <button onClick={() => setOpen(false)} className="rounded-lg border px-4 py-2 text-xs font-bold">إغلاق</button>
+      </div>
     </div>
   );
 }

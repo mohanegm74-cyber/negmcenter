@@ -48,3 +48,19 @@ export function answerToText(v: unknown): string {
   if (v == null) return "";
   return String(v);
 }
+
+/** قائمة الصفوف الدراسية الموحدة */
+export const GRADES = [
+  "الصف الأول الابتدائي","الثاني الابتدائي","الثالث الابتدائي","الرابع الابتدائي","الخامس الابتدائي","السادس الابتدائي",
+  "الأول الإعدادي","الثاني الإعدادي","الثالث الإعدادي",
+  "الأول الثانوي","الثاني الثانوي","الثالث الثانوي",
+];
+
+/** مطابقة مرنة لاسم الصف (تتجاهل كلمة «الصف» والمسافات) */
+export function gradeMatches(a?: string | null, b?: string | null) {
+  const n = (v?: string | null) =>
+    String(v ?? "").replace(/الصف/g, "").replace(/\s+/g, "").replace(/[أإآ]/g, "ا");
+  if (!a || !b) return true;
+  const x = n(a), y = n(b);
+  return x === y || x.includes(y) || y.includes(x);
+}
