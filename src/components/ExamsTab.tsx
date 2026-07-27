@@ -2,9 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { Loader2, Timer, Play, CheckCircle2, Sparkles } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-import { gradeAttempt } from "@/lib/exams.functions";
-import { isAuto, answerToText, gradeMatches } from "@/lib/exam-constants";
+import { getStudentExams, startExamAttempt, submitExamAttempt } from "@/lib/student.functions";
 
 type Exam = {
   id: string; title: string; grade: string | null; term: string | null; group_id: string | null;
@@ -13,7 +11,7 @@ type Exam = {
 };
 type Q = {
   id: string; position: number; kind: string; prompt: string; passage: string | null; options: any;
-  correct_answer: any; rationale: string | null; skill: string | null; difficulty: string; score: number;
+  skill: string | null; difficulty: string; score: number;
 };
 type Attempt = {
   id: string; exam_id: string; status: string; score: number; max_score: number; percentage: number;
@@ -22,46 +20,35 @@ type Attempt = {
 
 const DIFF_ORDER = ["easy", "medium", "hard"];
 
-export function ExamsTab({ student }: { student: { id: string; full_name: string; grade: string | null; group_id: string | null } }) {
+export function ExamsTab({ code }: { code: string }) {
   const [exams, setExams] = useState<Exam[]>([]);
   const [attempts, setAttempts] = useState<Attempt[]>([]);
   const [active, setActive] = useState<{ exam: Exam; questions: Q[]; attempt: Attempt } | null>(null);
   const [loading, setLoading] = useState(true);
+  const listFn = useServerFn(getStudentExams);
+  const startFn = useServerFn(startExamAttempt);
 
   async function load() {
-    const { data: ex } = await supabase.from("exams").select("*").eq("status", "published").order("created_at", { ascending: false });
-    const mine = ((ex as Exam[]) || []).filter(
-      (e) =>
-        (!e.group_id || !student.group_id || e.group_id === student.group_id) &&
-        gradeMatches(e.grade, student.grade),
-    );
-    setExams(mine);
-    const { data: at } = await supabase.from("exam_attempts").select("*").eq("student_id", student.id);
-    setAttempts((at as Attempt[]) || []);
+    try {
+      const d = await listFn({ data: { code } });
+      setExams((d.exams as Exam[]) || []);
+      setAttempts((d.attempts as Attempt[]) || []);
+    } catch (e: any) { toast.error(e?.message || "تعذر تحميل الاختبارات"); }
     setLoading(false);
   }
-  useEffect(() => { load(); }, [student.id]);
+  useEffect(() => { load(); }, [code]);
 
   async function start(exam: Exam) {
-    const { data: qs } = await supabase.from("exam_questions").select("*").eq("exam_id", exam.id).order("position");
-    let questions = (qs as Q[]) || [];
-    if (!questions.length) return toast.error("لا توجد أسئلة في هذا الاختبار");
-    if (exam.adaptive) {
-      questions = [...questions].sort((a, b) => DIFF_ORDER.indexOf(a.difficulty) - DIFF_ORDER.indexOf(b.difficulty));
-    }
-    const prior = attempts.filter((a) => a.exam_id === exam.id).length;
-    const { data: at, error } = await supabase.from("exam_attempts").insert({
-      exam_id: exam.id, student_id: student.id, attempt_no: prior + 1, status: "in_progress",
-      max_score: questions.reduce((s, q) => s + Number(q.score), 0),
-    }).select().single();
-    if (error) return toast.error(error.message);
-    setActive({ exam, questions, attempt: at as Attempt });
+    try {
+      const d = await startFn({ data: { code, exam_id: exam.id } });
+      setActive({ exam: d.exam as Exam, questions: (d.questions as Q[]) || [], attempt: d.attempt as Attempt });
+    } catch (e: any) { toast.error(e?.message || "تعذر بدء الاختبار"); }
   }
 
   if (loading) return <div className="p-6 text-center text-muted-foreground">جاري التحميل…</div>;
 
   if (active) {
-    return <Runner {...active} student={student} onDone={() => { setActive(null); load(); }} />;
+    return <Runner {...active} code={code} onDone={() => { setActive(null); load(); }} />;
   }
 
   return (
@@ -113,8 +100,8 @@ function Result({ attempt }: { attempt: Attempt }) {
   );
 }
 
-function Runner({ exam, questions, attempt, student, onDone }:
-  { exam: Exam; questions: Q[]; attempt: Attempt; student: { id: string; full_name: string }; onDone: () => void }) {
+function Runner({ exam, questions, attempt, code, onDone }:
+  { exam: Exam; questions: Q[]; attempt: Attempt; code: string; onDone: () => void }) {
   const storeKey = `najm_exam_${attempt.id}`;
   const [answers, setAnswers] = useState<Record<string, string>>(() => {
     if (typeof window === "undefined") return {};
@@ -123,7 +110,7 @@ function Runner({ exam, questions, attempt, student, onDone }:
   const [left, setLeft] = useState(exam.duration_minutes * 60);
   const [submitting, setSubmitting] = useState(false);
   const startedAt = useRef(Date.now());
-  const grade = useServerFn(gradeAttempt);
+  const submitFn = useServerFn(submitExamAttempt);
 
   useEffect(() => { localStorage.setItem(storeKey, JSON.stringify(answers)); }, [answers, storeKey]);
 
@@ -133,16 +120,14 @@ function Runner({ exam, questions, attempt, student, onDone }:
   }, []);
   useEffect(() => { if (left === 0) submit(); /* eslint-disable-next-line */ }, [left]);
 
-  // التكيّف الذكي: إظهار الأسئلة تدريجياً حسب أداء الطالب
+  // التكيّف الذكي: إظهار الأسئلة تدريجياً حسب تقدّم الطالب
   const visible = useMemo(() => {
     if (!exam.adaptive) return questions;
-    let streak = 0, out: Q[] = [];
+    const out: Q[] = [];
     for (const q of questions) {
       out.push(q);
       const a = answers[q.id];
       if (a == null || a === "") break;
-      const ok = isAuto(q.kind) && a.trim() === answerToText(q.correct_answer).trim();
-      streak = ok ? streak + 1 : 0;
     }
     return out;
   }, [questions, answers, exam.adaptive]);
@@ -152,29 +137,8 @@ function Runner({ exam, questions, attempt, student, onDone }:
     setSubmitting(true);
     const t = toast.loading("جاري تصحيح الاختبار…");
     try {
-      const items = questions.map((q) => ({
-        id: q.id, kind: q.kind, prompt: q.prompt, correct: answerToText(q.correct_answer),
-        answer: answers[q.id] || "", score: Number(q.score), skill: q.skill, autoCorrect: isAuto(q.kind),
-      }));
-      const { data: peers } = await supabase.from("exam_attempts").select("percentage").eq("exam_id", exam.id).eq("status", "submitted");
-      const avg = peers && peers.length ? Math.round(peers.reduce((s: number, p: any) => s + Number(p.percentage), 0) / peers.length) : null;
-
-      const res = await grade({ data: { studentName: student.full_name, examTitle: exam.title, classAverage: avg, items } });
       const spent = Math.round((Date.now() - startedAt.current) / 1000);
-
-      await supabase.from("exam_answers").upsert(
-        res.results.map((r) => ({
-          attempt_id: attempt.id, question_id: r.id, answer: answers[r.id] || "",
-          is_correct: r.is_correct, score: r.score, feedback: r.feedback,
-        })),
-        { onConflict: "attempt_id,question_id" },
-      );
-      await supabase.from("exam_attempts").update({
-        status: "submitted", submitted_at: new Date().toISOString(), time_spent_seconds: spent,
-        score: res.total, max_score: res.max, percentage: res.percentage, analysis: res.analysis,
-        strengths: res.strengths, weaknesses: res.weaknesses, remedial_plan: res.remedial_plan,
-      }).eq("id", attempt.id);
-
+      const res = await submitFn({ data: { code, attempt_id: attempt.id, answers, time_spent_seconds: spent } });
       localStorage.removeItem(storeKey);
       toast.success(`تم التصحيح: ${res.total} من ${res.max} (${res.percentage}%)`, { id: t });
       onDone();
