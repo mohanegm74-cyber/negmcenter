@@ -3,10 +3,11 @@ import { useEffect, useRef, useState } from "react";
 import QRCode from "qrcode";
 import { toast } from "sonner";
 import { ArrowRight, LogOut, CalendarCheck, XCircle, Search, User, BookOpen, Wallet, MessageCircleQuestion, Sparkles, Save, Upload, FileText } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import { BrandLogo } from "@/components/BrandLogo";
 import { ExamsTab } from "@/components/ExamsTab";
 import { generateStudentReport } from "@/lib/ai-report.functions";
+import { getStudentPortal, updateStudentProfile, askTeacher, submitHomeworkText, createHomeworkUploadUrl, finalizeHomeworkUpload, getSubmissionUrl } from "@/lib/student.functions";
+import { supabase } from "@/integrations/supabase/client";
 import { useServerFn } from "@tanstack/react-start";
 
 export const Route = createFileRoute("/student/portal")({
@@ -40,60 +41,64 @@ function Portal() {
   const [error, setError] = useState<string | null>(null);
   const qrRef = useRef<HTMLCanvasElement | null>(null);
 
+  const loadPortal = useServerFn(getStudentPortal);
+  const [code, setCode] = useState<string | null>(null);
+
   useEffect(() => {
-    const id = typeof window !== "undefined" ? localStorage.getItem("najm_student_id") : null;
-    if (!id) { setLoading(false); return; }
-    loadStudent(id).finally(() => setLoading(false));
+    const c = typeof window !== "undefined" ? localStorage.getItem("najm_student_code") : null;
+    if (!c) { setLoading(false); return; }
+    setCode(c);
+    loadStudent(c).finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
     if (student && qrRef.current) QRCode.toCanvas(qrRef.current, student.code, { width: 180, margin: 1, color: { dark: "#1e3a8a", light: "#ffffff" } });
   }, [student, tab]);
 
-  async function loadStudent(id: string) {
-    const { data: s, error: e1 } = await supabase.from("students").select("*").eq("id", id).maybeSingle();
-    if (e1 || !s) { setError("لم يتم العثور على الطالب"); return; }
-    setStudent(s as Student);
-
-    const promises: any[] = [
-      supabase.from("attendance").select("id,date,status").eq("student_id", s.id).order("date", { ascending: false }).limit(100),
-      supabase.from("homework_submissions").select("*").eq("student_id", s.id),
-      supabase.from("payments").select("*").eq("student_id", s.id).order("paid_at", { ascending: false }),
-      supabase.from("student_notes").select("*").eq("student_id", s.id).order("created_at", { ascending: false }),
-      supabase.from("questions").select("*").eq("student_id", s.id).order("created_at", { ascending: false }),
-    ];
-    if (s.group_id) {
-      promises.push(supabase.from("groups").select("*").eq("id", s.group_id).maybeSingle());
-      promises.push(supabase.from("homework").select("*").eq("group_id", s.group_id).order("created_at", { ascending: false }));
-    } else {
-      promises.push(Promise.resolve({ data: null }));
-      promises.push(supabase.from("homework").select("*").is("group_id", null));
+  async function loadStudent(c: string) {
+    try {
+      const d = await loadPortal({ data: { code: c } });
+      setStudent(d.student as Student);
+      setGroup((d.group as Group) || null);
+      setAttendance((d.attendance as Att[]) || []);
+      setSubs((d.subs as Sub[]) || []);
+      setPayments((d.payments as Payment[]) || []);
+      setNotes((d.notes as Note[]) || []);
+      setQuestions((d.questions as Q[]) || []);
+      setHomework((d.homework as HW[]) || []);
+    } catch {
+      setError("لم يتم العثور على الطالب");
     }
-    const [a, hs, p, n, q, g, h] = await Promise.all(promises);
-    setAttendance((a.data as Att[]) || []);
-    setSubs((hs.data as Sub[]) || []);
-    setPayments((p.data as Payment[]) || []);
-    setNotes((n.data as Note[]) || []);
-    setQuestions((q.data as Q[]) || []);
-    setGroup((g?.data as Group) || null);
-    setHomework((h.data as HW[]) || []);
   }
 
   async function loginByCode(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    const code = codeInput.trim().toUpperCase();
-    if (!code) return;
-    const { data, error } = await supabase.from("students").select("id, code").eq("code", code).maybeSingle();
-    if (error || !data) { setError("الكود غير صحيح"); return; }
-    localStorage.setItem("najm_student_id", data.id);
+    const c = codeInput.trim().toUpperCase();
+    if (!c) return;
     setLoading(true);
-    await loadStudent(data.id);
+    try {
+      const d = await loadPortal({ data: { code: c } });
+      localStorage.setItem("najm_student_code", c);
+      setCode(c);
+      setStudent(d.student as Student);
+      setGroup((d.group as Group) || null);
+      setAttendance((d.attendance as Att[]) || []);
+      setSubs((d.subs as Sub[]) || []);
+      setPayments((d.payments as Payment[]) || []);
+      setNotes((d.notes as Note[]) || []);
+      setQuestions((d.questions as Q[]) || []);
+      setHomework((d.homework as HW[]) || []);
+    } catch {
+      setError("الكود غير صحيح");
+    }
     setLoading(false);
   }
 
   function logout() {
+    localStorage.removeItem("najm_student_code");
     localStorage.removeItem("najm_student_id");
+    setCode(null);
     setStudent(null); setGroup(null); setAttendance([]); setSubs([]); setPayments([]); setNotes([]); setQuestions([]); setHomework([]);
   }
 
@@ -242,9 +247,9 @@ function Portal() {
           </section>
         )}
 
-        {tab === "exams" && <ExamsTab student={student} />}
+        {tab === "exams" && <ExamsTab code={code!} />}
 
-        {tab === "homework" && <HomeworkTab student={student} homework={homework} subs={subs} reload={() => loadStudent(student.id)} />}
+        {tab === "homework" && <HomeworkTab code={code!} homework={homework} subs={subs} reload={() => loadStudent(code!)} />}
 
         {tab === "grades" && (
           <section className="rounded-2xl bg-white p-6 shadow-sm">
@@ -316,32 +321,32 @@ function Portal() {
           </section>
         )}
 
-        {tab === "ask" && <AskTab studentId={student.id} questions={questions} reload={() => loadStudent(student.id)} />}
+        {tab === "ask" && <AskTab code={code!} questions={questions} reload={() => loadStudent(code!)} />}
 
         {tab === "ai" && <AiTab student={student} group={group} attendance={attendance} homework={homework} subs={subs} notes={notes} totalDue={totalDue} paidTotal={paidTotal} balance={balance} />}
 
-        {tab === "edit" && <EditTab student={student} reload={() => loadStudent(student.id)} />}
+        {tab === "edit" && <EditTab code={code!} student={student} reload={() => loadStudent(code!)} />}
       </main>
     </div>
   );
 }
 
-function HomeworkTab({ student, homework, subs, reload }: { student: Student; homework: HW[]; subs: Sub[]; reload: () => void }) {
+function HomeworkTab({ code, homework, subs, reload }: { code: string; homework: HW[]; subs: Sub[]; reload: () => void }) {
   const [uploading, setUploading] = useState<string | null>(null);
   const [savingText, setSavingText] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const makeUrl = useServerFn(createHomeworkUploadUrl);
+  const finalize = useServerFn(finalizeHomeworkUpload);
+  const saveTextFn = useServerFn(submitHomeworkText);
+  const fileUrl = useServerFn(getSubmissionUrl);
 
   async function upload(hw: HW, file: File) {
     setUploading(hw.id);
     try {
-      const path = `${student.id}/${hw.id}_${Date.now()}_${file.name}`;
-      const { error: e1 } = await supabase.storage.from("submissions").upload(path, file, { upsert: true });
-      if (e1) throw e1;
-      const existing = subs.find(x => x.homework_id === hw.id && x.student_id === student.id);
-      const body: any = { homework_id: hw.id, student_id: student.id, file_url: path, status: "submitted" };
-      if (existing) body.id = existing.id;
-      const { error: e2 } = await supabase.from("homework_submissions").upsert(body, { onConflict: "homework_id,student_id" });
-      if (e2) throw e2;
+      const { path, token } = await makeUrl({ data: { code, homework_id: hw.id, filename: file.name } });
+      const { error } = await supabase.storage.from("submissions").uploadToSignedUrl(path, token, file);
+      if (error) throw error;
+      await finalize({ data: { code, homework_id: hw.id, path } });
       toast.success("تم رفع الحل بنجاح");
       reload();
     } catch (err: any) { toast.error(err.message || "فشل الرفع"); }
@@ -353,11 +358,7 @@ function HomeworkTab({ student, homework, subs, reload }: { student: Student; ho
     if (!text) { toast.error("اكتب حل الواجب أو ملاحظتك أولاً"); return; }
     setSavingText(hw.id);
     try {
-      const existing = subs.find(x => x.homework_id === hw.id && x.student_id === student.id);
-      const body: any = { homework_id: hw.id, student_id: student.id, answer_text: text, status: "submitted" };
-      if (existing) body.id = existing.id;
-      const { error } = await supabase.from("homework_submissions").upsert(body, { onConflict: "homework_id,student_id" });
-      if (error) throw error;
+      await saveTextFn({ data: { code, homework_id: hw.id, answer_text: text } });
       toast.success("تم إرسال حلك للأستاذ");
       setDrafts(d => ({ ...d, [hw.id]: "" }));
       reload();
@@ -366,8 +367,10 @@ function HomeworkTab({ student, homework, subs, reload }: { student: Student; ho
   }
 
   async function viewFile(path: string) {
-    const { data } = await supabase.storage.from("submissions").createSignedUrl(path, 3600);
-    if (data?.signedUrl) window.open(data.signedUrl, "_blank");
+    try {
+      const { url } = await fileUrl({ data: { code, path } });
+      window.open(url, "_blank");
+    } catch (err: any) { toast.error(err.message || "تعذر فتح الملف"); }
   }
 
   return (
@@ -430,17 +433,19 @@ function HomeworkTab({ student, homework, subs, reload }: { student: Student; ho
 }
 
 
-function AskTab({ studentId, questions, reload }: { studentId: string; questions: Q[]; reload: () => void }) {
+function AskTab({ code, questions, reload }: { code: string; questions: Q[]; reload: () => void }) {
   const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
+  const ask = useServerFn(askTeacher);
   async function send(e: React.FormEvent) {
     e.preventDefault();
     if (!body.trim()) return;
     setSending(true);
-    const { error } = await supabase.from("questions").insert({ student_id: studentId, body: body.trim() });
+    try {
+      await ask({ data: { code, body: body.trim() } });
+      toast.success("تم إرسال السؤال للأستاذ"); setBody(""); reload();
+    } catch (err: any) { toast.error(err.message || "تعذر الإرسال"); }
     setSending(false);
-    if (error) toast.error(error.message);
-    else { toast.success("تم إرسال السؤال للأستاذ"); setBody(""); reload(); }
   }
   return (
     <section className="rounded-2xl bg-white p-6 shadow-sm">
@@ -527,19 +532,22 @@ function AiTab({ student, group, attendance, homework, subs, notes, totalDue, pa
   );
 }
 
-function EditTab({ student, reload }: { student: Student; reload: () => void }) {
+function EditTab({ code, student, reload }: { code: string; student: Student; reload: () => void }) {
   const [saving, setSaving] = useState(false);
+  const update = useServerFn(updateStudentProfile);
   async function save(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setSaving(true);
     const fd = new FormData(e.currentTarget);
-    const payload: any = {};
+    const fields: Record<string, string> = {};
     ["full_name", "phone", "parent_phone", "address", "school", "section"].forEach(k => {
-      payload[k] = String(fd.get(k) || "").trim() || null;
+      fields[k] = String(fd.get(k) || "").trim();
     });
-    const { error } = await supabase.from("students").update(payload).eq("id", student.id);
+    try {
+      await update({ data: { code, fields } });
+      toast.success("تم حفظ التعديلات"); reload();
+    } catch (err: any) { toast.error(err.message || "تعذر الحفظ"); }
     setSaving(false);
-    if (error) toast.error(error.message); else { toast.success("تم حفظ التعديلات"); reload(); }
   }
   return (
     <section className="rounded-2xl bg-white p-6 shadow-sm">
