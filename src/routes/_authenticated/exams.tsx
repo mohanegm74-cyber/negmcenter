@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
-import { Sparkles, Trash2, Send, BarChart3, X, Loader2, FileQuestion, Printer } from "lucide-react";
+import { Sparkles, Trash2, Send, BarChart3, X, Loader2, FileQuestion, Printer, Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { generateExam } from "@/lib/exams.functions";
 import { QUESTION_KINDS, DIFFICULTIES, TERMS, GRADES, answerToText } from "@/lib/exam-constants";
@@ -109,6 +109,23 @@ function ExamsPage() {
     } finally { setBusy(false); toast.dismiss(t); }
   }
 
+  /** إنشاء اختبار يدوي فارغ يضيف المعلم أسئلته بنفسه */
+  async function createManual() {
+    if (!form.lesson.trim()) { toast.error("أدخل اسم الدرس"); return; }
+    const title = `${form.subject || "اختبار"} — ${form.lesson} (${form.grade})`;
+    const { data: exam, error } = await supabase.from("exams").insert({
+      title, grade: form.grade, term: form.term, group_id: form.group_id || null,
+      subject: form.subject || null, unit: null, lesson: form.lesson,
+      question_count: 0, duration_minutes: Number(form.duration_minutes),
+      total_score: Number(form.total_score), difficulty: form.difficulty,
+      question_types: kinds, adaptive: form.adaptive, status: "draft", sources: [],
+    }).select().single();
+    if (error) return toast.error(error.message);
+    toast.success("تم إنشاء اختبار يدوي — أضف الأسئلة من «بنك الأسئلة»");
+    await load();
+    setDetail(exam as Exam);
+  }
+
   async function setStatus(ex: Exam, status: string) {
     const { error } = await supabase.from("exams").update({ status }).eq("id", ex.id);
     if (error) return toast.error(error.message);
@@ -179,7 +196,11 @@ function ExamsPage() {
 
         <button onClick={create} disabled={busy}
           className="mt-5 inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-black text-primary-foreground shadow disabled:opacity-60">
-          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />} ابدأ بناء الاختبار
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />} بناء الاختبار بالذكاء الاصطناعي
+        </button>
+        <button onClick={createManual} disabled={busy}
+          className="mt-5 mr-2 inline-flex items-center gap-2 rounded-xl border border-primary px-5 py-2.5 text-sm font-black text-primary disabled:opacity-60">
+          <Plus className="h-4 w-4" /> إنشاء اختبار يدوي
         </button>
       </section>
 
@@ -255,6 +276,20 @@ function ExamDetail({ exam, students, onClose }: { exam: Exam; students: Student
       }
     })();
   }, [exam.id]);
+
+  async function reloadQuestions() {
+    const { data } = await supabase.from("exam_questions").select("*").eq("exam_id", exam.id).order("position");
+    const list = (data as Q[]) || [];
+    setQuestions(list);
+    await supabase.from("exams").update({ question_count: list.length }).eq("id", exam.id);
+  }
+  async function removeQuestion(id: string) {
+    if (!confirm("حذف هذا السؤال؟")) return;
+    const { error } = await supabase.from("exam_questions").delete().eq("id", id);
+    if (error) return toast.error(error.message);
+    toast.success("تم حذف السؤال");
+    reloadQuestions();
+  }
 
   const eligible = useMemo(
     () => students.filter((s) => (exam.group_id ? s.group_id === exam.group_id : exam.grade ? s.grade === exam.grade : true)),
@@ -373,9 +408,13 @@ function ExamDetail({ exam, students, onClose }: { exam: Exam; students: Student
 
         {view === "bank" && (
           <div className="space-y-3">
+            <ManualQuestion examId={exam.id} nextPos={questions.length + 1} onAdded={reloadQuestions} />
             {questions.map((q) => (
               <div key={q.id} className="rounded-xl border p-3 text-sm">
-                <div className="font-bold">{q.position}. {q.prompt}</div>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="font-bold">{q.position}. {q.prompt}</div>
+                  <button onClick={() => removeQuestion(q.id)} className="rounded-lg bg-destructive/10 p-1 text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
+                </div>
                 {q.passage && <div className="mt-1 rounded bg-muted/50 p-2 text-xs">{q.passage}</div>}
                 {Array.isArray(q.options) && (q.options as string[]).length > 0 && (
                   <ul className="mt-1 list-disc pr-5 text-xs text-muted-foreground">{(q.options as string[]).map((o, i) => <li key={i}>{o}</li>)}</ul>
@@ -401,6 +440,60 @@ function Kpi({ label, value }: { label: string; value: any }) {
     <div className="rounded-xl border bg-muted/30 p-3 text-center">
       <div className="text-lg font-black text-primary">{value}</div>
       <div className="text-[11px] text-muted-foreground">{label}</div>
+    </div>
+  );
+}
+
+/** إضافة سؤال يدوياً إلى بنك أسئلة الاختبار */
+function ManualQuestion({ examId, nextPos, onAdded }: { examId: string; nextPos: number; onAdded: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState({ kind: QUESTION_KINDS[0] as string, prompt: "", options: "", correct: "", rationale: "", skill: "", difficulty: "medium", score: 5 });
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    if (!q.prompt.trim() || !q.correct.trim()) { toast.error("اكتب السؤال والإجابة الصحيحة"); return; }
+    setSaving(true);
+    const { error } = await supabase.from("exam_questions").insert({
+      exam_id: examId, position: nextPos, kind: q.kind, prompt: q.prompt,
+      options: q.options.split("\n").map((o) => o.trim()).filter(Boolean),
+      correct_answer: q.correct, rationale: q.rationale || null, skill: q.skill || null,
+      difficulty: q.difficulty, score: Number(q.score) || 1,
+    });
+    setSaving(false);
+    if (error) return toast.error(error.message);
+    toast.success("تمت إضافة السؤال");
+    setQ({ ...q, prompt: "", options: "", correct: "", rationale: "" });
+    onAdded();
+  }
+
+  if (!open) {
+    return (
+      <button onClick={() => setOpen(true)} className="inline-flex items-center gap-1.5 rounded-xl border border-primary px-4 py-2 text-xs font-black text-primary">
+        <Plus className="h-4 w-4" /> إضافة سؤال يدوياً
+      </button>
+    );
+  }
+  return (
+    <div className="space-y-2 rounded-xl border bg-muted/20 p-3">
+      <div className="grid gap-2 sm:grid-cols-3">
+        <Field label="نوع السؤال">
+          <select className={inp} value={q.kind} onChange={(e) => setQ({ ...q, kind: e.target.value })}>
+            {QUESTION_KINDS.map((k) => <option key={k}>{k}</option>)}
+          </select>
+        </Field>
+        <Field label="المهارة"><input className={inp} value={q.skill} onChange={(e) => setQ({ ...q, skill: e.target.value })} /></Field>
+        <Field label="الدرجة"><input type="number" min={1} className={inp} value={q.score} onChange={(e) => setQ({ ...q, score: +e.target.value })} /></Field>
+      </div>
+      <Field label="نص السؤال"><textarea rows={2} className={inp} value={q.prompt} onChange={(e) => setQ({ ...q, prompt: e.target.value })} /></Field>
+      <Field label="الاختيارات (اختياري — كل اختيار في سطر)"><textarea rows={3} className={inp} value={q.options} onChange={(e) => setQ({ ...q, options: e.target.value })} /></Field>
+      <div className="grid gap-2 sm:grid-cols-2">
+        <Field label="الإجابة الصحيحة"><input className={inp} value={q.correct} onChange={(e) => setQ({ ...q, correct: e.target.value })} /></Field>
+        <Field label="سبب الإجابة (اختياري)"><input className={inp} value={q.rationale} onChange={(e) => setQ({ ...q, rationale: e.target.value })} /></Field>
+      </div>
+      <div className="flex gap-2">
+        <button onClick={save} disabled={saving} className="rounded-lg bg-primary px-4 py-2 text-xs font-black text-primary-foreground disabled:opacity-60">حفظ السؤال</button>
+        <button onClick={() => setOpen(false)} className="rounded-lg border px-4 py-2 text-xs font-bold">إغلاق</button>
+      </div>
     </div>
   );
 }
