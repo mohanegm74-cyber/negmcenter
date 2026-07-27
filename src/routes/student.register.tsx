@@ -2,7 +2,8 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast, Toaster } from "sonner";
 import { ArrowRight, Save } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { useServerFn } from "@tanstack/react-start";
+import { registerStudent } from "@/lib/student.functions";
 
 export const Route = createFileRoute("/student/register")({
   head: () => ({ meta: [{ title: "تسجيل طالب جديد — سنتر الأستاذ محمد نجم" }, { name: "description", content: "استمارة تسجيل طالب جديد في السنتر." }] }),
@@ -18,38 +19,24 @@ function RegisterStudent() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
 
+  const register = useServerFn(registerStudent);
+
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setLoading(true);
     const fd = new FormData(e.currentTarget);
-    const payload: Record<string, any> = {};
+    const payload: Record<string, string> = {};
     fd.forEach((v, k) => { const s = String(v).trim(); if (s) payload[k] = s; });
-    if (!payload.full_name) { toast.error("الاسم مطلوب"); setLoading(false); return; }
-
-    // Duplicate check: same full name + (parent_phone OR national_id OR phone)
     try {
-      let dupQ = supabase.from("students").select("id, full_name").eq("full_name", payload.full_name);
-      const orParts: string[] = [];
-      if (payload.parent_phone) orParts.push(`parent_phone.eq.${payload.parent_phone}`);
-      if (payload.national_id) orParts.push(`national_id.eq.${payload.national_id}`);
-      if (payload.phone) orParts.push(`phone.eq.${payload.phone}`);
-      if (orParts.length > 0) {
-        const { data: dups } = await dupQ.or(orParts.join(",")).limit(1);
-        if (dups && dups.length > 0) {
-          setLoading(false);
-          toast.error("هذا الطالب مسجَّل بالفعل. يرجى مراجعة الأستاذ على واتساب 01015174084 قبل إعادة التسجيل.");
-          return;
-        }
-      }
-    } catch { /* ignore duplicate check errors and proceed */ }
-
-    const { data, error } = await supabase.from("students").insert(payload).select("id, code, full_name").single();
-    setLoading(false);
-    if (error) { toast.error("تعذر الحفظ: " + error.message); return; }
-    localStorage.setItem("najm_student_id", data.id);
-    localStorage.setItem("najm_student_code", data.code);
-    toast.success("تم تسجيل الطالب بنجاح");
-    setTimeout(() => navigate({ to: "/student/portal" }), 800);
+      const res = await register({ data: payload });
+      localStorage.setItem("najm_student_code", res.code);
+      toast.success("تم تسجيل الطالب بنجاح");
+      setTimeout(() => navigate({ to: "/student/portal" }), 800);
+    } catch (err: any) {
+      toast.error(err?.message || "تعذر الحفظ");
+    } finally {
+      setLoading(false);
+    }
   }
 
 
