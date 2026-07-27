@@ -5,7 +5,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { Sparkles, Trash2, Send, BarChart3, X, Loader2, FileQuestion, Printer } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { generateExam } from "@/lib/exams.functions";
-import { QUESTION_KINDS, DIFFICULTIES, TERMS, answerToText } from "@/lib/exam-constants";
+import { QUESTION_KINDS, DIFFICULTIES, TERMS, GRADES, answerToText } from "@/lib/exam-constants";
 import { openPrint, esc } from "@/lib/print";
 
 export const Route = createFileRoute("/_authenticated/exams")({
@@ -46,7 +46,7 @@ function ExamsPage() {
   const gen = useServerFn(generateExam);
 
   const [form, setForm] = useState({
-    grade: "", term: TERMS[0], group_id: "", subject: "", unit: "", lesson: "",
+    grade: GRADES[0], term: TERMS[0], group_id: "", subject: "", lesson: "",
     question_count: 10, duration_minutes: 20, total_score: 100, difficulty: "medium", adaptive: false,
   });
   const [kinds, setKinds] = useState<string[]>(["اختيار من متعدد", "صح أو خطأ", "أكمل"]);
@@ -76,7 +76,7 @@ function ExamsPage() {
       const res = await gen({
         data: {
           grade: form.grade, term: form.term, subject: form.subject || "—",
-          unit: form.unit || "—", lesson: form.lesson,
+          unit: "—", lesson: form.lesson,
           questionCount: Number(form.question_count), totalScore: Number(form.total_score),
           difficulty: form.difficulty, kinds,
         },
@@ -84,7 +84,7 @@ function ExamsPage() {
       const title = `${form.subject || "اختبار"} — ${form.lesson} (${form.grade})`;
       const { data: exam, error } = await supabase.from("exams").insert({
         title, grade: form.grade, term: form.term, group_id: form.group_id || null,
-        subject: form.subject || null, unit: form.unit || null, lesson: form.lesson,
+        subject: form.subject || null, unit: null, lesson: form.lesson,
         question_count: res.questions.length, duration_minutes: Number(form.duration_minutes),
         total_score: Number(form.total_score), difficulty: form.difficulty,
         question_types: kinds, adaptive: form.adaptive, status: "draft", sources: res.sources,
@@ -133,7 +133,11 @@ function ExamsPage() {
       <section className="rounded-2xl border bg-white p-5 shadow-sm">
         <h2 className="mb-4 flex items-center gap-2 text-sm font-black text-primary"><Sparkles className="h-4 w-4" /> إنشاء اختبار جديد بالذكاء الاصطناعي</h2>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Field label="الصف"><input className={inp} value={form.grade} onChange={(e) => setForm({ ...form, grade: e.target.value })} placeholder="مثال: الصف الثالث الإعدادي" /></Field>
+          <Field label="الصف">
+            <select className={inp} value={form.grade} onChange={(e) => setForm({ ...form, grade: e.target.value })}>
+              {GRADES.map((g) => <option key={g}>{g}</option>)}
+            </select>
+          </Field>
           <Field label="الفصل الدراسي">
             <select className={inp} value={form.term} onChange={(e) => setForm({ ...form, term: e.target.value })}>
               {TERMS.map((t) => <option key={t}>{t}</option>)}
@@ -146,7 +150,6 @@ function ExamsPage() {
             </select>
           </Field>
           <Field label="المادة"><input className={inp} value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} placeholder="اللغة العربية" /></Field>
-          <Field label="الوحدة"><input className={inp} value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} /></Field>
           <Field label="الدرس"><input className={inp} value={form.lesson} onChange={(e) => setForm({ ...form, lesson: e.target.value })} /></Field>
           <Field label="عدد الأسئلة"><input type="number" min={1} max={40} className={inp} value={form.question_count} onChange={(e) => setForm({ ...form, question_count: +e.target.value })} /></Field>
           <Field label="زمن الاختبار (دقيقة)"><input type="number" min={1} className={inp} value={form.duration_minutes} onChange={(e) => setForm({ ...form, duration_minutes: +e.target.value })} /></Field>
