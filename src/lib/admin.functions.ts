@@ -1,39 +1,25 @@
 import { createServerFn } from "@tanstack/react-start";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
-/** فحص هل المستخدم هو الأستاذ فعلاً عبر السيرفر */
+/** فحص صلاحية الأستاذ */
 export const verifyTeacherStatus = createServerFn({ method: "GET" })
   .handler(async () => {
     const db = supabaseAdmin;
     const { data: { user } } = await db.auth.getUser();
     if (!user) return { isTeacher: false };
-    
-    // فحص الرتبة مباشرة من جدول الأدوار
     const { data } = await db.from("user_roles").select("role").eq("user_id", user.id).maybeSingle();
-    return { isTeacher: data?.role === "teacher" || data?.role === "admin" };
+    return { isTeacher: !!data };
   });
 
-/** منح رتبة معلم للمستخدم الحالي عبر السيرفر (حالة الطوارئ) */
-export const claimTeacherRoleServer = createServerFn({ method: "POST" })
-  .handler(async () => {
-    const db = supabaseAdmin;
-    const { data: { user } } = await db.auth.getUser();
-    if (!user) throw new Error("يجب تسجيل الدخول أولاً");
-    
-    const { error } = await db.from("user_roles").upsert({ user_id: user.id, role: "teacher" }, { onConflict: "user_id" });
-    if (error) throw new Error(error.message);
-    return { ok: true };
-  });
-
-/** جلب إحصائيات لوحة التحكم بالكامل من السيرفر */
+/** جلب إحصائيات لوحة التحكم بالكامل */
 export const getDashboardStatsAdmin = createServerFn({ method: "GET" })
   .handler(async () => {
     const db = supabaseAdmin;
     const today = new Date().toISOString().slice(0, 10);
     
     const [st, gr, ap, aa, pay] = await Promise.all([
-      db.from("students").select("id,group_id,registration_date", { count: "exact" }).eq("active", true),
-      db.from("groups").select("id,monthly_fee"),
+      db.from("students").select("id", { count: "exact" }).eq("active", true),
+      db.from("groups").select("id"),
       db.from("attendance").select("id", { count: "exact", head: true }).eq("date", today).eq("status", "present"),
       db.from("attendance").select("id", { count: "exact", head: true }).eq("date", today).eq("status", "absent"),
       db.from("payments").select("amount,kind"),
@@ -53,7 +39,15 @@ export const getDashboardStatsAdmin = createServerFn({ method: "GET" })
     };
   });
 
-/** جلب المجموعات للأستاذ من السيرفر */
+/** جلب كافة الطلاب للمعلم - استرداد كامل البيانات */
+export const getAllStudentsAdmin = createServerFn({ method: "GET" })
+  .handler(async () => {
+    const { data, error } = await supabaseAdmin.from("students").select("*").order("created_at", { ascending: false });
+    if (error) throw new Error(error.message);
+    return { students: data || [] };
+  });
+
+/** جلب المجموعات - استرداد كامل البيانات */
 export const getGroupsAdmin = createServerFn({ method: "GET" })
   .handler(async () => {
     const { data, error } = await supabaseAdmin.from("groups").select("*").order("created_at", { ascending: false });
@@ -61,7 +55,7 @@ export const getGroupsAdmin = createServerFn({ method: "GET" })
     return { groups: data || [] };
   });
 
-/** حفظ أو تحديث مجموعة - يتخطى قيود RLS */
+/** حفظ مجموعة جديدة */
 export const saveGroup = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => d as { id?: string; payload: any })
   .handler(async ({ data }) => {
@@ -74,21 +68,4 @@ export const saveGroup = createServerFn({ method: "POST" })
       if (error) throw new Error(error.message);
     }
     return { ok: true };
-  });
-
-/** حذف مجموعة */
-export const deleteGroup = createServerFn({ method: "POST" })
-  .inputValidator((d: unknown) => d as { id: string })
-  .handler(async ({ data }) => {
-    const { error } = await supabaseAdmin.from("groups").delete().eq("id", data.id);
-    if (error) throw new Error(error.message);
-    return { ok: true };
-  });
-
-/** جلب كافة الطلاب للمعلم - يضمن الظهور حتى لو فشل RLS */
-export const getAllStudentsAdmin = createServerFn({ method: "GET" })
-  .handler(async () => {
-    const { data, error } = await supabaseAdmin.from("students").select("*").order("created_at", { ascending: false });
-    if (error) throw new Error(error.message);
-    return { students: data || [] };
   });

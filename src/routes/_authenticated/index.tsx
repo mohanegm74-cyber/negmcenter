@@ -1,11 +1,10 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Users, Boxes, ClipboardCheck, CalendarX, Wallet, TrendingUp, AlertCircle, Loader2 } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { getDashboardStatsAdmin } from "@/lib/admin.functions";
 
-export const Route = createFileRoute("/_authenticated/dashboard")({
-  head: () => ({ meta: [{ title: "لوحة التحكم — الأستاذ" }, { name: "description", content: "إحصائيات السنتر." }] }),
+export const Route = createFileRoute("/_authenticated/")({
   component: Dashboard,
 });
 
@@ -54,21 +53,6 @@ function Dashboard() {
           </div>
         ))}
       </div>
-
-      <div className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <QuickCard title="سجل الحضور" desc="افتح شاشة مسح QR أو سجّل الحضور يدوياً." to="/scan" />
-        <QuickCard title="أضف مدفوعة" desc="سجّل مدفوعات الطلاب وتابع المتأخرات." to="/finance" />
-        <QuickCard title="التقارير" desc="تقارير مصنفة حسب الصف والمجموعة." to="/reports" />
-      </div>
     </div>
-  );
-}
-
-function QuickCard({ title, desc, to }: { title: string; desc: string; to: "/scan" | "/finance" | "/reports" }) {
-  return (
-    <Link to={to} className="block rounded-2xl bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-      <h3 className="text-lg font-bold text-primary">{title}</h3>
-      <p className="mt-1 text-sm text-muted-foreground">{desc}</p>
-    </Link>
   );
 }

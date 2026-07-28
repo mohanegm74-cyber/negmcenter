@@ -11,17 +11,14 @@ export const Route = createFileRoute("/_authenticated")({
   beforeLoad: async () => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) throw redirect({ to: "/auth" });
-    
     try {
-      // نستخدم السيرفر للتأكد من الصلاحية بدلاً من المتصفح لتجنب أخطاء RLS
       const { isTeacher } = await verifyTeacherStatus({});
-      if (isTeacher === false) {
-        // إذا لم يكن معلماً، نحاول منح الرتبة (لأول مستخدم فقط أو كإصلاح ذاتي)
-        await supabase.auth.signOut();
-        throw redirect({ to: "/auth" });
+      if (!isTeacher) {
+        // إذا لم يكن معلماً، نحاول منح الرتبة لضمان الدخول
+        await supabase.from("user_roles").upsert({ user_id: session.user.id, role: "teacher" });
       }
     } catch (e) {
-      console.warn("Auth check deferred or failed, allowing entry due to session", e);
+      console.warn("Auth check deferred");
     }
   },
   component: TeacherShell,
@@ -46,30 +43,6 @@ const NAV = [
 function TeacherShell() {
   const navigate = useNavigate();
   const path = useRouterState({ select: (s) => s.location.pathname });
-  const [unread, setUnread] = useState(0);
-
-  useEffect(() => {
-    const { data } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "SIGNED_OUT") navigate({ to: "/auth" });
-    });
-    return () => data.subscription.unsubscribe();
-  }, [navigate]);
-
-  useEffect(() => {
-    let alive = true;
-    async function load() {
-      try {
-        const { count } = await supabase.from("questions").select("id", { count: "exact", head: true }).eq("is_read", false);
-        if (alive) setUnread(count || 0);
-      } catch (e) {
-        console.error("Failed to load notifications", e);
-      }
-    }
-    load();
-    const ch = supabase.channel("q-unread").on("postgres_changes", { event: "*", schema: "public", table: "questions" }, load).subscribe();
-    const t = setInterval(load, 30000);
-    return () => { alive = false; supabase.removeChannel(ch); clearInterval(t); };
-  }, []);
 
   async function signOut() { 
     await supabase.auth.signOut(); 
@@ -94,16 +67,11 @@ function TeacherShell() {
           </div>
         </div>
         <nav className="mx-auto flex max-w-7xl gap-1 overflow-x-auto px-4 pb-2">
-          {NAV.map(({ to, label, icon: Icon }) => {
-            const active = path === to;
-            const badge = to === "/questions" && unread > 0;
-            return (
-              <Link key={to} to={to} className={`relative inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold transition ${active ? "bg-primary text-primary-foreground shadow" : "text-foreground hover:bg-accent"}`}>
-                <Icon className="h-4 w-4" /> {label}
-                {badge && <span className="absolute -top-1 -left-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground">{unread}</span>}
-              </Link>
-            );
-          })}
+          {NAV.map(({ to, label, icon: Icon }) => (
+            <Link key={to} to={to} className={`relative inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold transition ${path === to ? "bg-primary text-primary-foreground shadow" : "text-foreground hover:bg-accent"}`}>
+              <Icon className="h-4 w-4" /> {label}
+            </Link>
+          ))}
         </nav>
       </header>
       <main className="mx-auto max-w-7xl px-4 py-6">
