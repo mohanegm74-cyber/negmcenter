@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 
-/** فحص صلاحية الأستاذ بشكل مباشر من جدول الرتب */
+/** فحص صلاحية الأستاذ */
 export const verifyTeacherStatus = createServerFn({ method: "GET" })
   .handler(async () => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -9,17 +9,30 @@ export const verifyTeacherStatus = createServerFn({ method: "GET" })
     if (!user) return { isTeacher: false };
     
     const { data } = await db.from("user_roles").select("role").eq("user_id", user.id).maybeSingle();
-    const isTeacher = data?.role === "teacher" || data?.role === "admin";
-    
-    if (!data) {
-      await db.from("user_roles").insert({ user_id: user.id, role: "teacher" });
-      return { isTeacher: true };
-    }
-    
-    return { isTeacher };
+    return { isTeacher: data?.role === "teacher" || data?.role === "admin" };
   });
 
-/** جلب الإحصائيات مع ضمان الربط الصحيح بين الجداول */
+/** جلب كل البيانات الأساسية للأستاذ بضمان تخطي RLS */
+export const getAdminDataSummary = createServerFn({ method: "GET" })
+  .handler(async () => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const db = supabaseAdmin;
+    
+    const [st, gr, py, at] = await Promise.all([
+      db.from("students").select("*").order("full_name"),
+      db.from("groups").select("*").order("name"),
+      db.from("payments").select("*").order("paid_at", { ascending: false }),
+      db.from("attendance").select("*").order("date", { ascending: false }),
+    ]);
+
+    return { 
+      students: st.data || [], 
+      groups: gr.data || [], 
+      payments: py.data || [],
+      attendance: at.data || []
+    };
+  });
+
 export const getDashboardStatsAdmin = createServerFn({ method: "GET" })
   .handler(async () => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");

@@ -1,48 +1,60 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Check, X, Clock, ClipboardCheck } from "lucide-react";
+import { Check, X, Clock, ClipboardCheck, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useServerFn } from "@tanstack/react-start";
+import { getAdminDataSummary } from "@/lib/admin.functions";
 
 export const Route = createFileRoute("/_authenticated/attendance")({
-  head: () => ({ meta: [{ title: "الحضور — الأستاذ" }, { name: "description", content: "تسجيل حضور الطلاب حسب المجموعة." }] }),
+  head: () => ({ meta: [{ title: "الحضور — الأستاذ" }, { name: "description", content: "تسجيل حضور الطلاب." }] }),
   component: AttendancePage,
 });
 
 type Group = { id: string; name: string };
-type Student = { id: string; full_name: string; code: string };
+type Student = { id: string; full_name: string; code: string; group_id: string | null };
 type Att = { student_id: string; status: string };
 
 function AttendancePage() {
   const [groups, setGroups] = useState<Group[]>([]);
+  const [allStudents, setAllStudents] = useState<Student[]>([]);
   const [groupId, setGroupId] = useState<string>("");
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
-  const [students, setStudents] = useState<Student[]>([]);
   const [statusMap, setStatusMap] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => { 
-    supabase.from("groups").select("id,name").order("name").then(({ data }) => setGroups((data as Group[]) || [])); 
-  }, []);
+  const loadData = useServerFn(getAdminDataSummary);
 
-  useEffect(() => {
-    if (!groupId) { setStudents([]); return; }
-    (async () => {
-      // ربط مباشر: جلب الطلاب الذين ينتمون لهذه المجموعة فقط
-      const { data: st } = await supabase.from("students").select("id,full_name,code").eq("group_id", groupId).eq("active", true).order("full_name");
-      setStudents((st as Student[]) || []);
+  async function fetchAll() {
+    setLoading(true);
+    try {
+      const res = await loadData({});
+      setGroups(res.groups as Group[]);
+      setAllStudents(res.students as Student[]);
       
-      const { data: at } = await supabase.from("attendance").select("student_id,status").eq("group_id", groupId).eq("date", date);
       const map: Record<string, string> = {};
-      (at as Att[] | null)?.forEach(a => { map[a.student_id] = a.status; });
+      (res.attendance as any[])
+        .filter(a => a.date === date)
+        .forEach(a => { map[a.student_id] = a.status; });
       setStatusMap(map);
-    })();
-  }, [groupId, date]);
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { fetchAll(); }, [date]);
+
+  const displayedStudents = allStudents.filter(s => s.group_id === groupId);
 
   async function mark(student_id: string, status: "present" | "absent" | "late") {
     const { error } = await supabase.from("attendance").upsert({ student_id, group_id: groupId, date, status }, { onConflict: "student_id,date" });
     if (error) { toast.error(error.message); return; }
     setStatusMap(m => ({ ...m, [student_id]: status }));
   }
+
+  if (loading && groups.length === 0) return <div className="flex h-64 items-center justify-center text-muted-foreground"><Loader2 className="h-8 w-8 animate-spin" /></div>;
 
   return (
     <div>
@@ -53,7 +65,7 @@ function AttendancePage() {
       
       <div className="mb-4 grid grid-cols-1 gap-3 rounded-2xl bg-white p-4 shadow-sm sm:grid-cols-2">
         <div>
-          <label className="mb-1.5 block text-sm font-semibold">اختر المجموعة للبدء</label>
+          <label className="mb-1.5 block text-sm font-semibold">اختر المجموعة</label>
           <select value={groupId} onChange={(e) => setGroupId(e.target.value)} className="w-full rounded-lg border border-input bg-white px-3 py-2 text-sm">
             <option value="">— اختر مجموعة —</option>
             {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
@@ -66,15 +78,15 @@ function AttendancePage() {
       </div>
 
       {!groupId ? (
-        <div className="rounded-2xl bg-white p-12 text-center text-muted-foreground shadow-sm">برجاء اختيار المجموعة لعرض الطلاب المرتبطين بها.</div>
-      ) : students.length === 0 ? (
-        <div className="rounded-2xl bg-white p-12 text-center text-muted-foreground shadow-sm">لا يوجد طلاب نشطين في هذه المجموعة حالياً.</div>
+        <div className="rounded-2xl bg-white p-12 text-center text-muted-foreground shadow-sm">برجاء اختيار المجموعة لعرض الطلاب.</div>
+      ) : displayedStudents.length === 0 ? (
+        <div className="rounded-2xl bg-white p-12 text-center text-muted-foreground shadow-sm">لا يوجد طلاب في هذه المجموعة.</div>
       ) : (
         <div className="overflow-hidden rounded-2xl bg-white shadow-sm">
           <table className="w-full text-sm">
             <thead className="bg-primary text-primary-foreground text-right"><tr><th className="p-3">الطالب</th><th className="p-3">الكود</th><th className="p-3 text-center">الحالة</th></tr></thead>
             <tbody>
-              {students.map(s => {
+              {displayedStudents.map(s => {
                 const st = statusMap[s.id];
                 return (
                   <tr key={s.id} className="border-t hover:bg-muted/30">

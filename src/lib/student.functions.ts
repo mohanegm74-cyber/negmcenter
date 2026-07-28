@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 
-/** تسجيل طالب جديد */
+/** تسجيل طالب جديد - إضافة تفعيل الحالة تلقائياً */
 export const registerStudent = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => d as Record<string, string>)
   .handler(async ({ data }) => {
@@ -13,7 +13,7 @@ export const registerStudent = createServerFn({ method: "POST" })
       "subject", "teacher_name", "notes", "group_id"
     ];
     
-    const payload: Record<string, any> = {};
+    const payload: Record<string, any> = { active: true }; // تفعيل الطالب فوراً عند التسجيل
     for (const k of FIELDS) {
       const v = str(data?.[k], k === "notes" || k === "address" ? 1000 : 120);
       if (v) payload[k] = v;
@@ -37,7 +37,6 @@ export const getAvailableGroups = createServerFn({ method: "GET" })
     return { groups: data || [] };
   });
 
-/** بوابة الطالب */
 export const getStudentPortal = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => d as { code: string })
   .handler(async ({ data }) => {
@@ -57,7 +56,6 @@ export const getStudentPortal = createServerFn({ method: "POST" })
     return { student, group: g.data, attendance: a.data || [], subs: hs.data || [], payments: p.data || [], notes: n.data || [], questions: q.data || [], homework: hw.data || [] };
   });
 
-/** تحديث البيانات */
 export const updateStudentProfile = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => d as { code: string; fields: Record<string, string> })
   .handler(async ({ data }) => {
@@ -72,7 +70,6 @@ export const updateStudentProfile = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-/** سؤال الأستاذ */
 export const askTeacher = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => d as { code: string; body: string })
   .handler(async ({ data }) => {
@@ -85,7 +82,6 @@ export const askTeacher = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-/** الواجبات */
 export const submitHomeworkText = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => d as { code: string; homework_id: string; answer_text: string })
   .handler(async ({ data }) => {
@@ -127,7 +123,6 @@ export const getSubmissionUrl = createServerFn({ method: "POST" })
     return { url: res.signedUrl };
   });
 
-/** وظائف الاختبارات الذكية المطلوبة لبناء التطبيق */
 export const getStudentExams = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => d as { code: string })
   .handler(async ({ data }) => {
