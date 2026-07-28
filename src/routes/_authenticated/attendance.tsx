@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Check, X, Clock } from "lucide-react";
+import { Check, X, Clock, ClipboardCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/_authenticated/attendance")({
@@ -20,13 +20,17 @@ function AttendancePage() {
   const [students, setStudents] = useState<Student[]>([]);
   const [statusMap, setStatusMap] = useState<Record<string, string>>({});
 
-  useEffect(() => { supabase.from("groups").select("id,name").order("name").then(({ data }) => setGroups((data as Group[]) || [])); }, []);
+  useEffect(() => { 
+    supabase.from("groups").select("id,name").order("name").then(({ data }) => setGroups((data as Group[]) || [])); 
+  }, []);
 
   useEffect(() => {
     if (!groupId) { setStudents([]); return; }
     (async () => {
-      const { data: st } = await supabase.from("students").select("id,full_name,code").eq("group_id", groupId).order("full_name");
+      // ربط مباشر: جلب الطلاب الذين ينتمون لهذه المجموعة فقط
+      const { data: st } = await supabase.from("students").select("id,full_name,code").eq("group_id", groupId).eq("active", true).order("full_name");
       setStudents((st as Student[]) || []);
+      
       const { data: at } = await supabase.from("attendance").select("student_id,status").eq("group_id", groupId).eq("date", date);
       const map: Record<string, string> = {};
       (at as Att[] | null)?.forEach(a => { map[a.student_id] = a.status; });
@@ -40,22 +44,18 @@ function AttendancePage() {
     setStatusMap(m => ({ ...m, [student_id]: status }));
   }
 
-  async function markAll(status: "present" | "absent") {
-    if (!students.length) return;
-    const rows = students.map(s => ({ student_id: s.id, group_id: groupId, date, status }));
-    const { error } = await supabase.from("attendance").upsert(rows, { onConflict: "student_id,date" });
-    if (error) toast.error(error.message);
-    else { toast.success("تم التسجيل"); setStatusMap(Object.fromEntries(students.map(s => [s.id, status]))); }
-  }
-
   return (
     <div>
-      <h1 className="mb-4 text-2xl font-black">تسجيل الحضور</h1>
-      <div className="mb-4 grid grid-cols-1 gap-3 rounded-2xl bg-white p-4 shadow-sm sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mb-4 flex items-center gap-2">
+        <ClipboardCheck className="h-6 w-6 text-primary" />
+        <h1 className="text-2xl font-black">تسجيل الحضور</h1>
+      </div>
+      
+      <div className="mb-4 grid grid-cols-1 gap-3 rounded-2xl bg-white p-4 shadow-sm sm:grid-cols-2">
         <div>
-          <label className="mb-1.5 block text-sm font-semibold">المجموعة</label>
+          <label className="mb-1.5 block text-sm font-semibold">اختر المجموعة للبدء</label>
           <select value={groupId} onChange={(e) => setGroupId(e.target.value)} className="w-full rounded-lg border border-input bg-white px-3 py-2 text-sm">
-            <option value="">— اختر —</option>
+            <option value="">— اختر مجموعة —</option>
             {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
           </select>
         </div>
@@ -63,25 +63,21 @@ function AttendancePage() {
           <label className="mb-1.5 block text-sm font-semibold">التاريخ</label>
           <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full rounded-lg border border-input bg-white px-3 py-2 text-sm" />
         </div>
-        <div className="flex items-end gap-2 sm:col-span-2 lg:col-span-2">
-          <button onClick={() => markAll("present")} disabled={!students.length} className="flex-1 rounded-lg bg-secondary px-4 py-2 text-sm font-bold text-secondary-foreground disabled:opacity-50">حضور جماعي</button>
-          <button onClick={() => markAll("absent")} disabled={!students.length} className="flex-1 rounded-lg bg-destructive px-4 py-2 text-sm font-bold text-destructive-foreground disabled:opacity-50">غياب جماعي</button>
-        </div>
       </div>
 
       {!groupId ? (
-        <div className="rounded-2xl bg-white p-12 text-center text-muted-foreground shadow-sm">اختر مجموعة لعرض طلابها.</div>
+        <div className="rounded-2xl bg-white p-12 text-center text-muted-foreground shadow-sm">برجاء اختيار المجموعة لعرض الطلاب المرتبطين بها.</div>
       ) : students.length === 0 ? (
-        <div className="rounded-2xl bg-white p-12 text-center text-muted-foreground shadow-sm">لا يوجد طلاب في هذه المجموعة.</div>
+        <div className="rounded-2xl bg-white p-12 text-center text-muted-foreground shadow-sm">لا يوجد طلاب نشطين في هذه المجموعة حالياً.</div>
       ) : (
         <div className="overflow-hidden rounded-2xl bg-white shadow-sm">
           <table className="w-full text-sm">
-            <thead className="bg-muted/50 text-right"><tr><th className="p-3">الطالب</th><th className="p-3">الكود</th><th className="p-3 text-center">الحالة</th></tr></thead>
+            <thead className="bg-primary text-primary-foreground text-right"><tr><th className="p-3">الطالب</th><th className="p-3">الكود</th><th className="p-3 text-center">الحالة</th></tr></thead>
             <tbody>
               {students.map(s => {
                 const st = statusMap[s.id];
                 return (
-                  <tr key={s.id} className="border-t">
+                  <tr key={s.id} className="border-t hover:bg-muted/30">
                     <td className="p-3 font-semibold">{s.full_name}</td>
                     <td className="p-3 font-mono text-xs text-muted-foreground">{s.code}</td>
                     <td className="p-3">
@@ -106,7 +102,7 @@ function StatusBtn({ active, tone, onClick, icon, label }: { active: boolean; to
   const cls = active
     ? tone === "secondary" ? "bg-secondary text-secondary-foreground"
     : tone === "destructive" ? "bg-destructive text-destructive-foreground"
-    : "bg-gold text-gold-foreground"
+    : "bg-gold text-gold-foreground shadow-md"
     : "bg-muted text-muted-foreground hover:bg-accent";
-  return <button onClick={onClick} className={`inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-bold transition ${cls}`}>{icon}{label}</button>;
+  return <button onClick={onClick} className={`inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-bold transition-all ${cls}`}>{icon}{label}</button>;
 }
