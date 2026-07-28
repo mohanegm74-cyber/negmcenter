@@ -17,6 +17,7 @@ export const getDashboardStatsAdmin = createServerFn({ method: "GET" })
     const db = supabaseAdmin;
     const today = new Date().toISOString().slice(0, 10);
     
+    // جلب البيانات من الجداول مباشرة لضمان ظهور السجلات القديمة والجديدة
     const [st, gr, ap, aa, pay] = await Promise.all([
       db.from("students").select("id", { count: "exact" }).eq("active", true),
       db.from("groups").select("id"),
@@ -67,5 +68,14 @@ export const saveGroup = createServerFn({ method: "POST" })
       const { error } = await db.from("groups").insert(data.payload);
       if (error) throw new Error(error.message);
     }
+    return { ok: true };
+  });
+
+/** حذف مجموعة */
+export const deleteGroup = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) => d as { id: string })
+  .handler(async ({ data }) => {
+    const { error } = await supabaseAdmin.from("groups").delete().eq("id", data.id);
+    if (error) throw new Error(error.message);
     return { ok: true };
   });
