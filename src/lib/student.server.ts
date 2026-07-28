@@ -1,10 +1,7 @@
 /** Server-only helpers for the public (code-based) student portal. */
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
-export function admin() {
-  // استخدام العميل الموحد الذي يحتوي على فحص للمتغيرات البيئية
-  return supabaseAdmin;
-}
+export const admin = supabaseAdmin;
 
 export function cleanCode(code: unknown) {
   const c = String(code ?? "").trim().toUpperCase();
@@ -12,12 +9,10 @@ export function cleanCode(code: unknown) {
   return c;
 }
 
-/** Resolve a student from their private access code, or throw. */
 export async function requireStudent(code: unknown) {
-  const db = admin();
-  const { data, error } = await db.from("students").select("*").eq("code", cleanCode(code)).maybeSingle();
+  const { data, error } = await admin.from("students").select("*").eq("code", cleanCode(code)).maybeSingle();
   if (error || !data) throw new Error("الكود غير صحيح");
-  return { db, student: data as any };
+  return { db: admin, student: data as any };
 }
 
 export function str(v: unknown, max = 500) {

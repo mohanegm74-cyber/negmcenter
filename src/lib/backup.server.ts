@@ -1,11 +1,9 @@
 /** Server-only helpers for full database backup & restore (teacher only). */
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
-export function admin() {
-  return supabaseAdmin;
-}
+export const admin = supabaseAdmin;
 
-/** Order matters: parents first so foreign keys resolve on restore. */
+/** الترتيب مهم: الجداول الأساسية أولاً لضمان عدم حدوث أخطاء في المفاتيح الخارجية */
 export const BACKUP_TABLES = [
   "groups",
   "students",
@@ -31,7 +29,7 @@ export type BackupFile = {
 };
 
 export async function dumpAll(): Promise<BackupFile> {
-  const db = admin();
+  const db = admin;
   const tables: Partial<Record<BackupTable, any[]>> = {};
   for (const t of BACKUP_TABLES) {
     const { data, error } = await db.from(t as any).select("*").limit(50000);
@@ -43,11 +41,10 @@ export async function dumpAll(): Promise<BackupFile> {
 
 export async function restoreAll(file: any, mode: "merge" | "replace") {
   if (!file || typeof file !== "object" || !file.tables) throw new Error("ملف النسخة الاحتياطية غير صالح");
-  const db = admin();
+  const db = admin;
   const result: Record<string, number> = {};
 
   if (mode === "replace") {
-    // delete children first
     for (const t of [...BACKUP_TABLES].reverse()) {
       const { error } = await db.from(t as any).delete().not("id", "is", null);
       if (error) throw new Error(`فشل حذف ${t}: ${error.message}`);

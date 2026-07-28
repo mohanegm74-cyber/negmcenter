@@ -7,7 +7,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { openPrint, esc } from "@/lib/print";
 import { generateCenterReport } from "@/lib/ai-report.functions";
 
-
 export const Route = createFileRoute("/_authenticated/reports")({
   head: () => ({ meta: [{ title: "التقارير — الأستاذ" }, { name: "description", content: "تقارير شاملة مصنفة حسب الصف والمجموعة." }] }),
   component: ReportsPage,
@@ -29,6 +28,7 @@ function ReportsPage() {
 
   useEffect(() => {
     (async () => {
+      // الربط الأساسي: جلب كل البيانات المتعلقة بالطلاب المسجلين
       const [s, g, a, p] = await Promise.all([
         supabase.from("students").select("id,full_name,code,grade,group_id,phone").eq("active", true),
         supabase.from("groups").select("id,name,grade,monthly_fee"),
@@ -44,7 +44,7 @@ function ReportsPage() {
 
   const groupMap = useMemo(() => Object.fromEntries(groups.map(g => [g.id, g])), [groups]);
 
-  // Report by grade
+  // تقرير حسب الصف: يربط الطلاب بمالياتهم وحضورهم
   const byGrade = useMemo(() => {
     const map = new Map<string, { grade: string; students: number; present: number; absent: number; late: number; income: number; dues: number }>();
     for (const s of students) {
@@ -68,7 +68,7 @@ function ReportsPage() {
     return Array.from(map.values()).sort((a, b) => a.grade.localeCompare(b.grade));
   }, [students, att, pay]);
 
-  // Report by group
+  // تقرير حسب المجموعة: يربط المجموعة بطلابها ونشاطهم
   const byGroup = useMemo(() => {
     return groups.map(g => {
       const gs = students.filter(s => s.group_id === g.id);
@@ -86,7 +86,6 @@ function ReportsPage() {
     });
   }, [groups, students, att, pay]);
 
-  // Per-student attendance
   const attReport = useMemo(() => {
     return students.map(s => {
       const rows = att.filter(a => a.student_id === s.id);
@@ -179,7 +178,7 @@ function ReportsPage() {
                       </style></head><body>
                       <button onclick="window.print()">🖨️ طباعة / حفظ PDF</button>
                       <h1>تقرير الذكاء الاصطناعي — سنتر الأستاذ محمد نجم</h1>
-                      <div class="body">${aiText.replace(/</g, "&lt;")}</div>
+                      <div class="body">${aiText.replace(/</g, "<")}</div>
                       </body></html>`);
                     w.document.close();
                   }}
@@ -190,7 +189,6 @@ function ReportsPage() {
           </div>
         </div>
       )}
-
 
       <div className="mb-4 flex gap-2 rounded-2xl bg-white p-1.5 shadow-sm">
         {(["grade", "group", "attendance"] as const).map(t => (
