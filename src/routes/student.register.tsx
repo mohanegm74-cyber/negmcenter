@@ -1,9 +1,9 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast, Toaster } from "sonner";
-import { ArrowRight, Save } from "lucide-react";
+import { ArrowRight, Save, Loader2 } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
-import { registerStudent } from "@/lib/student.functions";
+import { registerStudent, getAvailableGroups } from "@/lib/student.functions";
 
 export const Route = createFileRoute("/student/register")({
   head: () => ({ meta: [{ title: "تسجيل طالب جديد — سنتر الأستاذ محمد نجم" }, { name: "description", content: "استمارة تسجيل طالب جديد في السنتر." }] }),
@@ -14,12 +14,16 @@ const GOVERNORATES = ["القاهرة","الجيزة","الإسكندرية","ا
 const GRADES = ["الصف الأول الابتدائي","الثاني الابتدائي","الثالث الابتدائي","الرابع الابتدائي","الخامس الابتدائي","السادس الابتدائي","الأول الإعدادي","الثاني الإعدادي","الثالث الإعدادي","الأول الثانوي","الثاني الثانوي","الثالث الثانوي"];
 const SECTIONS = ["عام", "خاص فردي", "خاص بالاشتراك"];
 
-
 function RegisterStudent() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
-
+  const [groups, setGroups] = useState<any[]>([]);
   const register = useServerFn(registerStudent);
+  const loadGroups = useServerFn(getAvailableGroups);
+
+  useEffect(() => {
+    loadGroups({}).then(res => setGroups(res.groups)).catch(() => toast.error("تعذر تحميل المجموعات"));
+  }, []);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -27,6 +31,7 @@ function RegisterStudent() {
     const fd = new FormData(e.currentTarget);
     const payload: Record<string, string> = {};
     fd.forEach((v, k) => { const s = String(v).trim(); if (s) payload[k] = s; });
+    
     try {
       const res = await register({ data: payload });
       localStorage.setItem("najm_student_code", res.code);
@@ -38,7 +43,6 @@ function RegisterStudent() {
       setLoading(false);
     }
   }
-
 
   return (
     <div className="min-h-screen bg-muted/30">
@@ -61,6 +65,17 @@ function RegisterStudent() {
             <Field name="full_name" label="الاسم رباعي *" required />
             <Field name="phone" label="رقم الهاتف" type="tel" />
             <Field name="parent_phone" label="رقم ولي الأمر" type="tel" />
+            
+            <div>
+              <label className="mb-1.5 block text-sm font-semibold">المجموعة (الربط التلقائي) *</label>
+              <select name="group_id" required className="w-full rounded-lg border border-input bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring">
+                <option value="">— اختر المجموعة —</option>
+                {groups.map((g) => (
+                  <option key={g.id} value={g.id}>{g.name} ({g.grade || 'بدون صف'})</option>
+                ))}
+              </select>
+            </div>
+
             <Select name="gender" label="الجنس" options={["ذكر","أنثى"]} />
             <Field name="birth_date" label="تاريخ الميلاد" type="date" />
             <Field name="national_id" label="الرقم القومي" />
@@ -72,6 +87,7 @@ function RegisterStudent() {
             <Select name="section" label="الشعبة" options={SECTIONS} />
             <Field name="subject" label="المادة" />
             <Field name="teacher_name" label="اسم المعلم" />
+            
             <div className="sm:col-span-2">
               <label className="mb-1.5 block text-sm font-semibold">ملاحظات</label>
               <textarea name="notes" rows={3} className="w-full rounded-lg border border-input bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" />
@@ -79,15 +95,10 @@ function RegisterStudent() {
           </div>
 
           <button type="submit" disabled={loading} className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-6 py-3 text-base font-bold text-primary-foreground shadow-lg transition hover:opacity-90 disabled:opacity-60 sm:w-auto">
-            <Save className="h-5 w-5" />
-            {loading ? "جارٍ الحفظ..." : "حفظ التسجيل"}
+            {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Save className="h-5 w-5" />}
+            {loading ? "جارٍ الحفظ..." : "حفظ التسجيل والربط"}
           </button>
         </form>
-
-        <p className="mt-6 text-center text-sm text-muted-foreground">
-          مسجَّل بالفعل؟{" "}
-          <Link to="/student/portal" className="font-bold text-primary hover:underline">ادخل إلى صفحتك</Link>
-        </p>
       </main>
     </div>
   );
