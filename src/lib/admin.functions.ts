@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
-/** فحص صلاحية الأستاذ */
+/** فحص صلاحية الأستاذ لضمان الدخول الآمن */
 export const verifyTeacherStatus = createServerFn({ method: "GET" })
   .handler(async () => {
     const db = supabaseAdmin;
@@ -11,13 +11,12 @@ export const verifyTeacherStatus = createServerFn({ method: "GET" })
     return { isTeacher: !!data };
   });
 
-/** جلب إحصائيات لوحة التحكم بالكامل */
+/** استرجاع إحصائيات السنتر بالكامل من قاعدة البيانات */
 export const getDashboardStatsAdmin = createServerFn({ method: "GET" })
   .handler(async () => {
     const db = supabaseAdmin;
     const today = new Date().toISOString().slice(0, 10);
     
-    // جلب البيانات من الجداول مباشرة لضمان ظهور السجلات القديمة والجديدة
     const [st, gr, ap, aa, pay] = await Promise.all([
       db.from("students").select("id", { count: "exact" }).eq("active", true),
       db.from("groups").select("id"),
@@ -40,7 +39,7 @@ export const getDashboardStatsAdmin = createServerFn({ method: "GET" })
     };
   });
 
-/** جلب كافة الطلاب للمعلم - استرداد كامل البيانات */
+/** جلب كافة الطلاب مع ضمان استرجاع البيانات القديمة والجديدة */
 export const getAllStudentsAdmin = createServerFn({ method: "GET" })
   .handler(async () => {
     const { data, error } = await supabaseAdmin.from("students").select("*").order("created_at", { ascending: false });
@@ -48,7 +47,7 @@ export const getAllStudentsAdmin = createServerFn({ method: "GET" })
     return { students: data || [] };
   });
 
-/** جلب المجموعات - استرداد كامل البيانات */
+/** جلب كافة المجموعات المسجلة */
 export const getGroupsAdmin = createServerFn({ method: "GET" })
   .handler(async () => {
     const { data, error } = await supabaseAdmin.from("groups").select("*").order("created_at", { ascending: false });
@@ -56,7 +55,7 @@ export const getGroupsAdmin = createServerFn({ method: "GET" })
     return { groups: data || [] };
   });
 
-/** حفظ مجموعة جديدة */
+/** حفظ أو تحديث مجموعة - تنفيذ خادمي آمن */
 export const saveGroup = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => d as { id?: string; payload: any })
   .handler(async ({ data }) => {
@@ -71,7 +70,7 @@ export const saveGroup = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-/** حذف مجموعة */
+/** حذف مجموعة نهائياً */
 export const deleteGroup = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => d as { id: string })
   .handler(async ({ data }) => {

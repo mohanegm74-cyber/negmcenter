@@ -1,25 +1,15 @@
 import { createFileRoute, Outlet, Link, redirect, useNavigate, useRouterState } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { LayoutDashboard, Users, Boxes, ClipboardCheck, ScanLine, LogOut, Home, Wallet, BookOpen, FileBarChart, IdCard, Award, MessageCircleQuestion, FileQuestion, DatabaseBackup } from "lucide-react";
-import { Toaster, toast } from "sonner";
+import { Toaster } from "sonner";
 import { BrandLogo } from "@/components/BrandLogo";
-import { verifyTeacherStatus } from "@/lib/admin.functions";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
   beforeLoad: async () => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) throw redirect({ to: "/auth" });
-    try {
-      const { isTeacher } = await verifyTeacherStatus({});
-      if (!isTeacher) {
-        // إذا لم يكن معلماً، نحاول منح الرتبة لضمان الدخول
-        await supabase.from("user_roles").upsert({ user_id: session.user.id, role: "teacher" });
-      }
-    } catch (e) {
-      console.warn("Auth check deferred");
-    }
   },
   component: TeacherShell,
 });
