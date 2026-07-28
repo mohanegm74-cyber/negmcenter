@@ -5,7 +5,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { getDashboardStatsAdmin } from "@/lib/admin.functions";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
-  head: () => ({ meta: [{ title: "لوحة التحكم — الأستاذ" }, { name: "description", content: "إحصائيات السنتر." }] }),
+  head: () => ({ meta: [{ title: "لوحة التحكم — الأستاذ" }, { name: "description", content: "إحصائيات السنتر العامة." }] }),
   component: Dashboard,
 });
 
@@ -20,7 +20,7 @@ function Dashboard() {
       const stats = await getStats({});
       setS(stats);
     } catch (e) {
-      console.error("Failed to load dashboard stats", e);
+      console.error("Failed to load stats:", e);
     } finally {
       setLoading(false);
     }
@@ -41,8 +41,8 @@ function Dashboard() {
   if (loading) return <div className="flex h-64 items-center justify-center text-muted-foreground"><Loader2 className="h-8 w-8 animate-spin" /></div>;
 
   return (
-    <div>
-      <h1 className="mb-6 text-2xl font-black">إحصائيات السنتر العامة</h1>
+    <div className="space-y-6">
+      <h1 className="text-2xl font-black">إحصائيات السنتر العامة</h1>
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
         {cards.map((c) => (
           <div key={c.label} className="rounded-2xl bg-white p-5 shadow-sm">
@@ -55,20 +55,20 @@ function Dashboard() {
         ))}
       </div>
 
-      <div className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <QuickCard title="سجل الحضور" desc="افتح شاشة مسح QR أو سجّل الحضور يدوياً." to="/scan" />
-        <QuickCard title="أضف مدفوعة" desc="سجّل مدفوعات الطلاب وتابع المتأخرات." to="/finance" />
-        <QuickCard title="التقارير" desc="تقارير مصنفة حسب الصف والمجموعة." to="/reports" />
+      <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <Link to="/scan" className="block rounded-2xl bg-white p-6 shadow-sm transition hover:-translate-y-0.5">
+          <h3 className="text-lg font-bold text-primary">سجل الحضور</h3>
+          <p className="mt-1 text-sm text-muted-foreground">افتح شاشة مسح QR أو سجل الحضور.</p>
+        </Link>
+        <Link to="/finance" className="block rounded-2xl bg-white p-6 shadow-sm transition hover:-translate-y-0.5">
+          <h3 className="text-lg font-bold text-secondary">الماليات</h3>
+          <p className="mt-1 text-sm text-muted-foreground">تابع مدفوعات الطلاب والمتأخرات.</p>
+        </Link>
+        <Link to="/reports" className="block rounded-2xl bg-white p-6 shadow-sm transition hover:-translate-y-0.5">
+          <h3 className="text-lg font-bold text-gold-foreground">التقارير</h3>
+          <p className="mt-1 text-sm text-muted-foreground">تقارير شاملة عن أداء السنتر.</p>
+        </Link>
       </div>
     </div>
-  );
-}
-
-function QuickCard({ title, desc, to }: { title: string; desc: string; to: string }) {
-  return (
-    <Link to={to} className="block rounded-2xl bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-      <h3 className="text-lg font-bold text-primary">{title}</h3>
-      <p className="mt-1 text-sm text-muted-foreground">{desc}</p>
-    </Link>
   );
 }
