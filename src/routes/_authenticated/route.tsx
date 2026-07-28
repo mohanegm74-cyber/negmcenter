@@ -8,21 +8,29 @@ import { BrandLogo } from "@/components/BrandLogo";
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
   beforeLoad: async () => {
+    // 1. التحقق من وجود جلسة دخول (Session)
     const { data: { session } } = await supabase.auth.getSession();
-    if (!session) throw redirect({ to: "/auth" });
+    if (!session) {
+      throw redirect({ to: "/auth" });
+    }
     
+    // 2. التحقق من الصلاحيات بشكل مرن
+    // لا نطرد المستخدم فوراً إذا فشل الاتصال، بل نعتمد على وجود الجلسة كحد أدنى
     try {
-      // محاولة التحقق من الرتبة
       const { data: isTeacher, error } = await supabase.rpc("is_teacher");
       
-      // إذا حدث خطأ في الاتصال بقاعدة البيانات، لا تطرد المستخدم فوراً، بل انتظر المحاولة القادمة
-      // أما إذا نجح الاتصال وأكد أن المستخدم ليس معلماً، هنا فقط يتم الطرد
+      // إذا نجح الاتصال صراحة وأكد أن المستخدم "ليس معلماً"
       if (!error && isTeacher === false) {
-        await supabase.auth.signOut();
-        throw redirect({ to: "/auth" });
+        // نحاول منحه الرتبة إذا كان هو المستخدم الوحيد (حالة الطوارئ)
+        const { data: claimed } = await supabase.rpc("claim_teacher_role");
+        if (!claimed) {
+          await supabase.auth.signOut();
+          throw redirect({ to: "/auth" });
+        }
       }
     } catch (e) {
-      console.error("Auth check failed:", e);
+      // في حالة وجود خطأ في الـ RPC (مثل عدم وجود الدالة بعد)، نسمح بالدخول طالما الجلسة موجودة
+      console.warn("Permission check skipped or pending database migration", e);
     }
   },
   component: TeacherShell,

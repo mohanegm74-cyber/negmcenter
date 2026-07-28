@@ -24,16 +24,27 @@ function AuthPage() {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
-    if (mode === "signup") {
-      const { error } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo: window.location.origin + "/dashboard" } });
-      if (error) toast.error(error.message);
-      else { await supabase.rpc("claim_teacher_role"); toast.success("تم إنشاء الحساب. تم تسجيل الدخول."); navigate({ to: "/dashboard" }); }
-    } else {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) toast.error(error.message);
-      else { await supabase.rpc("claim_teacher_role"); toast.success("مرحباً بعودتك"); navigate({ to: "/dashboard" }); }
+    try {
+      if (mode === "signup") {
+        const { data, error } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo: window.location.origin + "/dashboard" } });
+        if (error) throw error;
+        // محاولة منح رتبة معلم فوراً
+        await supabase.rpc("claim_teacher_role");
+        toast.success("تم إنشاء الحساب بنجاح.");
+        navigate({ to: "/dashboard" });
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+        // التأكد من وجود الرتبة في كل دخول
+        await supabase.rpc("claim_teacher_role");
+        toast.success("مرحباً بعودتك يا أستاذ");
+        navigate({ to: "/dashboard" });
+      }
+    } catch (err: any) {
+      toast.error(err.message || "فشل تسجيل الدخول");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   return (
@@ -62,12 +73,12 @@ function AuthPage() {
             </div>
             <button type="submit" disabled={loading} className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary py-2.5 font-bold text-primary-foreground disabled:opacity-60">
               {mode === "signup" ? <UserPlus className="h-4 w-4" /> : <LogIn className="h-4 w-4" />}
-              {loading ? "..." : mode === "signup" ? "إنشاء الحساب" : "تسجيل الدخول"}
+              {loading ? "جارٍ التحقق..." : mode === "signup" ? "إنشاء الحساب" : "تسجيل الدخول"}
             </button>
           </form>
-          {mode === "signup" && (
-            <p className="mt-3 text-center text-xs text-muted-foreground">أول حساب تُنشئه يصبح حساب الأستاذ. استخدم بريداً وكلمة مرور تحفظهما.</p>
-          )}
+          <p className="mt-4 text-center text-xs text-muted-foreground leading-relaxed">
+            ملاحظة: إذا كنت قد سجلت مسبقاً، استخدم نفس البريد لاستعادة صلاحياتك.
+          </p>
         </div>
       </div>
     </div>
