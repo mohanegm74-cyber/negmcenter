@@ -1,11 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Search, Trash2, Pencil, Users, X, Printer, StickyNote, Sparkles, Loader2 } from "lucide-react";
+import { Search, Trash2, Pencil, Users, X, Loader2, AlertTriangle } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
-import { openPrint, esc } from "@/lib/print";
-import { generateStudentReport } from "@/lib/ai-report.functions";
 import { getAllStudentsAdmin } from "@/lib/admin.functions";
 
 export const Route = createFileRoute("/_authenticated/students")({
@@ -60,7 +58,7 @@ function StudentsPage() {
 
   async function assignGroup(id: string, group_id: string) {
     const { error } = await supabase.from("students").update({ group_id: group_id || null }).eq("id", id);
-    if (error) toast.error(error.message); else { toast.success("تم التحديث"); load(); }
+    if (error) toast.error(error.message); else { toast.success("تم ربط الطالب بالمجموعة"); load(); }
   }
 
   async function toggleActive(s: Student) {
@@ -106,6 +104,13 @@ function StudentsPage() {
         </div>
       </div>
 
+      {students.some(s => !s.group_id) && (
+        <div className="mb-4 flex items-center gap-2 rounded-xl bg-amber-50 p-3 text-sm text-amber-700 border border-amber-200">
+          <AlertTriangle className="h-4 w-4" />
+          <span>تنبيه: يوجد طلاب غير مرتبطين بمجموعات. يرجى اختيار مجموعة لهم لتظهر بياناتهم في الحضور والماليات.</span>
+        </div>
+      )}
+
       {editing && (
         <form onSubmit={saveEdit} className="mb-4 rounded-2xl bg-white p-5 shadow-sm">
           <div className="mb-3 flex items-center justify-between">
@@ -141,8 +146,8 @@ function StudentsPage() {
                     <td className="p-3 font-mono text-xs">{s.code}</td>
                     <td className="p-3">{s.grade || "—"}</td>
                     <td className="p-3">
-                      <select value={s.group_id || ""} onChange={(e) => assignGroup(s.id, e.target.value)} className="rounded-md border border-input bg-white px-2 py-1 text-sm">
-                        <option value="">— بدون —</option>
+                      <select value={s.group_id || ""} onChange={(e) => assignGroup(s.id, e.target.value)} className={`rounded-md border px-2 py-1 text-sm ${!s.group_id ? "border-amber-400 bg-amber-50" : "border-input bg-white"}`}>
+                        <option value="">— اختر مجموعة —</option>
                         {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
                       </select>
                     </td>
