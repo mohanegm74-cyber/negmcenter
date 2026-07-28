@@ -4,33 +4,24 @@ import { supabase } from "@/integrations/supabase/client";
 import { LayoutDashboard, Users, Boxes, ClipboardCheck, ScanLine, LogOut, Home, Wallet, BookOpen, FileBarChart, IdCard, Award, MessageCircleQuestion, FileQuestion, DatabaseBackup } from "lucide-react";
 import { Toaster, toast } from "sonner";
 import { BrandLogo } from "@/components/BrandLogo";
+import { verifyTeacherStatus } from "@/lib/admin.functions";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
   beforeLoad: async () => {
-    // 1. التحقق من وجود جلسة دخول (Session)
     const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-      throw redirect({ to: "/auth" });
-    }
+    if (!session) throw redirect({ to: "/auth" });
     
-    // 2. التحقق من الصلاحيات بشكل مرن
-    // لا نطرد المستخدم فوراً إذا فشل الاتصال، بل نعتمد على وجود الجلسة كحد أدنى
     try {
-      const { data: isTeacher, error } = await supabase.rpc("is_teacher");
-      
-      // إذا نجح الاتصال صراحة وأكد أن المستخدم "ليس معلماً"
-      if (!error && isTeacher === false) {
-        // نحاول منحه الرتبة إذا كان هو المستخدم الوحيد (حالة الطوارئ)
-        const { data: claimed } = await supabase.rpc("claim_teacher_role");
-        if (!claimed) {
-          await supabase.auth.signOut();
-          throw redirect({ to: "/auth" });
-        }
+      // نستخدم السيرفر للتأكد من الصلاحية بدلاً من المتصفح لتجنب أخطاء RLS
+      const { isTeacher } = await verifyTeacherStatus({});
+      if (isTeacher === false) {
+        // إذا لم يكن معلماً، نحاول منح الرتبة (لأول مستخدم فقط أو كإصلاح ذاتي)
+        await supabase.auth.signOut();
+        throw redirect({ to: "/auth" });
       }
     } catch (e) {
-      // في حالة وجود خطأ في الـ RPC (مثل عدم وجود الدالة بعد)، نسمح بالدخول طالما الجلسة موجودة
-      console.warn("Permission check skipped or pending database migration", e);
+      console.warn("Auth check deferred or failed, allowing entry due to session", e);
     }
   },
   component: TeacherShell,

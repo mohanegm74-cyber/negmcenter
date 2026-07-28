@@ -1,7 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Users, Boxes, ClipboardCheck, CalendarX, Wallet, TrendingUp, AlertCircle } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { Users, Boxes, ClipboardCheck, CalendarX, Wallet, TrendingUp, AlertCircle, Loader2 } from "lucide-react";
+import { useServerFn } from "@tanstack/react-start";
+import { getDashboardStatsAdmin } from "@/lib/admin.functions";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({ meta: [{ title: "لوحة التحكم — الأستاذ" }, { name: "description", content: "إحصائيات السنتر." }] }),
@@ -10,51 +11,22 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
 
 function Dashboard() {
   const [s, setS] = useState({ students: 0, groups: 0, present: 0, absent: 0, income: 0, dues: 0, outstanding: 0 });
+  const [loading, setLoading] = useState(true);
+  const getStats = useServerFn(getDashboardStatsAdmin);
 
-  useEffect(() => {
-    (async () => {
-      const today = new Date().toISOString().slice(0, 10);
-      const currentMonth = today.slice(0, 7); // YYYY-MM
-      const [st, gr, ap, aa, pay] = await Promise.all([
-        supabase.from("students").select("id,group_id,registration_date", { count: "exact" }).eq("active", true),
-        supabase.from("groups").select("id,monthly_fee"),
-        supabase.from("attendance").select("id", { count: "exact", head: true }).eq("date", today).eq("status", "present"),
-        supabase.from("attendance").select("id", { count: "exact", head: true }).eq("date", today).eq("status", "absent"),
-        supabase.from("payments").select("student_id,amount,kind,month"),
-      ]);
-      const payments = (pay.data as any[]) || [];
-      const income = payments.filter(p => p.kind === "payment").reduce((a, b) => a + Number(b.amount || 0), 0);
-      const feeMap = Object.fromEntries(((gr.data as any[]) || []).map(g => [g.id, Number(g.monthly_fee || 0)]));
+  async function load() {
+    setLoading(true);
+    try {
+      const stats = await getStats({});
+      setS(stats);
+    } catch (e) {
+      console.error("Failed to load dashboard stats", e);
+    } finally {
+      setLoading(false);
+    }
+  }
 
-      // Compute realistic dues per active student = months since registration × monthly_fee + explicit charges
-      const activeStudents = (st.data as any[]) || [];
-      let expectedDues = 0;
-      for (const s of activeStudents) {
-        const fee = s.group_id ? feeMap[s.group_id] || 0 : 0;
-        if (fee > 0) {
-          const reg = s.registration_date ? new Date(s.registration_date) : new Date();
-          const now = new Date();
-          const months = Math.max(1, (now.getFullYear() - reg.getFullYear()) * 12 + (now.getMonth() - reg.getMonth()) + 1);
-          const upto = new Date(now.getFullYear(), now.getMonth() + 1, 0) >= reg ? months : 1;
-          expectedDues += fee * upto;
-        }
-      }
-      const explicitCharges = payments.filter(p => p.kind === "charge").reduce((a, b) => a + Number(b.amount || 0), 0);
-      const dues = Math.max(expectedDues, explicitCharges);
-      const outstanding = Math.max(0, dues - income);
-
-      setS({
-        students: st.count || 0,
-        groups: (gr.data || []).length,
-        present: ap.count || 0,
-        absent: aa.count || 0,
-        income, dues, outstanding,
-      });
-      // keep currentMonth referenced to avoid lint
-      void currentMonth;
-    })();
-  }, []);
-
+  useEffect(() => { load(); }, []);
 
   const cards = [
     { icon: Users, label: "إجمالي الطلاب", value: s.students, tone: "primary" },
@@ -65,6 +37,8 @@ function Dashboard() {
     { icon: TrendingUp, label: "إجمالي الرسوم", value: `${s.dues.toLocaleString("ar-EG")} ج.م`, tone: "primary" },
     { icon: AlertCircle, label: "المتأخرات", value: `${s.outstanding.toLocaleString("ar-EG")} ج.م`, tone: "destructive" },
   ] as const;
+
+  if (loading) return <div className="flex h-64 items-center justify-center text-muted-foreground"><Loader2 className="h-8 w-8 animate-spin" /></div>;
 
   return (
     <div>

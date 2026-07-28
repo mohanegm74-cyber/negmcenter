@@ -2,9 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Plus, Trash2, Pencil, Boxes, X, Loader2 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import { useServerFn } from "@tanstack/react-start";
-import { saveGroup, deleteGroup } from "@/lib/admin.functions";
+import { saveGroup, deleteGroup, getGroupsAdmin } from "@/lib/admin.functions";
 
 export const Route = createFileRoute("/_authenticated/groups")({
   head: () => ({ meta: [{ title: "المجموعات — الأستاذ" }, { name: "description", content: "إدارة مجموعات السنتر." }] }),
@@ -22,13 +21,22 @@ function GroupsPage() {
   const [editing, setEditing] = useState<Group | null>(null);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const saveFn = useServerFn(saveGroup);
   const delFn = useServerFn(deleteGroup);
+  const listFn = useServerFn(getGroupsAdmin);
 
   async function load() {
-    const { data } = await supabase.from("groups").select("*").order("created_at", { ascending: false });
-    setGroups((data as Group[]) || []);
+    setLoading(true);
+    try {
+      const res = await listFn({});
+      setGroups(res.groups as Group[]);
+    } catch (e) {
+      console.error("Failed to load groups", e);
+    } finally {
+      setLoading(false);
+    }
   }
   useEffect(() => { load(); }, []);
 
@@ -61,6 +69,8 @@ function GroupsPage() {
       toast.error(err.message);
     }
   }
+
+  if (loading) return <div className="flex h-64 items-center justify-center text-muted-foreground"><Loader2 className="h-8 w-8 animate-spin" /></div>;
 
   return (
     <div>
