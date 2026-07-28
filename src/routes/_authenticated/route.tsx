@@ -8,15 +8,21 @@ import { BrandLogo } from "@/components/BrandLogo";
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
   beforeLoad: async () => {
-    const { data } = await supabase.auth.getSession();
-    if (!data.session) throw redirect({ to: "/auth" });
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) throw redirect({ to: "/auth" });
     
-    // التحقق من أن المستخدم لديه رتبة معلم أو أدمن
-    const { data: isTeacher, error } = await supabase.rpc("is_teacher");
-    if (error || !isTeacher) {
-      // إذا لم يكن معلماً، يتم تسجيل خروجه وتوجيهه لصفحة الدخول
-      await supabase.auth.signOut();
-      throw redirect({ to: "/auth" });
+    try {
+      // محاولة التحقق من الرتبة
+      const { data: isTeacher, error } = await supabase.rpc("is_teacher");
+      
+      // إذا حدث خطأ في الاتصال بقاعدة البيانات، لا تطرد المستخدم فوراً، بل انتظر المحاولة القادمة
+      // أما إذا نجح الاتصال وأكد أن المستخدم ليس معلماً، هنا فقط يتم الطرد
+      if (!error && isTeacher === false) {
+        await supabase.auth.signOut();
+        throw redirect({ to: "/auth" });
+      }
+    } catch (e) {
+      console.error("Auth check failed:", e);
     }
   },
   component: TeacherShell,

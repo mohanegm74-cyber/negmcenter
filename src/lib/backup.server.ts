@@ -1,11 +1,8 @@
 /** Server-only helpers for full database backup & restore (teacher only). */
-import { createClient } from "@supabase/supabase-js";
-import type { Database } from "@/integrations/supabase/types";
+import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
 export function admin() {
-  return createClient<Database>(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+  return supabaseAdmin;
 }
 
 /** Order matters: parents first so foreign keys resolve on restore. */

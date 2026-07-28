@@ -1,11 +1,9 @@
 /** Server-only helpers for the public (code-based) student portal. */
-import { createClient } from "@supabase/supabase-js";
-import type { Database } from "@/integrations/supabase/types";
+import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
 export function admin() {
-  return createClient<Database>(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+  // استخدام العميل الموحد الذي يحتوي على فحص للمتغيرات البيئية
+  return supabaseAdmin;
 }
 
 export function cleanCode(code: unknown) {
