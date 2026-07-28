@@ -1,6 +1,4 @@
-import logoAsset from "@/assets/negm-logo.png.asset.json";
-
-export const LOGO_URL = logoAsset.url;
+export const LOGO_URL = "/logo.png";
 
 export function BrandLogo({ size = 96, className = "" }: { size?: number; className?: string }) {
   return (

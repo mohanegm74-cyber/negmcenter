@@ -15,23 +15,36 @@ export const registerStudent = createServerFn({ method: "POST" })
       const v = str(data?.[k], k === "notes" || k === "address" ? 1000 : 120);
       if (v) payload[k] = v;
     }
+    
     if (!payload.full_name) throw new Error("الاسم مطلوب");
 
     const db = admin();
+    
+    // التحقق من وجود مفتاح السيرفر (Service Role)
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      throw new Error("خطأ في تكوين النظام: مفتاح السيرفر مفقود. يرجى ربط قاعدة البيانات بشكل صحيح.");
+    }
+
     const orParts: string[] = [];
     for (const k of ["parent_phone", "national_id", "phone"]) {
       if (payload[k]) orParts.push(`${k}.eq.${payload[k]}`);
     }
+    
     if (orParts.length) {
       const { data: dups } = await db
         .from("students").select("id").eq("full_name", payload.full_name).or(orParts.join(",")).limit(1);
       if (dups && dups.length) {
-        throw new Error("هذا الطالب مسجَّل بالفعل. يرجى مراجعة الأستاذ على واتساب 01015174084 قبل إعادة التسجيل.");
+        throw new Error("هذا الطالب مسجَّل بالفعل بكود مختلف. يرجى مراجعة الأستاذ.");
       }
     }
 
     const { data: row, error } = await db.from("students").insert(payload as never).select("code, full_name").single();
-    if (error) throw new Error("تعذر الحفظ، حاول مرة أخرى.");
+    
+    if (error) {
+      console.error("Database Insert Error:", error);
+      throw new Error(`تعذر الحفظ في قاعدة البيانات: ${error.message}`);
+    }
+    
     return { code: row.code as string, full_name: row.full_name as string };
   });
 

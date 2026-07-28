@@ -2,7 +2,7 @@ import { createFileRoute, Outlet, Link, redirect, useNavigate, useRouterState } 
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { LayoutDashboard, Users, Boxes, ClipboardCheck, ScanLine, LogOut, Home, Wallet, BookOpen, FileBarChart, IdCard, Award, MessageCircleQuestion, FileQuestion, DatabaseBackup } from "lucide-react";
-import { Toaster } from "sonner";
+import { Toaster, toast } from "sonner";
 import { BrandLogo } from "@/components/BrandLogo";
 
 export const Route = createFileRoute("/_authenticated")({
@@ -10,6 +10,14 @@ export const Route = createFileRoute("/_authenticated")({
   beforeLoad: async () => {
     const { data } = await supabase.auth.getSession();
     if (!data.session) throw redirect({ to: "/auth" });
+    
+    // التحقق من أن المستخدم لديه رتبة معلم أو أدمن
+    const { data: isTeacher, error } = await supabase.rpc("is_teacher");
+    if (error || !isTeacher) {
+      // إذا لم يكن معلماً، يتم تسجيل خروجه وتوجيهه لصفحة الدخول
+      await supabase.auth.signOut();
+      throw redirect({ to: "/auth" });
+    }
   },
   component: TeacherShell,
 });
@@ -45,8 +53,12 @@ function TeacherShell() {
   useEffect(() => {
     let alive = true;
     async function load() {
-      const { count } = await supabase.from("questions").select("id", { count: "exact", head: true }).eq("is_read", false);
-      if (alive) setUnread(count || 0);
+      try {
+        const { count } = await supabase.from("questions").select("id", { count: "exact", head: true }).eq("is_read", false);
+        if (alive) setUnread(count || 0);
+      } catch (e) {
+        console.error("Failed to load notifications", e);
+      }
     }
     load();
     const ch = supabase.channel("q-unread").on("postgres_changes", { event: "*", schema: "public", table: "questions" }, load).subscribe();
@@ -54,7 +66,10 @@ function TeacherShell() {
     return () => { alive = false; supabase.removeChannel(ch); clearInterval(t); };
   }, []);
 
-  async function signOut() { await supabase.auth.signOut(); navigate({ to: "/auth" }); }
+  async function signOut() { 
+    await supabase.auth.signOut(); 
+    navigate({ to: "/auth" }); 
+  }
 
   return (
     <div className="min-h-screen bg-muted/30">
