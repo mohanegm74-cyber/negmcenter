@@ -1,11 +1,11 @@
 import { createServerFn } from "@tanstack/react-start";
 
-/** تسجيل طالب جديد - إصلاح شامل للربط مع المجموعات وقاعدة البيانات */
+/** تسجيل طالب جديد */
 export const registerStudent = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => d as Record<string, string>)
   .handler(async ({ data }) => {
     const { admin, str } = await import("./student.server");
-    const db = admin; // استخدام الكائن البروكسي مباشرة
+    const db = admin;
 
     const FIELDS = [
       "full_name", "phone", "parent_phone", "gender", "birth_date", "national_id",
@@ -22,25 +22,13 @@ export const registerStudent = createServerFn({ method: "POST" })
     if (!payload.full_name) throw new Error("الاسم مطلوب");
     if (payload.group_id === "") payload.group_id = null;
 
-    // التحقق من التكرار
-    const orParts: string[] = [];
-    if (payload.parent_phone) orParts.push(`parent_phone.eq.${payload.parent_phone}`);
-    if (payload.national_id) orParts.push(`national_id.eq.${payload.national_id}`);
-    
-    if (orParts.length) {
-      const { data: dups } = await db.from("students").select("id").or(orParts.join(",")).limit(1);
-      if (dups && dups.length) {
-        throw new Error("هذا الطالب مسجَّل بالفعل (رقم هاتف ولي الأمر أو الرقم القومي موجود مسبقاً).");
-      }
-    }
-
     const { data: row, error } = await db.from("students").insert(payload as any).select("code, full_name").single();
     if (error) throw new Error(`فشل الحفظ: ${error.message}`);
     
     return { code: row.code as string, full_name: row.full_name as string };
   });
 
-/** جلب المجموعات المتاحة للتسجيل العام */
+/** جلب المجموعات المتاحة */
 export const getAvailableGroups = createServerFn({ method: "GET" })
   .handler(async () => {
     const { admin } = await import("./student.server");
@@ -49,6 +37,7 @@ export const getAvailableGroups = createServerFn({ method: "GET" })
     return { groups: data || [] };
   });
 
+/** بوابة الطالب */
 export const getStudentPortal = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => d as { code: string })
   .handler(async ({ data }) => {
@@ -68,6 +57,7 @@ export const getStudentPortal = createServerFn({ method: "POST" })
     return { student, group: g.data, attendance: a.data || [], subs: hs.data || [], payments: p.data || [], notes: n.data || [], questions: q.data || [], homework: hw.data || [] };
   });
 
+/** تحديث البيانات */
 export const updateStudentProfile = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => d as { code: string; fields: Record<string, string> })
   .handler(async ({ data }) => {
@@ -82,6 +72,7 @@ export const updateStudentProfile = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+/** سؤال الأستاذ */
 export const askTeacher = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => d as { code: string; body: string })
   .handler(async ({ data }) => {
@@ -94,6 +85,7 @@ export const askTeacher = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+/** الواجبات */
 export const submitHomeworkText = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => d as { code: string; homework_id: string; answer_text: string })
   .handler(async ({ data }) => {
@@ -133,4 +125,45 @@ export const getSubmissionUrl = createServerFn({ method: "POST" })
     const { data: res, error } = await db.storage.from("submissions").createSignedUrl(data.path, 3600);
     if (error) throw new Error(error.message);
     return { url: res.signedUrl };
+  });
+
+/** وظائف الاختبارات الذكية المطلوبة لبناء التطبيق */
+export const getStudentExams = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) => d as { code: string })
+  .handler(async ({ data }) => {
+    const { requireStudent } = await import("./student.server");
+    const { db, student } = await requireStudent(data.code);
+    const { data: exams } = await db.from("exams").select("*").eq("status", "published").or(`group_id.eq.${student.group_id},grade.eq.${student.grade}`).order("created_at", { ascending: false });
+    const { data: attempts } = await db.from("exam_attempts").select("*").eq("student_id", student.id);
+    return { exams: exams || [], attempts: attempts || [] };
+  });
+
+export const startExamAttempt = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) => d as { code: string; exam_id: string })
+  .handler(async ({ data }) => {
+    const { requireStudent } = await import("./student.server");
+    const { db, student } = await requireStudent(data.code);
+    const { data: exam } = await db.from("exams").select("*").eq("id", data.exam_id).single();
+    const { data: questions } = await db.from("exam_questions").select("id, position, kind, prompt, passage, options, skill, difficulty, score").eq("exam_id", data.exam_id).order("position");
+    const { data: attempt } = await db.from("exam_attempts").insert({ student_id: student.id, exam_id: data.exam_id, status: "in_progress", started_at: new Date().toISOString() }).select().single();
+    return { exam, questions: questions || [], attempt };
+  });
+
+export const submitExamAttempt = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) => d as { code: string; attempt_id: string; answers: Record<string, any>; time_spent_seconds: number })
+  .handler(async ({ data }) => {
+    const { requireStudent } = await import("./student.server");
+    const { db, student } = await requireStudent(data.code);
+    const { data: attempt } = await db.from("exam_attempts").select("*").eq("id", data.attempt_id).single();
+    const { data: questions } = await db.from("exam_questions").select("*").eq("exam_id", attempt.exam_id);
+    const { gradeAndAnalyze } = await import("./exams.server");
+    const { data: exam } = await db.from("exams").select("title").eq("id", attempt.exam_id).single();
+    const items = questions!.map(q => ({
+      id: q.id, kind: q.kind, prompt: q.prompt, correct: String(q.correct_answer || ""),
+      answer: String(data.answers[q.id] || ""), score: q.score, skill: q.skill,
+      autoCorrect: ["اختيار من متعدد", "صح أو خطأ", "اختر من القائمة"].includes(q.kind)
+    }));
+    const result = await gradeAndAnalyze({ studentName: student.full_name, examTitle: exam?.title || "اختبار", classAverage: null, items });
+    await db.from("exam_attempts").update({ status: "submitted", submitted_at: new Date().toISOString(), score: result.total, max_score: result.max, percentage: result.percentage, time_spent_seconds: data.time_spent_seconds, analysis: result.analysis, strengths: result.strengths, weaknesses: result.weaknesses, remedial_plan: result.remedial_plan }).eq("id", data.attempt_id);
+    return { total: result.total, max: result.max, percentage: result.percentage };
   });
