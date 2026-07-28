@@ -1,18 +1,16 @@
 import { createServerFn } from "@tanstack/react-start";
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
 /** فحص صلاحية الأستاذ بشكل مباشر من جدول الرتب */
 export const verifyTeacherStatus = createServerFn({ method: "GET" })
   .handler(async () => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const db = supabaseAdmin;
     const { data: { user } } = await db.auth.getUser();
     if (!user) return { isTeacher: false };
     
-    // فحص الرتبة من جدول user_roles مباشرة
     const { data } = await db.from("user_roles").select("role").eq("user_id", user.id).maybeSingle();
     const isTeacher = data?.role === "teacher" || data?.role === "admin";
     
-    // إذا لم يكن لديه رتبة، نحاول منحه رتبة معلم (لأول مستخدم)
     if (!data) {
       await db.from("user_roles").insert({ user_id: user.id, role: "teacher" });
       return { isTeacher: true };
@@ -24,6 +22,7 @@ export const verifyTeacherStatus = createServerFn({ method: "GET" })
 /** جلب الإحصائيات مع ضمان الربط الصحيح بين الجداول */
 export const getDashboardStatsAdmin = createServerFn({ method: "GET" })
   .handler(async () => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const db = supabaseAdmin;
     const today = new Date().toISOString().slice(0, 10);
     
@@ -51,6 +50,7 @@ export const getDashboardStatsAdmin = createServerFn({ method: "GET" })
 
 export const getAllStudentsAdmin = createServerFn({ method: "GET" })
   .handler(async () => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data, error } = await supabaseAdmin.from("students").select("*").order("created_at", { ascending: false });
     if (error) throw new Error(error.message);
     return { students: data || [] };
@@ -58,6 +58,7 @@ export const getAllStudentsAdmin = createServerFn({ method: "GET" })
 
 export const getGroupsAdmin = createServerFn({ method: "GET" })
   .handler(async () => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data, error } = await supabaseAdmin.from("groups").select("*").order("created_at", { ascending: false });
     if (error) throw new Error(error.message);
     return { groups: data || [] };
@@ -66,6 +67,7 @@ export const getGroupsAdmin = createServerFn({ method: "GET" })
 export const saveGroup = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => d as { id?: string; payload: any })
   .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const db = supabaseAdmin;
     if (data.id) {
       const { error } = await db.from("groups").update(data.payload).eq("id", data.id);
@@ -80,6 +82,7 @@ export const saveGroup = createServerFn({ method: "POST" })
 export const deleteGroup = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => d as { id: string })
   .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { error } = await supabaseAdmin.from("groups").delete().eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true };
