@@ -69,6 +69,16 @@ export const deletePaymentAdmin = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+/** تحديث حالة الاختبار (نشر/إغلاق) عبر السيرفر لتجاوز قيود الأمان */
+export const updateExamStatusAdmin = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) => d as { id: string; status: string })
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await supabaseAdmin.from("exams").update({ status: data.status }).eq("id", data.id);
+    if (error) throw new Error(`فشل تحديث الحالة: ${error.message}`);
+    return { ok: true };
+  });
+
 /** تهيئة النظام - مسح شامل لكافة الجداول والبدء من الصفر */
 export const factoryResetSystem = createServerFn({ method: "POST" })
   .handler(async () => {

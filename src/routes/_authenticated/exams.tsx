@@ -5,6 +5,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { Sparkles, Trash2, Send, BarChart3, X, Loader2, FileQuestion, Printer, Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { generateExam } from "@/lib/exams.functions";
+import { updateExamStatusAdmin } from "@/lib/admin.functions";
 import { QUESTION_KINDS, DIFFICULTIES, TERMS, GRADES, answerToText } from "@/lib/exam-constants";
 import { openPrint, esc } from "@/lib/print";
 
@@ -45,6 +46,7 @@ function ExamsPage() {
   const [busy, setBusy] = useState(false);
   const [detail, setDetail] = useState<Exam | null>(null);
   const gen = useServerFn(generateExam);
+  const updateStatusFn = useServerFn(updateExamStatusAdmin);
 
   const [form, setForm] = useState({
     grade: GRADES[0], term: TERMS[0], group_id: "", subject: "", lesson: "",
@@ -112,7 +114,6 @@ function ExamsPage() {
     } finally { setBusy(false); toast.dismiss(t); }
   }
 
-  /** إنشاء اختبار يدوي فارغ يضيف المعلم أسئلته بنفسه */
   async function createManual() {
     if (!form.lesson.trim()) { toast.error("أدخل اسم الدرس"); return; }
     const title = `${form.subject || "اختبار"} — ${form.lesson} (${form.grade})`;
@@ -130,10 +131,13 @@ function ExamsPage() {
   }
 
   async function setStatus(ex: Exam, status: string) {
-    const { error } = await supabase.from("exams").update({ status }).eq("id", ex.id);
-    if (error) return toast.error(error.message);
-    toast.success(status === "published" ? "تم نشر الاختبار للطلاب" : status === "closed" ? "تم إغلاق الاختبار" : "تم الحفظ كمسودة");
-    load();
+    try {
+      await updateStatusFn({ data: { id: ex.id, status } });
+      toast.success(status === "published" ? "تم نشر الاختبار للطلاب" : status === "closed" ? "تم إغلاق الاختبار" : "تم الحفظ كمسودة");
+      load();
+    } catch (err: any) {
+      toast.error(err.message);
+    }
   }
 
   async function remove(ex: Exam) {
@@ -243,38 +247,6 @@ function ExamsPage() {
                   </td>
                 </tr>
               ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section className="rounded-2xl border bg-white shadow-sm">
-        <div className="border-b px-5 py-3 text-sm font-black">درجات الطلاب في الاختبارات</div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-right text-sm">
-            <thead className="bg-muted/50 text-xs text-muted-foreground"><tr>
-              <th className="p-3">الطالب</th><th className="p-3">الكود</th><th className="p-3">المجموعة</th>
-              <th className="p-3">عدد الاختبارات</th><th className="p-3">أفضل نتيجة</th><th className="p-3">المتوسط</th><th className="p-3">آخر اختبار</th>
-            </tr></thead>
-            <tbody>
-              {students.length === 0 && <tr><td colSpan={7} className="p-6 text-center text-muted-foreground">لا يوجد طلاب</td></tr>}
-              {students.map((st) => {
-                const mine = allAttempts.filter((a) => a.student_id === st.id);
-                const avg = mine.length ? Math.round(mine.reduce((x, a) => x + Number(a.percentage), 0) / mine.length) : null;
-                const best = mine.length ? Math.max(...mine.map((a) => Number(a.percentage))) : null;
-                const last = [...mine].sort((a, b) => String(b.submitted_at).localeCompare(String(a.submitted_at)))[0];
-                return (
-                  <tr key={st.id} className="border-t">
-                    <td className="p-3 font-semibold">{st.full_name}</td>
-                    <td className="p-3 font-mono text-xs">{st.code}</td>
-                    <td className="p-3">{groups.find((g) => g.id === st.group_id)?.name || "—"}</td>
-                    <td className="p-3">{mine.length}</td>
-                    <td className="p-3 font-bold">{best != null ? `${best}%` : "—"}</td>
-                    <td className="p-3">{avg != null ? `${avg}%` : "—"}</td>
-                    <td className="p-3 text-xs">{last ? `${exams.find((e) => e.id === last.exam_id)?.title || "—"} — ${Number(last.score)}/${Number(last.max_score)}` : "—"}</td>
-                  </tr>
-                );
-              })}
             </tbody>
           </table>
         </div>
@@ -479,7 +451,6 @@ function Kpi({ label, value }: { label: string; value: any }) {
   );
 }
 
-/** إضافة سؤال يدوياً إلى بنك أسئلة الاختبار */
 function ManualQuestion({ examId, nextPos, onAdded }: { examId: string; nextPos: number; onAdded: () => void }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState({ kind: QUESTION_KINDS[0] as string, prompt: "", options: "", correct: "", rationale: "", skill: "", difficulty: "medium", score: 5 });
