@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 
-/** تسجيل طالب جديد - إضافة تفعيل الحالة تلقائياً */
+/** تسجيل طالب جديد */
 export const registerStudent = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => d as Record<string, string>)
   .handler(async ({ data }) => {
@@ -13,7 +13,7 @@ export const registerStudent = createServerFn({ method: "POST" })
       "subject", "teacher_name", "notes", "group_id"
     ];
     
-    const payload: Record<string, any> = { active: true }; // تفعيل الطالب فوراً عند التسجيل
+    const payload: Record<string, any> = { active: true };
     for (const k of FIELDS) {
       const v = str(data?.[k], k === "notes" || k === "address" ? 1000 : 120);
       if (v) payload[k] = v;
@@ -63,7 +63,9 @@ export const updateStudentProfile = createServerFn({ method: "POST" })
     const { db, student } = await requireStudent(data.code);
     const upd: any = {};
     for (const [k, v] of Object.entries(data.fields)) {
-      if (["full_name", "phone", "parent_phone", "address", "school", "section"].includes(k)) upd[k] = str(v);
+      if (["full_name", "phone", "parent_phone", "address", "school", "section", "group_id"].includes(k)) {
+        upd[k] = v === "" ? null : str(v);
+      }
     }
     const { error } = await db.from("students").update(upd).eq("id", student.id);
     if (error) throw new Error(error.message);

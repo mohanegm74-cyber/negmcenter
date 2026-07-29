@@ -6,7 +6,7 @@ import { ArrowRight, LogOut, CalendarCheck, XCircle, Search, User, BookOpen, Wal
 import { BrandLogo } from "@/components/BrandLogo";
 import { ExamsTab } from "@/components/ExamsTab";
 import { generateStudentReport } from "@/lib/ai-report.functions";
-import { getStudentPortal, updateStudentProfile, askTeacher, submitHomeworkText, createHomeworkUploadUrl, finalizeHomeworkUpload, getSubmissionUrl } from "@/lib/student.functions";
+import { getStudentPortal, updateStudentProfile, askTeacher, submitHomeworkText, createHomeworkUploadUrl, finalizeHomeworkUpload, getSubmissionUrl, getAvailableGroups } from "@/lib/student.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { useServerFn } from "@tanstack/react-start";
 
@@ -187,6 +187,7 @@ function Portal() {
               <div className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-3">
                 <Info label="الصف" value={student.grade} />
                 <Info label="الشعبة" value={student.section} />
+                <Info label="المجموعة" value={group?.name} />
                 <Info label="المدرسة" value={student.school} />
                 <Info label="المادة" value={student.subject} />
                 <Info label="المعلم" value={student.teacher_name} />
@@ -514,7 +515,7 @@ function AiTab({ student, group, attendance, homework, subs, notes, totalDue, pa
       <button onclick="window.print()">🖨️ طباعة / حفظ PDF</button>
       <h1>تقرير تحليلي للطالب: ${student.full_name}</h1>
       <div class="meta">${student.grade || ""} — ${group?.name || ""} — ${new Date().toLocaleDateString("ar-EG")}</div>
-      <div class="body">${text.replace(/</g, "&lt;")}</div>
+      <div class="body">${text.replace(/</g, "<")}</div>
       </body></html>`);
     w.document.close();
   }
@@ -534,13 +535,20 @@ function AiTab({ student, group, attendance, homework, subs, notes, totalDue, pa
 
 function EditTab({ code, student, reload }: { code: string; student: Student; reload: () => void }) {
   const [saving, setSaving] = useState(false);
+  const [groups, setGroups] = useState<any[]>([]);
   const update = useServerFn(updateStudentProfile);
+  const loadGroups = useServerFn(getAvailableGroups);
+
+  useEffect(() => {
+    loadGroups({}).then(res => setGroups(res.groups)).catch(() => {});
+  }, []);
+
   async function save(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setSaving(true);
     const fd = new FormData(e.currentTarget);
     const fields: Record<string, string> = {};
-    ["full_name", "phone", "parent_phone", "address", "school", "section"].forEach(k => {
+    ["full_name", "phone", "parent_phone", "address", "school", "section", "group_id"].forEach(k => {
       fields[k] = String(fd.get(k) || "").trim();
     });
     try {
@@ -557,6 +565,15 @@ function EditTab({ code, student, reload }: { code: string; student: Student; re
         <F name="phone" label="الهاتف" defaultValue={student.phone ?? ""} />
         <F name="parent_phone" label="هاتف ولي الأمر" defaultValue={student.parent_phone ?? ""} />
         <F name="school" label="المدرسة" defaultValue={student.school ?? ""} />
+        
+        <div>
+          <label className="mb-1.5 block text-sm font-semibold">المجموعة</label>
+          <select name="group_id" defaultValue={student.group_id ?? ""} className="w-full rounded-lg border border-input bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring">
+            <option value="">— اختر مجموعة —</option>
+            {groups.map(g => <option key={g.id} value={g.id}>{g.name} ({g.grade || '—'})</option>)}
+          </select>
+        </div>
+
         <div>
           <label className="mb-1.5 block text-sm font-semibold">الشعبة</label>
           <select name="section" defaultValue={student.section ?? ""} className="w-full rounded-lg border border-input bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring">

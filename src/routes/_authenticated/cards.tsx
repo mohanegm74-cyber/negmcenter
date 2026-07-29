@@ -1,9 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Printer, IdCard } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { Printer, IdCard, Loader2 } from "lucide-react";
+import { useServerFn } from "@tanstack/react-start";
 import QRCode from "qrcode";
 import { LOGO_URL } from "@/components/BrandLogo";
+import { getAdminDataSummary } from "@/lib/admin.functions";
 
 export const Route = createFileRoute("/_authenticated/cards")({
   head: () => ({ meta: [{ title: "كروت الطلاب — الأستاذ" }, { name: "description", content: "طباعة كروت الطلاب مع QR." }] }),
@@ -19,17 +20,17 @@ function CardsPage() {
   const [gradeF, setGradeF] = useState("");
   const [groupF, setGroupF] = useState("");
   const [qrs, setQrs] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(true);
   const printRef = useRef<HTMLDivElement>(null);
+  
+  const loadFn = useServerFn(getAdminDataSummary);
 
   useEffect(() => {
-    (async () => {
-      const [s, g] = await Promise.all([
-        supabase.from("students").select("id,full_name,code,grade,group_id,phone,parent_phone").eq("active", true).order("full_name"),
-        supabase.from("groups").select("id,name").order("name"),
-      ]);
-      setStudents((s.data as Student[]) || []);
-      setGroups((g.data as Group[]) || []);
-    })();
+    loadFn({}).then(res => {
+      setStudents(res.students as Student[]);
+      setGroups(res.groups as Group[]);
+      setLoading(false);
+    });
   }, []);
 
   const groupMap = useMemo(() => Object.fromEntries(groups.map(g => [g.id, g.name])), [groups]);
@@ -74,6 +75,8 @@ function CardsPage() {
     </body></html>`);
     w.document.close();
   }
+
+  if (loading) return <div className="flex h-64 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
 
   return (
     <div>
