@@ -5,6 +5,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { Sparkles, Trash2, Send, BarChart3, X, Loader2, FileQuestion, Printer, Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { generateExam } from "@/lib/exams.functions";
+import { generateExamClassAnalysis } from "@/lib/ai-report.functions";
 import { updateExamStatusAdmin, getExamsDataAdmin, saveExamFullAdmin } from "@/lib/admin.functions";
 import { QUESTION_KINDS, DIFFICULTIES, TERMS, GRADES, answerToText } from "@/lib/exam-constants";
 import { openPrint, esc } from "@/lib/print";
@@ -280,7 +281,10 @@ function ExamDetail({ exam, students, onClose }: { exam: Exam; students: Student
   const [questions, setQuestions] = useState<Q[]>([]);
   const [attempts, setAttempts] = useState<Attempt[]>([]);
   const [answers, setAnswers] = useState<Answer[]>([]);
-  const [view, setView] = useState<"students" | "questions" | "bank">("students");
+  const [view, setView] = useState<"students" | "questions" | "ai" | "bank">("students");
+  const [aiText, setAiText] = useState<string | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const genAnalysis = useServerFn(generateExamClassAnalysis);
 
   useEffect(() => {
     (async () => {
@@ -298,18 +302,30 @@ function ExamDetail({ exam, students, onClose }: { exam: Exam; students: Student
     })();
   }, [exam.id]);
 
-  async function reloadQuestions() {
-    const { data } = await supabase.from("exam_questions").select("*").eq("exam_id", exam.id).order("position");
-    const list = (data as Q[]) || [];
-    setQuestions(list);
-    await supabase.from("exams").update({ question_count: list.length }).eq("id", exam.id);
-  }
-  async function removeQuestion(id: string) {
-    if (!confirm("حذف هذا السؤال؟")) return;
-    const { error } = await supabase.from("exam_questions").delete().eq("id", id);
-    if (error) return toast.error(error.message);
-    toast.success("تم حذف السؤال");
-    reloadQuestions();
+  async function runAiAnalysis() {
+    setAiLoading(true);
+    try {
+      const classStats = questions.map(q => {
+        const rel = answers.filter(a => a.question_id === q.id);
+        const correct = rel.filter(a => a.is_correct).length;
+        return { prompt: q.prompt, correctRate: rel.length ? Math.round((correct / rel.length) * 100) : 0 };
+      });
+      const studentPerformances = attempts.filter(a => a.status === "submitted").map(a => {
+        const s = students.find(st => st.id === a.student_id);
+        return { name: s?.full_name || "طالب", pct: a.percentage };
+      });
+
+      const r = await genAnalysis({ data: {
+        examTitle: exam.title,
+        stats: classStats,
+        students: studentPerformances
+      }});
+      setAiText(r.text);
+    } catch (e: any) {
+      toast.error("فشل التحليل الذكي");
+    } finally {
+      setAiLoading(false);
+    }
   }
 
   const eligible = useMemo(
@@ -323,7 +339,6 @@ function ExamDetail({ exam, students, onClose }: { exam: Exam; students: Student
     const rel = answers.filter((a) => a.question_id === q.id);
     const correct = rel.filter((a) => a.is_correct).length;
     const p = rel.length ? correct / rel.length : 0;
-    // معامل التمييز: فرق نسبة النجاح بين أعلى 27% وأدنى 27% من الطلاب
     const sorted = [...done].sort((a, b) => Number(b.percentage) - Number(a.percentage));
     const n = Math.max(1, Math.round(sorted.length * 0.27));
     const top = sorted.slice(0, n), low = sorted.slice(-n);
@@ -335,18 +350,6 @@ function ExamDetail({ exam, students, onClose }: { exam: Exam; students: Student
     const d = sorted.length >= 2 ? rate(top) - rate(low) : 0;
     return { q, answered: rel.length, correct, ease: Math.round(p * 100), disc: Math.round(d * 100) };
   });
-  const hardest = [...qStats].filter((s) => s.answered > 0).sort((a, b) => a.ease - b.ease)[0];
-
-  function printBank() {
-    const html = `<h1 style="text-align:center">${esc(exam.title)}</h1>
-      <p style="text-align:center">الزمن: ${exam.duration_minutes} دقيقة — الدرجة: ${exam.total_score}</p>
-      <ol>${questions.map((q) => `<li style="margin-bottom:10px"><b>${esc(q.prompt)}</b> <span style="color:#666">(${esc(q.kind)} — ${q.score} درجة)</span>
-        ${Array.isArray(q.options) && q.options.length ? `<div>${(q.options as string[]).map((o) => `• ${esc(String(o))}`).join(" &nbsp; ")}</div>` : ""}
-        <div style="color:#0a7">الإجابة: ${esc(answerToText(q.correct_answer))}</div>
-        ${q.rationale ? `<div style="color:#666;font-size:12px">السبب: ${esc(q.rationale)}</div>` : ""}
-      </li>`).join("")}</ol>`;
-    openPrint(exam.title, html);
-  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4">
@@ -363,19 +366,46 @@ function ExamDetail({ exam, students, onClose }: { exam: Exam; students: Student
           <Kpi label="متوسط النتيجة" value={`${avg}%`} />
         </div>
 
-        <div className="mb-3 flex gap-1.5">
-          {([["students", "الطلاب والترتيب"], ["questions", "تحليل الأسئلة"], ["bank", "بنك الأسئلة"]] as const).map(([id, lbl]) => (
-            <button key={id} onClick={() => setView(id)} className={`rounded-lg px-3 py-1.5 text-xs font-bold ${view === id ? "bg-primary text-primary-foreground" : "border"}`}>{lbl}</button>
-          ))}
-          <button onClick={printBank} className="mr-auto inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs font-bold"><Printer className="h-3.5 w-3.5" /> طباعة</button>
+        <div className="mb-3 flex gap-1.5 overflow-x-auto pb-1">
+          <TabBtn active={view === "students"} onClick={() => setView("students")} label="الطلاب والترتيب" />
+          <TabBtn active={view === "questions"} onClick={() => setView("questions")} label="تحليل الأسئلة" />
+          <TabBtn active={view === "ai"} onClick={() => setView("ai")} label="التحليل الذكي (AI)" icon={<Sparkles className="h-3.5 w-3.5" />} />
+          <TabBtn active={view === "bank"} onClick={() => setView("bank")} label="بنك الأسئلة" />
         </div>
+
+        {view === "ai" && (
+          <div className="space-y-4">
+            {!aiText && (
+              <div className="text-center py-8">
+                <Sparkles className="mx-auto h-12 w-12 text-gold mb-3 opacity-20" />
+                <p className="text-sm text-muted-foreground mb-4">احصل على تحليل تربوي عميق لأداء مجموعتك في هذا الاختبار.</p>
+                <button onClick={runAiAnalysis} disabled={aiLoading} className="inline-flex items-center gap-2 rounded-xl bg-gold px-6 py-2.5 text-sm font-black text-gold-foreground">
+                  {aiLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />} بدء التحليل الذكي
+                </button>
+              </div>
+            )}
+            {aiText && (
+              <div className="rounded-2xl bg-muted/10 p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="font-black text-primary flex items-center gap-2"><Sparkles className="h-4 w-4 text-gold" /> نتائج التحليل التربوي</h4>
+                  <button onClick={() => {
+                    const w = window.open("", "_blank"); if (!w) return;
+                    w.document.write(`<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/><title>تحليل الاختبار</title><style>body{font-family:system-ui;padding:40px;line-height:1.8}h1{color:#1e3a8a}</style></head><body><h1>تحليل الاختبار: ${exam.title}</h1><div style="white-space:pre-wrap">${aiText}</div></body></html>`);
+                    w.document.close();
+                  }} className="text-xs font-bold text-primary underline">طباعة التحليل</button>
+                </div>
+                <div className="whitespace-pre-wrap text-sm leading-relaxed">{aiText}</div>
+              </div>
+            )}
+          </div>
+        )}
 
         {view === "students" && (
           <div className="overflow-x-auto rounded-xl border">
             <table className="w-full text-right text-sm">
               <thead className="bg-muted/50 text-xs text-muted-foreground"><tr>
                 <th className="p-2">#</th><th className="p-2">الطالب</th><th className="p-2">الكود</th><th className="p-2">الحالة</th>
-                <th className="p-2">الدرجة</th><th className="p-2">النسبة</th><th className="p-2">الزمن</th><th className="p-2">المحاولات</th>
+                <th className="p-2">الدرجة</th><th className="p-2">النسبة</th><th className="p-2">الزمن</th>
               </tr></thead>
               <tbody>
                 {eligible.map((s) => {
@@ -391,7 +421,6 @@ function ExamDetail({ exam, students, onClose }: { exam: Exam; students: Student
                       <td className="p-2">{best ? `${Number(best.score)} / ${Number(best.max_score)}` : "—"}</td>
                       <td className="p-2 font-bold">{best ? `${Number(best.percentage)}%` : "—"}</td>
                       <td className="p-2">{best ? `${Math.round(best.time_spent_seconds / 60)} د` : "—"}</td>
-                      <td className="p-2">{mine.length}</td>
                     </tr>
                   );
                 })}
@@ -401,58 +430,35 @@ function ExamDetail({ exam, students, onClose }: { exam: Exam; students: Student
         )}
 
         {view === "questions" && (
-          <div className="space-y-3">
-            {hardest && <div className="rounded-xl bg-amber-50 p-3 text-sm"><b>أكثر سؤال أخطأ فيه الطلاب:</b> {hardest.q.prompt}</div>}
-            <div className="overflow-x-auto rounded-xl border">
-              <table className="w-full text-right text-sm">
-                <thead className="bg-muted/50 text-xs text-muted-foreground"><tr>
-                  <th className="p-2">#</th><th className="p-2">السؤال</th><th className="p-2">النوع</th>
-                  <th className="p-2">المهارة</th><th className="p-2">أجاب</th><th className="p-2">نسبة الصواب</th><th className="p-2">معامل التمييز</th>
-                </tr></thead>
-                <tbody>
-                  {qStats.map((s) => (
-                    <tr key={s.q.id} className="border-t">
-                      <td className="p-2">{s.q.position}</td>
-                      <td className="p-2 max-w-md">{s.q.prompt}</td>
-                      <td className="p-2 text-xs">{s.q.kind}</td>
-                      <td className="p-2 text-xs">{s.q.skill || "—"}</td>
-                      <td className="p-2">{s.answered}</td>
-                      <td className="p-2 font-bold">{s.answered ? `${s.ease}%` : "—"}</td>
-                      <td className="p-2">{s.answered ? `${s.disc}%` : "—"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {view === "bank" && (
-          <div className="space-y-3">
-            <ManualQuestion examId={exam.id} nextPos={questions.length + 1} onAdded={reloadQuestions} />
-            {questions.map((q) => (
-              <div key={q.id} className="rounded-xl border p-3 text-sm">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="font-bold">{q.position}. {q.prompt}</div>
-                  <button onClick={() => removeQuestion(q.id)} className="rounded-lg bg-destructive/10 p-1 text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
-                </div>
-                {q.passage && <div className="mt-1 rounded bg-muted/50 p-2 text-xs">{q.passage}</div>}
-                {Array.isArray(q.options) && (q.options as string[]).length > 0 && (
-                  <ul className="mt-1 list-disc pr-5 text-xs text-muted-foreground">{(q.options as string[]).map((o, i) => <li key={i}>{o}</li>)}</ul>
-                )}
-                <div className="mt-1 text-xs text-emerald-700">الإجابة: {answerToText(q.correct_answer)}</div>
-                {q.rationale && <div className="text-xs text-muted-foreground">السبب: {q.rationale}</div>}
-                <div className="mt-1 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
-                  <span>النوع: {q.kind}</span><span>المهارة: {q.skill || "—"}</span>
-                  <span>ناتج التعلم: {q.learning_outcome || "—"}</span><span>الصعوبة: {q.difficulty}</span>
-                  <span>الزمن: {q.expected_seconds}ث</span><span>الدرجة: {q.score}</span>
-                </div>
-              </div>
-            ))}
+          <div className="overflow-x-auto rounded-xl border">
+            <table className="w-full text-right text-sm">
+              <thead className="bg-muted/50 text-xs text-muted-foreground"><tr>
+                <th className="p-2">#</th><th className="p-2">السؤال</th><th className="p-2">أجاب</th><th className="p-2">نسبة الصواب</th><th className="p-2">التمييز</th>
+              </tr></thead>
+              <tbody>
+                {qStats.map((s) => (
+                  <tr key={s.q.id} className="border-t">
+                    <td className="p-2">{s.q.position}</td>
+                    <td className="p-2 max-w-md">{s.q.prompt}</td>
+                    <td className="p-2">{s.answered}</td>
+                    <td className="p-2 font-bold text-primary">{s.answered ? `${s.ease}%` : "—"}</td>
+                    <td className="p-2">{s.answered ? `${s.disc}%` : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
     </div>
+  );
+}
+
+function TabBtn({ active, onClick, label, icon }: { active: boolean; onClick: () => void; label: string; icon?: React.ReactNode }) {
+  return (
+    <button onClick={onClick} className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg px-4 py-2 text-xs font-bold transition ${active ? "bg-primary text-primary-foreground shadow" : "border border-input hover:bg-accent"}`}>
+      {icon}{label}
+    </button>
   );
 }
 
@@ -461,59 +467,6 @@ function Kpi({ label, value }: { label: string; value: any }) {
     <div className="rounded-xl border bg-muted/30 p-3 text-center">
       <div className="text-lg font-black text-primary">{value}</div>
       <div className="text-[11px] text-muted-foreground">{label}</div>
-    </div>
-  );
-}
-
-function ManualQuestion({ examId, nextPos, onAdded }: { examId: string; nextPos: number; onAdded: () => void }) {
-  const [open, setOpen] = useState(false);
-  const [q, setQ] = useState({ kind: QUESTION_KINDS[0] as string, prompt: "", options: "", correct: "", rationale: "", skill: "", difficulty: "medium", score: 5 });
-  const [saving, setSaving] = useState(false);
-
-  async function save() {
-    if (!q.prompt.trim() || !q.correct.trim()) { toast.error("اكتب السؤال والإجابة الصحيحة"); return; }
-    setSaving(true);
-    const { error } = await supabase.from("exam_questions").insert({
-      exam_id: examId, position: nextPos, kind: q.kind, prompt: q.prompt,
-      options: q.options.split("\n").map((o) => o.trim()).filter(Boolean),
-      correct_answer: q.correct, rationale: q.rationale || null, skill: q.skill || null,
-      difficulty: q.difficulty, score: Number(q.score) || 1,
-    });
-    setSaving(false);
-    if (error) return toast.error(error.message);
-    toast.success("تمت إضافة السؤال");
-    setQ({ ...q, prompt: "", options: "", correct: "", rationale: "" });
-    onAdded();
-  }
-
-  if (!open) {
-    return (
-      <button onClick={() => setOpen(true)} className="inline-flex items-center gap-1.5 rounded-xl border border-primary px-4 py-2 text-xs font-black text-primary">
-        <Plus className="h-4 w-4" /> إضافة سؤال يدوياً
-      </button>
-    );
-  }
-  return (
-    <div className="space-y-2 rounded-xl border bg-muted/20 p-3">
-      <div className="grid gap-2 sm:grid-cols-3">
-        <Field label="نوع السؤال">
-          <select className={inp} value={q.kind} onChange={(e) => setQ({ ...q, kind: e.target.value })}>
-            {QUESTION_KINDS.map((k) => <option key={k}>{k}</option>)}
-          </select>
-        </Field>
-        <Field label="المهارة"><input className={inp} value={q.skill} onChange={(e) => setQ({ ...q, skill: e.target.value })} /></Field>
-        <Field label="الدرجة"><input type="number" min={1} className={inp} value={q.score} onChange={(e) => setQ({ ...q, score: +e.target.value })} /></Field>
-      </div>
-      <Field label="نص السؤال"><textarea rows={2} className={inp} value={q.prompt} onChange={(e) => setQ({ ...q, prompt: e.target.value })} /></Field>
-      <Field label="الاختيارات (اختياري — كل اختيار في سطر)"><textarea rows={3} className={inp} value={q.options} onChange={(e) => setQ({ ...q, options: e.target.value })} /></Field>
-      <div className="grid gap-2 sm:grid-cols-2">
-        <Field label="الإجابة الصحيحة"><input className={inp} value={q.correct} onChange={(e) => setQ({ ...q, correct: e.target.value })} /></Field>
-        <Field label="سبب الإجابة (اختياري)"><input className={inp} value={q.rationale} onChange={(e) => setQ({ ...q, rationale: e.target.value })} /></Field>
-      </div>
-      <div className="flex gap-2">
-        <button onClick={save} disabled={saving} className="rounded-lg bg-primary px-4 py-2 text-xs font-black text-primary-foreground disabled:opacity-60">حفظ السؤال</button>
-        <button onClick={() => setOpen(false)} className="rounded-lg border px-4 py-2 text-xs font-bold">إغلاق</button>
-      </div>
     </div>
   );
 }

@@ -37,3 +37,21 @@ export const generateCenterReport = createServerFn({ method: "POST" })
     const text = await callAi("أنت مستشار إداري لسنتر تعليمي تكتب تقارير احترافية للإدارة بالعربية الفصحى.", prompt);
     return { text };
   });
+
+export const generateExamClassAnalysis = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) => d as { examTitle: string; stats: any; students: any[] })
+  .handler(async ({ data }) => {
+    const { callAi } = await import("./ai.server");
+    const prompt = `أنت محلل تربوي خبير. قم بتحليل نتائج الاختبار التالي لمجموعة من الطلاب:
+الاختبار: ${data.examTitle}
+إحصائيات الأسئلة: ${JSON.stringify(data.stats)}
+أداء الطلاب (عينة): ${JSON.stringify(data.students.slice(0, 20))}
+
+اكتب تقريراً باللغة العربية يشمل:
+1. التقييم العام لمستوى المجموعة في هذا الاختبار.
+2. تحديد أصعب الأسئلة والمهارات التي تعثر فيها أغلب الطلاب.
+3. توصيات عملية لك (المعلم) لمعالجة نقاط الضعف في الحصص القادمة.`;
+
+    const text = await callAi("أنت محلل بيانات تربوي خبير.", prompt);
+    return { text };
+  });

@@ -3,8 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Search, Trash2, Pencil, Users, X, Loader2, Phone, MapPin, School, GraduationCap, Save, Boxes, Info, Calendar } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
-import { supabase } from "@/integrations/supabase/client";
-import { getAllStudentsAdmin, deleteStudentAdmin, updateStudentAdmin } from "@/lib/admin.functions";
+import { getAllStudentsAdmin, deleteStudentAdmin, updateStudentAdmin, getGroupsAdmin } from "@/lib/admin.functions";
 
 export const Route = createFileRoute("/_authenticated/students")({
   head: () => ({ meta: [{ title: "إدارة الطلاب — الأستاذ محمد نجم" }, { name: "description", content: "إدارة طلاب السنتر وتعديل بياناتهم بشكل شامل." }] }),
@@ -31,14 +30,17 @@ function StudentsPage() {
   const [isSaving, setIsSaving] = useState(false);
   
   const loadStudentsFn = useServerFn(getAllStudentsAdmin);
+  const loadGroupsFn = useServerFn(getGroupsAdmin);
   const deleteStudentFn = useServerFn(deleteStudentAdmin);
   const updateStudentFn = useServerFn(updateStudentAdmin);
 
   async function load() {
     setLoading(true);
     try {
-      const { students: st } = await loadStudentsFn({});
-      const { data: g } = await supabase.from("groups").select("id,name,grade").order("name");
+      const [{ students: st }, { groups: g }] = await Promise.all([
+        loadStudentsFn({}),
+        loadGroupsFn({})
+      ]);
       setStudents(st as Student[]);
       setGroups((g as Group[]) || []);
     } catch (err: any) {
