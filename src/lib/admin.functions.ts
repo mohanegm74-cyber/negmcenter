@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 /** فحص صلاحية الأستاذ */
 export const verifyTeacherStatus = createServerFn({ method: "GET" })
@@ -12,7 +13,7 @@ export const verifyTeacherStatus = createServerFn({ method: "GET" })
     return { isTeacher: data?.role === "teacher" || data?.role === "admin" };
   });
 
-/** جلب كل البيانات الأساسية للأستاذ بضمان تخطي RLS */
+/** جلب كل البيانات الأساسية للأستاذ بضمان تخطي RLS والربط بين المجموعات والطلاب */
 export const getAdminDataSummary = createServerFn({ method: "GET" })
   .handler(async () => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -31,6 +32,22 @@ export const getAdminDataSummary = createServerFn({ method: "GET" })
       payments: py.data || [],
       attendance: at.data || []
     };
+  });
+
+/** تسجيل حضور طالب عبر السيرفر لتجنب أخطاء الصلاحيات */
+export const markAttendanceAdmin = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) => d as { student_id: string; group_id: string; date: string; status: string })
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await supabaseAdmin.from("attendance").upsert({ 
+      student_id: data.student_id, 
+      group_id: data.group_id, 
+      date: data.date, 
+      status: data.status 
+    }, { onConflict: "student_id,date" });
+    
+    if (error) throw new Error(`فشل تسجيل الحضور: ${error.message}`);
+    return { ok: true };
   });
 
 export const getDashboardStatsAdmin = createServerFn({ method: "GET" })
@@ -116,7 +133,6 @@ export const factoryResetSystem = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const db = supabaseAdmin;
     
-    // الترتيب العكسي ضروري لتجنب أخطاء المفاتيح الخارجية
     const tables = [
       "exam_answers", "exam_attempts", "exam_questions", "exams",
       "homework_submissions", "homework", "attendance", "payments",

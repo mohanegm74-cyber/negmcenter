@@ -2,9 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Check, X, Clock, ClipboardCheck, Loader2 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import { useServerFn } from "@tanstack/react-start";
-import { getAdminDataSummary } from "@/lib/admin.functions";
+import { getAdminDataSummary, markAttendanceAdmin } from "@/lib/admin.functions";
 
 export const Route = createFileRoute("/_authenticated/attendance")({
   head: () => ({ meta: [{ title: "الحضور — الأستاذ" }, { name: "description", content: "تسجيل حضور الطلاب." }] }),
@@ -13,7 +12,6 @@ export const Route = createFileRoute("/_authenticated/attendance")({
 
 type Group = { id: string; name: string };
 type Student = { id: string; full_name: string; code: string; group_id: string | null };
-type Att = { student_id: string; status: string };
 
 function AttendancePage() {
   const [groups, setGroups] = useState<Group[]>([]);
@@ -24,6 +22,7 @@ function AttendancePage() {
   const [loading, setLoading] = useState(true);
 
   const loadData = useServerFn(getAdminDataSummary);
+  const markFn = useServerFn(markAttendanceAdmin);
 
   async function fetchAll() {
     setLoading(true);
@@ -38,7 +37,7 @@ function AttendancePage() {
         .forEach(a => { map[a.student_id] = a.status; });
       setStatusMap(map);
     } catch (err: any) {
-      toast.error(err.message);
+      toast.error("فشل تحميل البيانات: " + err.message);
     } finally {
       setLoading(false);
     }
@@ -49,9 +48,14 @@ function AttendancePage() {
   const displayedStudents = allStudents.filter(s => s.group_id === groupId);
 
   async function mark(student_id: string, status: "present" | "absent" | "late") {
-    const { error } = await supabase.from("attendance").upsert({ student_id, group_id: groupId, date, status }, { onConflict: "student_id,date" });
-    if (error) { toast.error(error.message); return; }
-    setStatusMap(m => ({ ...m, [student_id]: status }));
+    if (!groupId) return;
+    try {
+      await markFn({ data: { student_id, group_id: groupId, date, status } });
+      setStatusMap(m => ({ ...m, [student_id]: status }));
+      toast.success("تم الحفظ بنجاح", { duration: 1000 });
+    } catch (err: any) {
+      toast.error(err.message);
+    }
   }
 
   if (loading && groups.length === 0) return <div className="flex h-64 items-center justify-center text-muted-foreground"><Loader2 className="h-8 w-8 animate-spin" /></div>;
@@ -80,7 +84,7 @@ function AttendancePage() {
       {!groupId ? (
         <div className="rounded-2xl bg-white p-12 text-center text-muted-foreground shadow-sm">برجاء اختيار المجموعة لعرض الطلاب.</div>
       ) : displayedStudents.length === 0 ? (
-        <div className="rounded-2xl bg-white p-12 text-center text-muted-foreground shadow-sm">لا يوجد طلاب في هذه المجموعة.</div>
+        <div className="rounded-2xl bg-white p-12 text-center text-muted-foreground shadow-sm">لا يوجد طلاب في هذه المجموعة حالياً.</div>
       ) : (
         <div className="overflow-hidden rounded-2xl bg-white shadow-sm">
           <table className="w-full text-sm">
