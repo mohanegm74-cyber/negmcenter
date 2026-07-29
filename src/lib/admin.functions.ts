@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
-/** جلب ملخص إحصائيات لوحة التحكم */
+/** 1. جلب ملخص إحصائيات لوحة التحكم */
 export const getDashboardStatsAdmin = createServerFn({ method: "GET" })
   .handler(async () => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -30,7 +30,7 @@ export const getDashboardStatsAdmin = createServerFn({ method: "GET" })
     };
   });
 
-/** جلب بيانات صفحة الواجبات */
+/** 2. جلب بيانات صفحة الواجبات */
 export const getHomeworkDataAdmin = createServerFn({ method: "GET" })
   .handler(async () => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -44,7 +44,7 @@ export const getHomeworkDataAdmin = createServerFn({ method: "GET" })
     return { groups: g.data || [], items: h.data || [], students: s.data || [], subs: sb.data || [] };
   });
 
-/** جلب بيانات صفحة الاختبارات */
+/** 3. جلب بيانات صفحة الاختبارات */
 export const getExamsDataAdmin = createServerFn({ method: "GET" })
   .handler(async () => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -58,7 +58,7 @@ export const getExamsDataAdmin = createServerFn({ method: "GET" })
     return { groups: g.data || [], students: s.data || [], exams: e.data || [], attempts: at.data || [] };
   });
 
-/** جلب بيانات صفحة التقارير */
+/** 4. جلب بيانات صفحة التقارير */
 export const getReportsDataAdmin = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => d as { from: string; to: string })
   .handler(async ({ data }) => {
@@ -73,7 +73,7 @@ export const getReportsDataAdmin = createServerFn({ method: "POST" })
     return { students: s.data || [], groups: g.data || [], attendance: a.data || [], payments: p.data || [] };
   });
 
-/** جلب ملخص البيانات للحضور */
+/** 5. جلب ملخص البيانات للحضور */
 export const getAdminDataSummary = createServerFn({ method: "GET" })
   .handler(async () => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -86,7 +86,7 @@ export const getAdminDataSummary = createServerFn({ method: "GET" })
     return { groups: gr.data || [], students: st.data || [], attendance: at.data || [] };
   });
 
-/** تسجيل الحضور عبر السيرفر */
+/** 6. تسجيل الحضور عبر السيرفر */
 export const markAttendanceAdmin = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => d as { student_id: string; group_id: string; date: string; status: string })
   .handler(async ({ data }) => {
@@ -96,7 +96,16 @@ export const markAttendanceAdmin = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-/** حفظ أو تحديث مجموعة */
+/** 7. جلب المجموعات */
+export const getGroupsAdmin = createServerFn({ method: "GET" })
+  .handler(async () => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data, error } = await supabaseAdmin.from("groups").select("*").order("name");
+    if (error) throw new Error(error.message);
+    return { groups: data || [] };
+  });
+
+/** 8. حفظ أو تحديث مجموعة */
 export const saveGroup = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => d as { id?: string; payload: any })
   .handler(async ({ data }) => {
@@ -108,7 +117,7 @@ export const saveGroup = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-/** حذف مجموعة */
+/** 9. حذف مجموعة */
 export const deleteGroup = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => d as { id: string })
   .handler(async ({ data }) => {
@@ -118,7 +127,16 @@ export const deleteGroup = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-/** حذف طالب نهائياً */
+/** 10. جلب كافة الطلاب */
+export const getAllStudentsAdmin = createServerFn({ method: "GET" })
+  .handler(async () => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data, error } = await supabaseAdmin.from("students").select("*").order("full_name");
+    if (error) throw new Error(error.message);
+    return { students: data || [] };
+  });
+
+/** 11. حذف طالب نهائياً */
 export const deleteStudentAdmin = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => d as { id: string })
   .handler(async ({ data }) => {
@@ -128,7 +146,7 @@ export const deleteStudentAdmin = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-/** جلب البيانات المالية */
+/** 12. جلب البيانات المالية */
 export const getFinanceDataAdmin = createServerFn({ method: "GET" })
   .handler(async () => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -141,7 +159,7 @@ export const getFinanceDataAdmin = createServerFn({ method: "GET" })
     return { students: st.data || [], groups: gr.data || [], payments: py.data || [] };
   });
 
-/** تسجيل حركة مالية */
+/** 13. تسجيل حركة مالية */
 export const addPaymentAdmin = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => d as { student_id: string; group_id: string | null; amount: number; kind: string; month: string; paid_at: string; note: string | null })
   .handler(async ({ data }) => {
@@ -151,7 +169,17 @@ export const addPaymentAdmin = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-/** تحديث حالة الاختبار */
+/** 14. حذف حركة مالية */
+export const deletePaymentAdmin = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) => d as { id: string })
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await supabaseAdmin.from("payments").delete().eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+/** 15. تحديث حالة الاختبار */
 export const updateExamStatusAdmin = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => d as { id: string; status: string })
   .handler(async ({ data }) => {
@@ -161,7 +189,7 @@ export const updateExamStatusAdmin = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-/** تهيئة النظام (تصفير) */
+/** 16. تهيئة النظام (تصفير) */
 export const factoryResetSystem = createServerFn({ method: "POST" })
   .handler(async () => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
