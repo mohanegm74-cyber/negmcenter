@@ -1,11 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { Printer, FileBarChart, Sparkles, X } from "lucide-react";
+import { Printer, FileBarChart, Sparkles, X, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
-import { supabase } from "@/integrations/supabase/client";
 import { openPrint, esc } from "@/lib/print";
 import { generateCenterReport } from "@/lib/ai-report.functions";
+import { getReportsDataAdmin } from "@/lib/admin.functions";
 
 export const Route = createFileRoute("/_authenticated/reports")({
   head: () => ({ meta: [{ title: "التقارير — الأستاذ" }, { name: "description", content: "تقارير شاملة مصنفة حسب الصف والمجموعة." }] }),
@@ -25,26 +25,30 @@ function ReportsPage() {
   const [tab, setTab] = useState<"grade" | "group" | "attendance">("grade");
   const [from, setFrom] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10));
   const [to, setTo] = useState(new Date().toISOString().slice(0, 10));
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    (async () => {
-      // الربط الأساسي: جلب كل البيانات المتعلقة بالطلاب المسجلين
-      const [s, g, a, p] = await Promise.all([
-        supabase.from("students").select("id,full_name,code,grade,group_id,phone").eq("active", true),
-        supabase.from("groups").select("id,name,grade,monthly_fee"),
-        supabase.from("attendance").select("student_id,group_id,date,status").gte("date", from).lte("date", to),
-        supabase.from("payments").select("student_id,amount,kind,month"),
-      ]);
-      setStudents((s.data as Student[]) || []);
-      setGroups((g.data as Group[]) || []);
-      setAtt((a.data as Att[]) || []);
-      setPay((p.data as Pay[]) || []);
-    })();
-  }, [from, to]);
+  const loadFn = useServerFn(getReportsDataAdmin);
+  const genCenter = useServerFn(generateCenterReport);
+
+  async function load() {
+    setLoading(true);
+    try {
+      const res = await loadFn({ data: { from, to } });
+      setStudents(res.students as Student[]);
+      setGroups(res.groups as Group[]);
+      setAtt(res.attendance as Att[]);
+      setPay(res.payments as Pay[]);
+    } catch (e: any) {
+      toast.error("فشل تحميل التقارير");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { load(); }, [from, to]);
 
   const groupMap = useMemo(() => Object.fromEntries(groups.map(g => [g.id, g])), [groups]);
 
-  // تقرير حسب الصف: يربط الطلاب بمالياتهم وحضورهم
   const byGrade = useMemo(() => {
     const map = new Map<string, { grade: string; students: number; present: number; absent: number; late: number; income: number; dues: number }>();
     for (const s of students) {
@@ -68,7 +72,6 @@ function ReportsPage() {
     return Array.from(map.values()).sort((a, b) => a.grade.localeCompare(b.grade));
   }, [students, att, pay]);
 
-  // تقرير حسب المجموعة: يربط المجموعة بطلابها ونشاطهم
   const byGroup = useMemo(() => {
     return groups.map(g => {
       const gs = students.filter(s => s.group_id === g.id);
@@ -117,7 +120,6 @@ function ReportsPage() {
   const [aiOpen, setAiOpen] = useState(false);
   const [aiText, setAiText] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
-  const genCenter = useServerFn(generateCenterReport);
 
   async function runCenterAI() {
     setAiOpen(true); setAiLoading(true); setAiText(null);
@@ -140,6 +142,8 @@ function ReportsPage() {
     } catch (e: any) { toast.error(e.message || "فشل التحليل"); setAiOpen(false); }
     finally { setAiLoading(false); }
   }
+
+  if (loading && groups.length === 0) return <div className="flex h-64 items-center justify-center text-muted-foreground"><Loader2 className="h-8 w-8 animate-spin" /></div>;
 
   return (
     <div>

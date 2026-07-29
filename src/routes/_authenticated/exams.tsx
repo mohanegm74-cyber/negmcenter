@@ -5,7 +5,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { Sparkles, Trash2, Send, BarChart3, X, Loader2, FileQuestion, Printer, Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { generateExam } from "@/lib/exams.functions";
-import { updateExamStatusAdmin } from "@/lib/admin.functions";
+import { updateExamStatusAdmin, getExamsDataAdmin } from "@/lib/admin.functions";
 import { QUESTION_KINDS, DIFFICULTIES, TERMS, GRADES, answerToText } from "@/lib/exam-constants";
 import { openPrint, esc } from "@/lib/print";
 
@@ -44,9 +44,12 @@ function ExamsPage() {
   const [exams, setExams] = useState<Exam[]>([]);
   const [allAttempts, setAllAttempts] = useState<Attempt[]>([]);
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [detail, setDetail] = useState<Exam | null>(null);
+  
   const gen = useServerFn(generateExam);
   const updateStatusFn = useServerFn(updateExamStatusAdmin);
+  const loadFn = useServerFn(getExamsDataAdmin);
 
   const [form, setForm] = useState({
     grade: GRADES[0], term: TERMS[0], group_id: "", subject: "", lesson: "",
@@ -55,16 +58,18 @@ function ExamsPage() {
   const [kinds, setKinds] = useState<string[]>(["اختيار من متعدد", "صح أو خطأ", "أكمل"]);
 
   async function load() {
-    const [g, s, e, at] = await Promise.all([
-      supabase.from("groups").select("id,name,grade,subject").order("name"),
-      supabase.from("students").select("id,full_name,code,group_id,grade").order("full_name"),
-      supabase.from("exams").select("*").order("created_at", { ascending: false }),
-      supabase.from("exam_attempts").select("*").eq("status", "submitted"),
-    ]);
-    setAllAttempts((at.data as Attempt[]) || []);
-    setGroups((g.data as Group[]) || []);
-    setStudents((s.data as Student[]) || []);
-    setExams((e.data as Exam[]) || []);
+    setLoading(true);
+    try {
+      const res = await loadFn({});
+      setGroups(res.groups as Group[]);
+      setStudents(res.students as Student[]);
+      setExams(res.exams as Exam[]);
+      setAllAttempts(res.attempts as Attempt[]);
+    } catch (e: any) {
+      toast.error("فشل تحميل بيانات الاختبارات");
+    } finally {
+      setLoading(false);
+    }
   }
   useEffect(() => { load(); }, []);
 
@@ -146,6 +151,8 @@ function ExamsPage() {
     if (error) return toast.error(error.message);
     toast.success("تم الحذف"); load();
   }
+
+  if (loading) return <div className="flex h-64 items-center justify-center text-muted-foreground"><Loader2 className="h-8 w-8 animate-spin" /></div>;
 
   return (
     <div className="space-y-6">

@@ -1,9 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Plus, Trash2, Pencil, X, Printer, BookOpen } from "lucide-react";
+import { Plus, Trash2, Pencil, X, Printer, BookOpen, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { openPrint, esc } from "@/lib/print";
+import { useServerFn } from "@tanstack/react-start";
+import { getHomeworkDataAdmin } from "@/lib/admin.functions";
 
 export const Route = createFileRoute("/_authenticated/homework")({
   head: () => ({ meta: [{ title: "الواجبات — الأستاذ" }, { name: "description", content: "إدارة الواجبات وتقييم الطلاب." }] }),
@@ -23,18 +25,23 @@ function HomeworkPage() {
   const [editing, setEditing] = useState<HW | null>(null);
   const [open, setOpen] = useState(false);
   const [activeHW, setActiveHW] = useState<HW | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const loadFn = useServerFn(getHomeworkDataAdmin);
 
   async function load() {
-    const [g, h, s, sb] = await Promise.all([
-      supabase.from("groups").select("id,name,grade").order("name"),
-      supabase.from("homework").select("*").order("created_at", { ascending: false }),
-      supabase.from("students").select("id,full_name,code,group_id").eq("active", true).order("full_name"),
-      supabase.from("homework_submissions").select("*"),
-    ]);
-    setGroups((g.data as Group[]) || []);
-    setItems((h.data as HW[]) || []);
-    setStudents((s.data as Student[]) || []);
-    setSubs((sb.data as Sub[]) || []);
+    setLoading(true);
+    try {
+      const res = await loadFn({});
+      setGroups(res.groups as Group[]);
+      setItems(res.items as HW[]);
+      setStudents(res.students as Student[]);
+      setSubs(res.subs as Sub[]);
+    } catch (e: any) {
+      toast.error("فشل تحميل البيانات");
+    } finally {
+      setLoading(false);
+    }
   }
   useEffect(() => { load(); }, []);
 
@@ -83,6 +90,8 @@ function HomeworkPage() {
       <tbody>${rows}</tbody></table>
     `);
   }
+
+  if (loading) return <div className="flex h-64 items-center justify-center text-muted-foreground"><Loader2 className="h-8 w-8 animate-spin" /></div>;
 
   return (
     <div>
