@@ -66,13 +66,41 @@ export const deleteGroup = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-/** تعديل بيانات الطالب */
+/** تعديل بيانات الطالب (شامل المجموعة) */
 export const updateStudentAdmin = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => d as { id: string; payload: any })
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    // تنظيف المجموعة إذا كانت فارغة
+    if (data.payload.group_id === "") data.payload.group_id = null;
     const { error } = await supabaseAdmin.from("students").update(data.payload).eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+/** الرد على سؤال طالب */
+export const answerStudentQuestionAdmin = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => d as { id: string; answer: string })
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await supabaseAdmin.from("questions").update({ 
+      answer: data.answer, 
+      answered_at: new Date().toISOString(),
+      is_read: true 
+    }).eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+/** حذف سؤال طالب */
+export const deleteStudentQuestionAdmin = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => d as { id: string })
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await supabaseAdmin.from("questions").delete().eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true };
   });
@@ -188,24 +216,15 @@ export const getAdminDataSummary = createServerFn({ method: "GET" })
     return { groups: gr.data || [], students: st.data || [], attendance: at.data || [] };
   });
 
-/** جلب بيانات المجموعات */
-export const getGroupsAdmin = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
-  .handler(async () => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data, error } = await supabaseAdmin.from("groups").select("*").order("name");
-    if (error) throw new Error(error.message);
-    return { groups: data || [] };
-  });
-
-/** جلب كافة الطلاب */
+/** جلب كافة بيانات التقارير والطلاب */
 export const getAllStudentsAdmin = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async () => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data, error } = await supabaseAdmin.from("students").select("*").order("full_name");
-    if (error) throw new Error(error.message);
-    return { students: data || [] };
+    const { data: st, error: se } = await supabaseAdmin.from("students").select("*").order("full_name");
+    const { data: gr, error: ge } = await supabaseAdmin.from("groups").select("id,name,grade").order("name");
+    if (se || ge) throw new Error(se?.message || ge?.message);
+    return { students: st || [], groups: gr || [] };
   });
 
 /** جلب بيانات الواجبات */
@@ -266,6 +285,16 @@ export const getFinanceDataAdmin = createServerFn({ method: "GET" })
       db.from("payments").select("*").order("paid_at", { ascending: false }),
     ]);
     return { students: st.data || [], groups: gr.data || [], payments: py.data || [] };
+  });
+
+/** جلب أسئلة الطلاب للأستاذ */
+export const getStudentQuestionsAdmin = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async () => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: q } = await supabaseAdmin.from("questions").select("*").order("created_at", { ascending: false });
+    const { data: s } = await supabaseAdmin.from("students").select("id,full_name,code");
+    return { questions: q || [], students: s || [] };
   });
 
 /** تهيئة النظام (تصفير) */

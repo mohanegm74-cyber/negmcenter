@@ -1,8 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { MessageCircleQuestion, Check, Trash2, Send } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { MessageCircleQuestion, Check, Trash2, Send, Loader2 } from "lucide-react";
+import { useServerFn } from "@tanstack/react-start";
+import { getStudentQuestionsAdmin, answerStudentQuestionAdmin, deleteStudentQuestionAdmin } from "@/lib/admin.functions";
 
 export const Route = createFileRoute("/_authenticated/questions")({
   head: () => ({ meta: [{ title: "أسئلة الطلاب — الأستاذ" }, { name: "description", content: "استقبال أسئلة الطلاب والرد عليها." }] }),
@@ -17,32 +18,52 @@ function QuestionsPage() {
   const [students, setStudents] = useState<Record<string, S>>({});
   const [answering, setAnswering] = useState<string | null>(null);
   const [answerText, setAnswerText] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  const listFn = useServerFn(getStudentQuestionsAdmin);
+  const answerFn = useServerFn(answerStudentQuestionAdmin);
+  const deleteFn = useServerFn(deleteStudentQuestionAdmin);
 
   async function load() {
-    const [{ data: q }, { data: s }] = await Promise.all([
-      supabase.from("questions").select("*").order("created_at", { ascending: false }),
-      supabase.from("students").select("id,full_name,code"),
-    ]);
-    setRows((q as Q[]) || []);
-    setStudents(Object.fromEntries(((s as S[]) || []).map(x => [x.id, x])));
+    setLoading(true);
+    try {
+      const res = await listFn({});
+      setRows(res.questions as Q[]);
+      setStudents(Object.fromEntries(((res.students as S[]) || []).map(x => [x.id, x])));
+    } catch (e: any) {
+      toast.error("فشل تحميل الأسئلة");
+    } finally {
+      setLoading(false);
+    }
   }
   useEffect(() => { load(); }, []);
 
   async function markRead(id: string) {
-    const { error } = await supabase.from("questions").update({ is_read: true }).eq("id", id);
-    if (error) toast.error(error.message); else load();
+    try {
+      await answerFn({ data: { id, answer: rows.find(r => r.id === id)?.answer || "" } });
+      load();
+    } catch (e: any) { toast.error(e.message); }
   }
+  
   async function remove(id: string) {
     if (!confirm("حذف السؤال؟")) return;
-    const { error } = await supabase.from("questions").delete().eq("id", id);
-    if (error) toast.error(error.message); else load();
+    try {
+      await deleteFn({ data: { id } });
+      toast.success("تم الحذف");
+      load();
+    } catch (e: any) { toast.error(e.message); }
   }
+
   async function sendAnswer(id: string) {
     if (!answerText.trim()) return;
-    const { error } = await supabase.from("questions").update({ answer: answerText.trim(), answered_at: new Date().toISOString(), is_read: true }).eq("id", id);
-    if (error) toast.error(error.message);
-    else { toast.success("تم الرد"); setAnswering(null); setAnswerText(""); load(); }
+    try {
+      await answerFn({ data: { id, answer: answerText.trim() } });
+      toast.success("تم الرد");
+      setAnswering(null); setAnswerText(""); load();
+    } catch (e: any) { toast.error(e.message); }
   }
+
+  if (loading && rows.length === 0) return <div className="flex h-64 items-center justify-center text-muted-foreground"><Loader2 className="h-8 w-8 animate-spin" /></div>;
 
   return (
     <div>

@@ -167,6 +167,7 @@ export const submitExamAttempt = createServerFn({ method: "POST" })
 
     const result = await gradeAndAnalyze({ studentName: student.full_name, examTitle: exam?.title || "اختبار", classAverage: null, items });
     
+    // حفظ النتائج والتحليل باستخدام صلاحيات الأدمن
     await db.from("exam_attempts").update({ 
       status: "submitted", 
       submitted_at: new Date().toISOString(), 
@@ -179,6 +180,21 @@ export const submitExamAttempt = createServerFn({ method: "POST" })
       weaknesses: result.weaknesses, 
       remedial_plan: result.remedial_plan 
     }).eq("id", data.attempt_id);
+
+    // حفظ الإجابات التفصيلية أيضاً بصلاحيات كاملة
+    const answersToInsert = items.map(i => {
+      const res = result.results.find(r => r.id === i.id);
+      return {
+        attempt_id: data.attempt_id,
+        question_id: i.id,
+        answer: data.answers[i.id] || "",
+        score: res?.score || 0,
+        is_correct: res?.is_correct || false,
+        feedback: res?.feedback || "",
+        time_spent_seconds: 0
+      };
+    });
+    await db.from("exam_answers").insert(answersToInsert);
     
     return { total: result.total, max: result.max, percentage: result.percentage };
   });
