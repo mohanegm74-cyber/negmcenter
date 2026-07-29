@@ -69,6 +69,15 @@ export const getAllStudentsAdmin = createServerFn({ method: "GET" })
     return { students: data || [] };
   });
 
+export const deleteStudentAdmin = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) => d as { id: string })
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await supabaseAdmin.from("students").delete().eq("id", data.id);
+    if (error) throw new Error(`فشل الحذف: ${error.message}`);
+    return { ok: true };
+  });
+
 export const getGroupsAdmin = createServerFn({ method: "GET" })
   .handler(async () => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -98,5 +107,26 @@ export const deleteGroup = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { error } = await supabaseAdmin.from("groups").delete().eq("id", data.id);
     if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+/** تهيئة النظام - مسح شامل لكافة الجداول والبدء من الصفر */
+export const factoryResetSystem = createServerFn({ method: "POST" })
+  .handler(async () => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const db = supabaseAdmin;
+    
+    // الترتيب العكسي ضروري لتجنب أخطاء المفاتيح الخارجية
+    const tables = [
+      "exam_answers", "exam_attempts", "exam_questions", "exams",
+      "homework_submissions", "homework", "attendance", "payments",
+      "student_notes", "questions", "students", "groups"
+    ];
+
+    for (const table of tables) {
+      const { error } = await db.from(table as any).delete().neq("id", "00000000-0000-0000-0000-000000000000");
+      if (error) throw new Error(`فشل مسح جدول ${table}: ${error.message}`);
+    }
+
     return { ok: true };
   });

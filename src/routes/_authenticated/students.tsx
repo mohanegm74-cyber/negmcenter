@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { Search, Trash2, Pencil, Users, X, Loader2, Link as LinkIcon, Phone, MapPin, School, GraduationCap, Save } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
-import { getAllStudentsAdmin } from "@/lib/admin.functions";
+import { getAllStudentsAdmin, deleteStudentAdmin } from "@/lib/admin.functions";
 
 export const Route = createFileRoute("/_authenticated/students")({
   head: () => ({ meta: [{ title: "إدارة الطلاب — الأستاذ محمد نجم" }, { name: "description", content: "إدارة طلاب السنتر وتعديل بياناتهم." }] }),
@@ -27,6 +27,7 @@ function StudentsPage() {
   const [isSaving, setIsSaving] = useState(false);
   
   const loadStudentsFn = useServerFn(getAllStudentsAdmin);
+  const deleteStudentFn = useServerFn(deleteStudentAdmin);
 
   async function load() {
     setLoading(true);
@@ -61,12 +62,12 @@ function StudentsPage() {
 
   async function remove(id: string, name: string) {
     if (!confirm(`هل أنت متأكد من حذف الطالب "${name}" نهائياً؟ لا يمكن التراجع عن هذا الإجراء.`)) return;
-    const { error } = await supabase.from("students").delete().eq("id", id);
-    if (error) {
-      toast.error("فشل الحذف: " + error.message);
-    } else {
+    try {
+      await deleteStudentFn({ data: { id } });
       toast.success("تم حذف الطالب بنجاح");
       load();
+    } catch (err: any) {
+      toast.error(err.message);
     }
   }
 

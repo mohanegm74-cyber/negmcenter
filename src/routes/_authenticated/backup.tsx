@@ -2,8 +2,9 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
-import { Database, Download, Upload, ShieldAlert } from "lucide-react";
+import { Database, Download, Upload, ShieldAlert, Trash2, Loader2, RefreshCcw } from "lucide-react";
 import { exportBackup, importBackup } from "@/lib/backup.functions";
+import { factoryResetSystem } from "@/lib/admin.functions";
 
 export const Route = createFileRoute("/_authenticated/backup")({
   head: () => ({
@@ -29,8 +30,9 @@ const LABELS: Record<string, string> = {
 function BackupPage() {
   const doExport = useServerFn(exportBackup);
   const doImport = useServerFn(importBackup);
+  const doReset = useServerFn(factoryResetSystem);
   const fileRef = useRef<HTMLInputElement>(null);
-  const [busy, setBusy] = useState<null | "export" | "import">(null);
+  const [busy, setBusy] = useState<null | "export" | "import" | "reset">(null);
   const [mode, setMode] = useState<"merge" | "replace">("merge");
   const [summary, setSummary] = useState<Record<string, number> | null>(null);
 
@@ -65,11 +67,26 @@ function BackupPage() {
     finally { setBusy(null); if (fileRef.current) fileRef.current.value = ""; }
   }
 
+  async function onReset() {
+    const confirmation = prompt("تحذير نهائي: سيتم مسح كافة الطلاب والمجموعات والماليات تماماً. اكتب 'تصفير' للتأكيد:");
+    if (confirmation !== "تصفير") return;
+    setBusy("reset");
+    try {
+      await doReset({});
+      setSummary(null);
+      toast.success("تم تصفير النظام بنجاح. يمكنك الآن البدء من جديد.");
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setBusy(null);
+    }
+  }
+
   return (
     <div className="space-y-5">
       <h1 className="text-2xl font-black flex items-center gap-2"><Database className="h-6 w-6 text-primary" /> النسخ الاحتياطي واستعادة البيانات</h1>
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <div className="rounded-2xl bg-white p-5 shadow-sm">
           <h2 className="mb-2 text-lg font-bold">تصدير نسخة احتياطية</h2>
           <p className="mb-4 text-sm text-muted-foreground">ملف JSON واحد يحتوي كل البيانات: الطلاب، المجموعات، الحضور، الماليات، الواجبات، الملاحظات، والاختبارات.</p>
@@ -94,7 +111,15 @@ function BackupPage() {
             onChange={(e) => { const f = e.target.files?.[0]; if (f) onImport(f); }}
             className="block w-full text-sm file:me-3 file:rounded-lg file:border-0 file:bg-secondary file:px-4 file:py-2 file:text-sm file:font-bold file:text-secondary-foreground" />
           {busy === "import" && <p className="mt-3 text-sm text-muted-foreground">جارٍ الاسترجاع...</p>}
-          <p className="mt-3 inline-flex items-center gap-1 text-xs text-muted-foreground"><Upload className="h-3.5 w-3.5" /> يتم التحقق من صلاحية الأستاذ قبل أي عملية.</p>
+        </div>
+
+        <div className="rounded-2xl border-2 border-destructive/20 bg-destructive/5 p-5 shadow-sm">
+          <h2 className="mb-2 text-lg font-bold text-destructive">تهيئة النظام (تصفير)</h2>
+          <p className="mb-4 text-xs text-muted-foreground leading-relaxed">هذا الإجراء يحذف كل شيء فوراً. يوصى بأخذ نسخة احتياطية أولاً قبل المسح النهائي.</p>
+          <button onClick={onReset} disabled={!!busy} className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-destructive px-5 py-2.5 text-sm font-black text-white shadow-lg shadow-destructive/20 hover:opacity-90 disabled:opacity-60">
+            {busy === "reset" ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCcw className="h-4 w-4" />}
+            تصفير النظام نهائياً
+          </button>
         </div>
       </div>
 
