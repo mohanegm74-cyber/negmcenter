@@ -1,6 +1,16 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
+/** جلب كافة المجموعات للأستاذ */
+export const getGroupsAdmin = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async () => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data, error } = await supabaseAdmin.from("groups").select("*").order("name");
+    if (error) throw new Error(error.message);
+    return { groups: data || [] };
+  });
+
 /** جلب ملخص إحصائيات لوحة التحكم */
 export const getDashboardStatsAdmin = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -72,7 +82,6 @@ export const updateStudentAdmin = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => d as { id: string; payload: any })
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    // تنظيف المجموعة إذا كانت فارغة
     if (data.payload.group_id === "") data.payload.group_id = null;
     const { error } = await supabaseAdmin.from("students").update(data.payload).eq("id", data.id);
     if (error) throw new Error(error.message);
