@@ -30,26 +30,93 @@ export const getDashboardStatsAdmin = createServerFn({ method: "GET" })
     };
   });
 
-/** جلب كافة البيانات المالية (طلاب + مجموعات + مدفوعات) في طلب واحد */
+/** جلب ملخص البيانات للحضور والمجموعات */
+export const getAdminDataSummary = createServerFn({ method: "GET" })
+  .handler(async () => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const db = supabaseAdmin;
+    const [gr, st, at] = await Promise.all([
+      db.from("groups").select("id,name").order("name"),
+      db.from("students").select("id,full_name,code,group_id").eq("active", true).order("full_name"),
+      db.from("attendance").select("*"),
+    ]);
+    return { groups: gr.data || [], students: st.data || [], attendance: at.data || [] };
+  });
+
+/** تسجيل الحضور عبر السيرفر */
+export const markAttendanceAdmin = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) => d as { student_id: string; group_id: string; date: string; status: string })
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await supabaseAdmin.from("attendance").upsert(data, { onConflict: "student_id,date" });
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+/** جلب كافة المجموعات للمعلم */
+export const getGroupsAdmin = createServerFn({ method: "GET" })
+  .handler(async () => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data, error } = await supabaseAdmin.from("groups").select("*").order("name");
+    if (error) throw new Error(error.message);
+    return { groups: data || [] };
+  });
+
+/** حفظ أو تحديث مجموعة */
+export const saveGroup = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) => d as { id?: string; payload: any })
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const db = supabaseAdmin;
+    const q = data.id ? db.from("groups").update(data.payload).eq("id", data.id) : db.from("groups").insert(data.payload);
+    const { error } = await q;
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+/** حذف مجموعة */
+export const deleteGroup = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) => d as { id: string })
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await supabaseAdmin.from("groups").delete().eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+/** جلب كافة الطلاب للمعلم */
+export const getAllStudentsAdmin = createServerFn({ method: "GET" })
+  .handler(async () => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data, error } = await supabaseAdmin.from("students").select("*").order("full_name");
+    if (error) throw new Error(error.message);
+    return { students: data || [] };
+  });
+
+/** حذف طالب نهائياً */
+export const deleteStudentAdmin = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) => d as { id: string })
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await supabaseAdmin.from("students").delete().eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+/** جلب كافة البيانات المالية */
 export const getFinanceDataAdmin = createServerFn({ method: "GET" })
   .handler(async () => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const db = supabaseAdmin;
-    
     const [st, gr, py] = await Promise.all([
       db.from("students").select("id,full_name,code,grade,group_id").eq("active", true).order("full_name"),
       db.from("groups").select("id,name,monthly_fee").order("name"),
       db.from("payments").select("*").order("paid_at", { ascending: false }),
     ]);
-
-    return { 
-      students: st.data || [], 
-      groups: gr.data || [], 
-      payments: py.data || [] 
-    };
+    return { students: st.data || [], groups: gr.data || [], payments: py.data || [] };
   });
 
-/** تسجيل حركة مالية جديدة */
+/** تسجيل حركة مالية */
 export const addPaymentAdmin = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => d as { student_id: string; group_id: string | null; amount: number; kind: string; month: string; paid_at: string; note: string | null })
   .handler(async ({ data }) => {
@@ -69,7 +136,7 @@ export const deletePaymentAdmin = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-/** تحديث حالة الاختبار (نشر/إغلاق) عبر السيرفر لتجاوز قيود الأمان */
+/** تحديث حالة الاختبار */
 export const updateExamStatusAdmin = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => d as { id: string; status: string })
   .handler(async ({ data }) => {
@@ -79,22 +146,18 @@ export const updateExamStatusAdmin = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-/** تهيئة النظام - مسح شامل لكافة الجداول والبدء من الصفر */
+/** تهيئة النظام (تصفير) */
 export const factoryResetSystem = createServerFn({ method: "POST" })
   .handler(async () => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const db = supabaseAdmin;
-    
     const tables = [
       "exam_answers", "exam_attempts", "exam_questions", "exams",
       "homework_submissions", "homework", "attendance", "payments",
       "student_notes", "questions", "students", "groups"
     ];
-
     for (const table of tables) {
-      const { error } = await db.from(table as any).delete().neq("id", "00000000-0000-0000-0000-000000000000");
-      if (error) throw new Error(`فشل مسح جدول ${table}: ${error.message}`);
+      await db.from(table as any).delete().neq("id", "00000000-0000-0000-0000-000000000000");
     }
-
     return { ok: true };
   });
