@@ -150,15 +150,33 @@ export const submitExamAttempt = createServerFn({ method: "POST" })
     const { requireStudent } = await import("./student.server");
     const { db, student } = await requireStudent(data.code);
     const { data: attempt } = await db.from("exam_attempts").select("*").eq("id", data.attempt_id).single();
+    
+    if (!attempt) throw new Error("محاولة الاختبار غير موجودة");
+
     const { data: questions } = await db.from("exam_questions").select("*").eq("exam_id", attempt.exam_id);
     const { gradeAndAnalyze } = await import("./exams.server");
     const { data: exam } = await db.from("exams").select("title").eq("id", attempt.exam_id).single();
-    const items = questions!.map(q => ({
+    
+    const items = (questions || []).map(q => ({
       id: q.id, kind: q.kind, prompt: q.prompt, correct: String(q.correct_answer || ""),
       answer: String(data.answers[q.id] || ""), score: q.score, skill: q.skill,
       autoCorrect: ["اختيار من متعدد", "صح أو خطأ", "اختر من القائمة"].includes(q.kind)
     }));
+
     const result = await gradeAndAnalyze({ studentName: student.full_name, examTitle: exam?.title || "اختبار", classAverage: null, items });
-    await db.from("exam_attempts").update({ status: "submitted", submitted_at: new Date().toISOString(), score: result.total, max_score: result.max, percentage: result.percentage, time_spent_seconds: data.time_spent_seconds, analysis: result.analysis, strengths: result.strengths, weaknesses: result.weaknesses, remedial_plan: result.remedial_plan }).eq("id", data.attempt_id);
+    
+    await db.from("exam_attempts").update({ 
+      status: "submitted", 
+      submitted_at: new Date().toISOString(), 
+      score: result.total, 
+      max_score: result.max, 
+      percentage: result.percentage, 
+      time_spent_seconds: data.time_spent_seconds, 
+      analysis: result.analysis, 
+      strengths: result.strengths, 
+      weaknesses: result.weaknesses, 
+      remedial_plan: result.remedial_plan 
+    }).eq("id", data.attempt_id);
+    
     return { total: result.total, max: result.max, percentage: result.percentage };
   });
