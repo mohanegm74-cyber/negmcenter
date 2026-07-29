@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { Search, Trash2, Pencil, Users, X, Loader2, Phone, MapPin, School, GraduationCap, Save, Boxes } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
-import { getAllStudentsAdmin, deleteStudentAdmin } from "@/lib/admin.functions";
+import { getAllStudentsAdmin, deleteStudentAdmin, updateStudentAdmin } from "@/lib/admin.functions";
 
 export const Route = createFileRoute("/_authenticated/students")({
   head: () => ({ meta: [{ title: "إدارة الطلاب — الأستاذ محمد نجم" }, { name: "description", content: "إدارة طلاب السنتر وتعديل بياناتهم." }] }),
@@ -28,6 +28,7 @@ function StudentsPage() {
   
   const loadStudentsFn = useServerFn(getAllStudentsAdmin);
   const deleteStudentFn = useServerFn(deleteStudentAdmin);
+  const updateStudentFn = useServerFn(updateStudentAdmin);
 
   async function load() {
     setLoading(true);
@@ -76,15 +77,15 @@ function StudentsPage() {
     const payload: any = {};
     fd.forEach((v, k) => { payload[k] = String(v).trim() || null; });
     
-    const { error } = await supabase.from("students").update(payload).eq("id", editing.id);
-    setIsSaving(false);
-    
-    if (error) {
-      toast.error("فشل الحفظ: " + error.message);
-    } else {
+    try {
+      await updateStudentFn({ data: { id: editing.id, payload } });
       toast.success("تم تحديث بيانات الطالب بنجاح");
       setEditing(null);
       load();
+    } catch (err: any) {
+      toast.error("فشل الحفظ: " + err.message);
+    } finally {
+      setIsSaving(false);
     }
   }
 
@@ -122,7 +123,10 @@ function StudentsPage() {
             </div>
           </div>
           <div className="mt-6 flex gap-3">
-            <button type="submit" disabled={isSaving} className="rounded-lg bg-primary px-8 py-2.5 text-sm font-black text-primary-foreground">حفظ التغييرات</button>
+            <button type="submit" disabled={isSaving} className="rounded-lg bg-primary px-8 py-2.5 text-sm font-black text-primary-foreground">
+              {isSaving ? <Loader2 className="h-4 w-4 animate-spin inline mr-2" /> : null}
+              حفظ التغييرات
+            </button>
             <button type="button" onClick={() => setEditing(null)} className="rounded-lg border bg-white px-8 py-2.5 text-sm font-bold hover:bg-muted">إلغاء</button>
           </div>
         </form>

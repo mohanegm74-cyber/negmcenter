@@ -2,10 +2,9 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Plus, Trash2, Pencil, X, Printer, BookOpen, Loader2 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import { openPrint, esc } from "@/lib/print";
 import { useServerFn } from "@tanstack/react-start";
-import { getHomeworkDataAdmin } from "@/lib/admin.functions";
+import { getHomeworkDataAdmin, saveHomeworkAdmin, upsertHomeworkSubmissionAdmin, deleteHomeworkAdmin } from "@/lib/admin.functions";
 
 export const Route = createFileRoute("/_authenticated/homework")({
   head: () => ({ meta: [{ title: "الواجبات — الأستاذ" }, { name: "description", content: "إدارة الواجبات وتقييم الطلاب." }] }),
@@ -26,8 +25,12 @@ function HomeworkPage() {
   const [open, setOpen] = useState(false);
   const [activeHW, setActiveHW] = useState<HW | null>(null);
   const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
 
   const loadFn = useServerFn(getHomeworkDataAdmin);
+  const saveHWFn = useServerFn(saveHomeworkAdmin);
+  const upsertSubFn = useServerFn(upsertHomeworkSubmissionAdmin);
+  const deleteHWFn = useServerFn(deleteHomeworkAdmin);
 
   async function load() {
     setLoading(true);
@@ -47,6 +50,7 @@ function HomeworkPage() {
 
   async function save(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    setBusy(true);
     const fd = new FormData(e.currentTarget);
     const payload: any = {
       group_id: String(fd.get("group_id") || "") || null,
@@ -55,30 +59,46 @@ function HomeworkPage() {
       due_date: String(fd.get("due_date") || "") || null,
       max_score: Number(fd.get("max_score") || 100),
     };
-    const q = editing ? supabase.from("homework").update(payload).eq("id", editing.id) : supabase.from("homework").insert(payload);
-    const { error } = await q;
-    if (error) toast.error(error.message); else { toast.success(editing ? "تم التحديث" : "تم إنشاء الواجب"); setOpen(false); setEditing(null); load(); }
+    
+    try {
+      await saveHWFn({ data: { id: editing?.id, payload } });
+      toast.success(editing ? "تم التحديث" : "تم إنشاء الواجب");
+      setOpen(false); setEditing(null); load();
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function remove(id: string) {
     if (!confirm("حذف هذا الواجب؟")) return;
-    const { error } = await supabase.from("homework").delete().eq("id", id);
-    if (error) toast.error(error.message); else { toast.success("تم الحذف"); load(); }
+    try {
+      await deleteHWFn({ data: { id } });
+      toast.success("تم الحذف"); load();
+    } catch (err: any) {
+      toast.error(err.message);
+    }
   }
 
   async function upsertSub(homework_id: string, student_id: string, patch: Partial<Sub>) {
     const existing = subs.find(x => x.homework_id === homework_id && x.student_id === student_id);
-    const body: any = { homework_id, student_id, ...patch };
-    if (existing) body.id = existing.id;
-    const { error } = await supabase.from("homework_submissions").upsert(body, { onConflict: "homework_id,student_id" });
-    if (error) toast.error(error.message); else load();
+    const payload: any = { homework_id, student_id, ...patch };
+    if (existing) payload.id = existing.id;
+    
+    try {
+      await upsertSubFn({ data: { payload } });
+      load();
+    } catch (err: any) {
+      toast.error(err.message);
+    }
   }
 
   const groupMap = useMemo(() => Object.fromEntries(groups.map(g => [g.id, g])), [groups]);
 
   function printHW(hw: HW) {
     const list = students.filter(s => !hw.group_id || s.group_id === hw.group_id);
-    const rows = list.map((s, i) => {
+    const rowsHtml = list.map((s, i) => {
       const sub = subs.find(x => x.homework_id === hw.id && x.student_id === s.id);
       return `<tr><td>${i + 1}</td><td>${esc(s.full_name)}</td><td>${esc(s.code)}</td>
         <td>${esc(sub?.status || "—")}</td><td>${sub?.score ?? "—"} / ${hw.max_score}</td><td>${esc(sub?.note)}</td></tr>`;
@@ -87,7 +107,7 @@ function HomeworkPage() {
       <h2>${esc(hw.title)} — ${esc(groupMap[hw.group_id || ""]?.name || "كل المجموعات")}${hw.due_date ? ` — تاريخ التسليم: ${esc(hw.due_date)}` : ""}</h2>
       ${hw.description ? `<p>${esc(hw.description)}</p>` : ""}
       <table><thead><tr><th>#</th><th>الطالب</th><th>الكود</th><th>الحالة</th><th>الدرجة</th><th>ملاحظة</th></tr></thead>
-      <tbody>${rows}</tbody></table>
+      <tbody>${rowsHtml}</tbody></table>
     `);
   }
 
@@ -122,7 +142,9 @@ function HomeworkPage() {
               <textarea name="description" defaultValue={editing?.description ?? ""} rows={3} className="w-full rounded-lg border border-input px-3 py-2 text-sm" />
             </div>
           </div>
-          <button type="submit" className="mt-4 rounded-lg bg-secondary px-5 py-2 text-sm font-bold text-secondary-foreground">{editing ? "تحديث" : "حفظ"}</button>
+          <button type="submit" disabled={busy} className="mt-4 rounded-lg bg-secondary px-5 py-2 text-sm font-bold text-secondary-foreground disabled:opacity-50">
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : editing ? "تحديث" : "حفظ"}
+          </button>
         </form>
       )}
 

@@ -5,7 +5,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { Sparkles, Trash2, Send, BarChart3, X, Loader2, FileQuestion, Printer, Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { generateExam } from "@/lib/exams.functions";
-import { updateExamStatusAdmin, getExamsDataAdmin } from "@/lib/admin.functions";
+import { updateExamStatusAdmin, getExamsDataAdmin, saveExamFullAdmin } from "@/lib/admin.functions";
 import { QUESTION_KINDS, DIFFICULTIES, TERMS, GRADES, answerToText } from "@/lib/exam-constants";
 import { openPrint, esc } from "@/lib/print";
 
@@ -50,6 +50,7 @@ function ExamsPage() {
   const gen = useServerFn(generateExam);
   const updateStatusFn = useServerFn(updateExamStatusAdmin);
   const loadFn = useServerFn(getExamsDataAdmin);
+  const saveFullExamFn = useServerFn(saveExamFullAdmin);
 
   const [form, setForm] = useState({
     grade: GRADES[0], term: TERMS[0], group_id: "", subject: "", lesson: "",
@@ -91,18 +92,18 @@ function ExamsPage() {
           difficulty: form.difficulty, kinds,
         },
       });
-      const title = `${form.subject || "اختبار"} — ${form.lesson} (${form.grade})`;
-      const { data: exam, error } = await supabase.from("exams").insert({
-        title, grade: form.grade, term: form.term, group_id: form.group_id || null,
+      const examTitle = `${form.subject || "اختبار"} — ${form.lesson} (${form.grade})`;
+      
+      const examPayload = {
+        title: examTitle, grade: form.grade, term: form.term, group_id: form.group_id || null,
         subject: form.subject || null, unit: null, lesson: form.lesson,
         question_count: res.questions.length, duration_minutes: Number(form.duration_minutes),
         total_score: Number(form.total_score), difficulty: form.difficulty,
         question_types: kinds, adaptive: form.adaptive, status: "draft", sources: res.sources,
-      }).select().single();
-      if (error) throw error;
+      };
 
-      const rows = res.questions.map((q, i) => ({
-        exam_id: exam.id, position: i + 1, kind: q.kind || "اختيار من متعدد",
+      const questionsPayload = res.questions.map((q, i) => ({
+        position: i + 1, kind: q.kind || "اختيار من متعدد",
         prompt: q.prompt, passage: q.passage || null,
         options: q.options || [], correct_answer: q.correct_answer ?? null,
         rationale: q.rationale || null, distractor_explanations: q.distractor_explanations || [],
@@ -110,9 +111,9 @@ function ExamsPage() {
         difficulty: q.difficulty || form.difficulty, expected_seconds: q.expected_seconds || 60,
         score: Number(q.score) || Number(form.total_score) / res.questions.length,
       }));
-      const { error: qe } = await supabase.from("exam_questions").insert(rows);
-      if (qe) throw qe;
-      toast.success(`تم إنشاء الاختبار (${rows.length} سؤالاً)`, { id: t });
+
+      await saveFullExamFn({ data: { exam: examPayload, questions: questionsPayload } });
+      toast.success(`تم إنشاء الاختبار بنجاح`, { id: t });
       load();
     } catch (err: any) {
       toast.error(err?.message || "فشل إنشاء الاختبار", { id: t });
@@ -121,18 +122,24 @@ function ExamsPage() {
 
   async function createManual() {
     if (!form.lesson.trim()) { toast.error("أدخل اسم الدرس"); return; }
-    const title = `${form.subject || "اختبار"} — ${form.lesson} (${form.grade})`;
-    const { data: exam, error } = await supabase.from("exams").insert({
-      title, grade: form.grade, term: form.term, group_id: form.group_id || null,
-      subject: form.subject || null, unit: null, lesson: form.lesson,
-      question_count: 0, duration_minutes: Number(form.duration_minutes),
-      total_score: Number(form.total_score), difficulty: form.difficulty,
-      question_types: kinds, adaptive: form.adaptive, status: "draft", sources: [],
-    }).select().single();
-    if (error) return toast.error(error.message);
-    toast.success("تم إنشاء اختبار يدوي — أضف الأسئلة من «بنك الأسئلة»");
-    await load();
-    setDetail(exam as Exam);
+    const examTitle = `${form.subject || "اختبار"} — ${form.lesson} (${form.grade})`;
+    
+    try {
+      await saveFullExamFn({ data: { 
+        exam: {
+          title: examTitle, grade: form.grade, term: form.term, group_id: form.group_id || null,
+          subject: form.subject || null, unit: null, lesson: form.lesson,
+          question_count: 0, duration_minutes: Number(form.duration_minutes),
+          total_score: Number(form.total_score), difficulty: form.difficulty,
+          question_types: kinds, adaptive: form.adaptive, status: "draft", sources: [],
+        }, 
+        questions: [] 
+      } });
+      toast.success("تم إنشاء اختبار يدوي");
+      load();
+    } catch (err: any) {
+      toast.error(err.message);
+    }
   }
 
   async function setStatus(ex: Exam, status: string) {
