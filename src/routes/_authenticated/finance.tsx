@@ -1,9 +1,7 @@
-"use client";
-
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Plus, Trash2, Printer, Wallet, Loader2, X, ArrowDownCircle, ArrowUpCircle } from "lucide-react";
+import { Plus, Trash2, Printer, Wallet, Loader2, X, ArrowDownCircle, ArrowUpCircle } from "lucide-center";
 import { useServerFn } from "@tanstack/react-start";
 import { getFinanceDataAdmin, addPaymentAdmin, deletePaymentAdmin } from "@/lib/admin.functions";
 

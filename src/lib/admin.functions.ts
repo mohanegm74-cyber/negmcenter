@@ -3,6 +3,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 /** جلب ملخص إحصائيات لوحة التحكم */
 export const getDashboardStatsAdmin = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
   .handler(async () => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const db = supabaseAdmin;
@@ -32,6 +33,7 @@ export const getDashboardStatsAdmin = createServerFn({ method: "GET" })
 
 /** جلب ملخص البيانات للحضور */
 export const getAdminDataSummary = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
   .handler(async () => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const db = supabaseAdmin;
@@ -45,6 +47,7 @@ export const getAdminDataSummary = createServerFn({ method: "GET" })
 
 /** تسجيل الحضور */
 export const markAttendanceAdmin = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => d as { student_id: string; group_id: string; date: string; status: string })
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -55,6 +58,7 @@ export const markAttendanceAdmin = createServerFn({ method: "POST" })
 
 /** جلب بيانات المجموعات */
 export const getGroupsAdmin = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
   .handler(async () => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data, error } = await supabaseAdmin.from("groups").select("*").order("name");
@@ -64,6 +68,7 @@ export const getGroupsAdmin = createServerFn({ method: "GET" })
 
 /** حفظ أو تحديث مجموعة */
 export const saveGroup = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => d as { id?: string; payload: any })
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -76,6 +81,7 @@ export const saveGroup = createServerFn({ method: "POST" })
 
 /** حذف مجموعة */
 export const deleteGroup = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => d as { id: string })
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -86,6 +92,7 @@ export const deleteGroup = createServerFn({ method: "POST" })
 
 /** جلب كافة الطلاب */
 export const getAllStudentsAdmin = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
   .handler(async () => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data, error } = await supabaseAdmin.from("students").select("*").order("full_name");
@@ -95,6 +102,7 @@ export const getAllStudentsAdmin = createServerFn({ method: "GET" })
 
 /** حذف طالب */
 export const deleteStudentAdmin = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => d as { id: string })
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -105,6 +113,7 @@ export const deleteStudentAdmin = createServerFn({ method: "POST" })
 
 /** جلب بيانات الواجبات */
 export const getHomeworkDataAdmin = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
   .handler(async () => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const db = supabaseAdmin;
@@ -119,6 +128,7 @@ export const getHomeworkDataAdmin = createServerFn({ method: "GET" })
 
 /** جلب بيانات الاختبارات */
 export const getExamsDataAdmin = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
   .handler(async () => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const db = supabaseAdmin;
@@ -133,6 +143,7 @@ export const getExamsDataAdmin = createServerFn({ method: "GET" })
 
 /** تحديث حالة الاختبار */
 export const updateExamStatusAdmin = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => d as { id: string; status: string })
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -143,6 +154,7 @@ export const updateExamStatusAdmin = createServerFn({ method: "POST" })
 
 /** جلب بيانات التقارير */
 export const getReportsDataAdmin = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => d as { from: string; to: string })
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -158,6 +170,7 @@ export const getReportsDataAdmin = createServerFn({ method: "POST" })
 
 /** جلب بيانات المالية */
 export const getFinanceDataAdmin = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
   .handler(async () => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const db = supabaseAdmin;
@@ -171,6 +184,7 @@ export const getFinanceDataAdmin = createServerFn({ method: "GET" })
 
 /** تسجيل حركة مالية */
 export const addPaymentAdmin = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => d as { student_id: string; group_id: string | null; amount: number; kind: string; month: string; paid_at: string; note: string | null })
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -181,6 +195,7 @@ export const addPaymentAdmin = createServerFn({ method: "POST" })
 
 /** حذف حركة مالية */
 export const deletePaymentAdmin = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => d as { id: string })
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -191,6 +206,7 @@ export const deletePaymentAdmin = createServerFn({ method: "POST" })
 
 /** تهيئة النظام (تصفير) */
 export const factoryResetSystem = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .handler(async () => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const db = supabaseAdmin;
@@ -200,6 +216,7 @@ export const factoryResetSystem = createServerFn({ method: "POST" })
       "student_notes", "questions", "students", "groups"
     ];
     for (const table of tables) {
+      // استخدام id كفلتر لضمان الحذف الصحيح
       await db.from(table as any).delete().neq("id", "00000000-0000-0000-0000-000000000000");
     }
     return { ok: true };
