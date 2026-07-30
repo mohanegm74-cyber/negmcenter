@@ -43,14 +43,14 @@ export const setupFirstAdmin = createServerFn({ method: "POST" })
       const { data: newUser, error } = await supabaseAdmin.auth.admin.createUser({
         email,
         password: data.password,
-        email_confirm: true,
+        email_confirm: false, // Supabase سيرسل رسالة تأكيد تلقائياً
       });
       if (error) throw error;
       targetUser = newUser.user;
     } else {
       await supabaseAdmin.auth.admin.updateUserById(targetUser.id, {
         password: data.password,
-        email_confirm: true,
+        email_confirm: false,
       });
     }
 
