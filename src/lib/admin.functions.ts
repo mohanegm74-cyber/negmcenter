@@ -15,14 +15,13 @@ export const forceSetupAdminMaster = createServerFn({ method: "POST" })
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-    // 1. البحث عن المستخدم أو إنشاؤه إذا لم يكن موجوداً
+    // 1. البحث عن المستخدم أو إنشاؤه
     const { data: { users }, error: listError } = await supabaseAdmin.auth.admin.listUsers();
     if (listError) throw listError;
 
     let targetUser = users.find(u => u.email?.toLowerCase() === data.email.toLowerCase());
     
     if (!targetUser) {
-      // إنشاء الحساب فوراً بكلمة المرور الثابتة إذا لم يكن موجوداً
       const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
         email: data.email,
         password: DEFAULT_MASTER_PASS,
@@ -31,32 +30,20 @@ export const forceSetupAdminMaster = createServerFn({ method: "POST" })
       if (createError) throw createError;
       targetUser = newUser.user;
     } else {
-      // إذا كان موجوداً، نقوم بإعادة تعيين كلمة مروره للكلمة الثابتة لضمان الدخول
       const { error: resetError } = await supabaseAdmin.auth.admin.updateUserById(targetUser.id, {
         password: DEFAULT_MASTER_PASS
       });
       if (resetError) throw resetError;
     }
 
-    // 2. تنظيف كافة الرتب القديمة تماماً لضمان عدم وجود متسللين
+    // 2. تنظيف الرتب ومنحها للأستاذ محمد حصرياً
     await supabaseAdmin.from("user_roles").delete().neq("user_id", "00000000-0000-0000-0000-000000000000");
+    await supabaseAdmin.from("user_roles").insert({ user_id: targetUser.id, role: "teacher" });
 
-    // 3. منح رتبة 'teacher' للأستاذ محمد حصرياً
-    const { data: existingRole } = await supabaseAdmin.from("user_roles").select("id").eq("user_id", targetUser.id).maybeSingle();
-
-    if (existingRole) {
-      await supabaseAdmin.from("user_roles").update({ role: "teacher" }).eq("user_id", targetUser.id);
-    } else {
-      await supabaseAdmin.from("user_roles").insert({ user_id: targetUser.id, role: "teacher" });
-    }
-
-    return { 
-      success: true, 
-      message: "تم تنظيف النظام، وإعادة تعيين كلمة المرور لـ: " + DEFAULT_MASTER_PASS 
-    };
+    return { success: true, message: "تم تفعيل سيطرتك على النظام بكلمة المرور: " + DEFAULT_MASTER_PASS };
   });
 
-// ... بقية الوظائف (تنزيل الحضور، المالية، إلخ) تبقى كما هي
+// --- وظائف الحضور ---
 export const markAttendanceAdmin = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => d as { student_id: string; group_id: string; date: string; status: string })
@@ -71,27 +58,7 @@ export const markAttendanceAdmin = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-export const getDashboardStatsAdmin = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
-  .handler(async () => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const today = new Date().toISOString().slice(0, 10);
-    const [st, gr, ap, aa, pay, groups] = await Promise.all([
-      supabaseAdmin.from("students").select("id", { count: "exact" }).eq("active", true),
-      supabaseAdmin.from("groups").select("id"),
-      supabaseAdmin.from("attendance").select("id", { count: "exact", head: true }).eq("date", today).eq("status", "present"),
-      supabaseAdmin.from("attendance").select("id", { count: "exact", head: true }).eq("date", today).eq("status", "absent"),
-      supabaseAdmin.from("payments").select("amount,kind"),
-      supabaseAdmin.from("groups").select("monthly_fee"),
-    ]);
-    const income = (pay.data || []).filter((p: any) => p.kind === "payment").reduce((a, b) => a + Number(b.amount || 0), 0);
-    const manualDues = (pay.data || []).filter((p: any) => p.kind === "charge").reduce((a, b) => a + Number(b.amount || 0), 0);
-    const totalStudentsCount = st.count || 0;
-    const averageFee = groups.data?.length ? groups.data.reduce((a, b) => a + (b.monthly_fee || 0), 0) / groups.data.length : 0;
-    const estimatedDues = manualDues || (totalStudentsCount * averageFee);
-    return { students: totalStudentsCount, groups: (gr.data || []).length, present: ap.count || 0, absent: aa.count || 0, income, dues: estimatedDues, outstanding: Math.max(0, estimatedDues - income) };
-  });
-
+// --- وظائف المجموعات ---
 export const getGroupsAdmin = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async () => {
@@ -118,6 +85,16 @@ export const deleteGroup = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+// --- وظائف الطلاب ---
+export const getAllStudentsAdmin = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async () => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: st } = await supabaseAdmin.from("students").select("*").order("full_name");
+    const { data: gr } = await supabaseAdmin.from("groups").select("id,name,grade").order("name");
+    return { students: st || [], groups: gr || [] };
+  });
+
 export const updateStudentAdmin = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => d as { id: string; payload: any })
@@ -137,81 +114,7 @@ export const deleteStudentAdmin = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-export const addPaymentAdmin = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => d as { student_id: string; group_id: string | null; amount: number; kind: string; month: string; paid_at: string; note: string | null })
-  .handler(async ({ data }) => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    await supabaseAdmin.from("payments").insert(data);
-    return { ok: true };
-  });
-
-export const deletePaymentAdmin = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => d as { id: string })
-  .handler(async ({ data }) => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    await supabaseAdmin.from("payments").delete().eq("id", data.id);
-    return { ok: true };
-  });
-
-export const updatePaymentAdmin = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => d as { id: string; payload: any })
-  .handler(async ({ data }) => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    await supabaseAdmin.from("payments").update(data.payload).eq("id", data.id);
-    return { ok: true };
-  });
-
-export const getAllStudentsAdmin = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
-  .handler(async () => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: st } = await supabaseAdmin.from("students").select("*").order("full_name");
-    const { data: gr } = await supabaseAdmin.from("groups").select("id,name,grade").order("name");
-    return { students: st || [], groups: gr || [] };
-  });
-
-export const getStudentNotesAdmin = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => d as { student_id: string })
-  .handler(async ({ data }) => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: notes } = await supabaseAdmin.from("student_notes").select("*").eq("student_id", data.student_id).order("created_at", { ascending: false });
-    return { notes: notes || [] };
-  });
-
-export const addStudentNoteAdmin = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => d as { student_id: string; title: string; body: string })
-  .handler(async ({ data }) => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    await supabaseAdmin.from("student_notes").insert(data);
-    return { ok: true };
-  });
-
-export const deleteStudentNoteAdmin = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => d as { id: string })
-  .handler(async ({ data }) => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    await supabaseAdmin.from("student_notes").delete().eq("id", data.id);
-    return { ok: true };
-  });
-
-export const getFinanceDataAdmin = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
-  .handler(async () => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const [st, gr, py] = await Promise.all([
-      supabaseAdmin.from("students").select("id,full_name,code,grade,group_id").eq("active", true).order("full_name"),
-      supabaseAdmin.from("groups").select("id,name,monthly_fee").order("name"),
-      supabaseAdmin.from("payments").select("*").order("paid_at", { ascending: false }),
-    ]);
-    return { students: st.data || [], groups: gr.data || [], payments: py.data || [] };
-  });
-
+// --- وظائف الواجبات (الإصلاح المطلوب) ---
 export const getHomeworkDataAdmin = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async () => {
@@ -225,6 +128,24 @@ export const getHomeworkDataAdmin = createServerFn({ method: "GET" })
     return { groups: g.data || [], items: h.data || [], students: s.data || [], subs: sb.data || [] };
   });
 
+export const saveHomeworkAdmin = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => d as { id?: string; payload: any })
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const q = data.id ? supabaseAdmin.from("homework").update(data.payload).eq("id", data.id) : supabaseAdmin.from("homework").insert(data.payload);
+    await q; return { ok: true };
+  });
+
+export const deleteHomeworkAdmin = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => d as { id: string })
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    await supabaseAdmin.from("homework").delete().eq("id", data.id);
+    return { ok: true };
+  });
+
 export const upsertHomeworkSubmissionAdmin = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => d as { id?: string; payload: any })
@@ -236,13 +157,18 @@ export const upsertHomeworkSubmissionAdmin = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-export const deleteHomeworkAdmin = createServerFn({ method: "POST" })
+// --- وظائف الاختبارات ---
+export const getExamsDataAdmin = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => d as { id: string })
-  .handler(async ({ data }) => {
+  .handler(async () => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    await supabaseAdmin.from("homework").delete().eq("id", data.id);
-    return { ok: true };
+    const [g, s, e, at] = await Promise.all([
+      supabaseAdmin.from("groups").select("id,name,grade,subject").order("name"),
+      supabaseAdmin.from("students").select("id,full_name,code,group_id,grade").order("full_name"),
+      supabaseAdmin.from("exams").select("*").order("created_at", { ascending: false }),
+      supabaseAdmin.from("exam_attempts").select("*").eq("status", "submitted"),
+    ]);
+    return { groups: g.data || [], students: s.data || [], exams: e.data || [], attempts: at.data || [] };
   });
 
 export const saveExamFullAdmin = createServerFn({ method: "POST" })
@@ -275,19 +201,6 @@ export const deleteExamAdmin = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-export const getExamsDataAdmin = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
-  .handler(async () => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const [g, s, e, at] = await Promise.all([
-      supabaseAdmin.from("groups").select("id,name,grade,subject").order("name"),
-      supabaseAdmin.from("students").select("id,full_name,code,group_id,grade").order("full_name"),
-      supabaseAdmin.from("exams").select("*").order("created_at", { ascending: false }),
-      supabaseAdmin.from("exam_attempts").select("*").eq("status", "submitted"),
-    ]);
-    return { groups: g.data || [], students: s.data || [], exams: e.data || [], attempts: at.data || [] };
-  });
-
 export const getExamDetailedResultsAdmin = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => d as { exam_id: string })
@@ -305,6 +218,78 @@ export const getExamDetailedResultsAdmin = createServerFn({ method: "POST" })
     return { questions: q.data || [], attempts: at.data || [], answers: ans };
   });
 
+// --- وظائف المالية ---
+export const getFinanceDataAdmin = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async () => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const [st, gr, py] = await Promise.all([
+      supabaseAdmin.from("students").select("id,full_name,code,grade,group_id").eq("active", true).order("full_name"),
+      supabaseAdmin.from("groups").select("id,name,monthly_fee").order("name"),
+      supabaseAdmin.from("payments").select("*").order("paid_at", { ascending: false }),
+    ]);
+    return { students: st.data || [], groups: gr.data || [], payments: py.data || [] };
+  });
+
+export const addPaymentAdmin = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => d as { student_id: string; group_id: string | null; amount: number; kind: string; month: string; paid_at: string; note: string | null })
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    await supabaseAdmin.from("payments").insert(data);
+    return { ok: true };
+  });
+
+export const updatePaymentAdmin = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => d as { id: string; payload: any })
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    await supabaseAdmin.from("payments").update(data.payload).eq("id", data.id);
+    return { ok: true };
+  });
+
+export const deletePaymentAdmin = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => d as { id: string })
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    await supabaseAdmin.from("payments").delete().eq("id", data.id);
+    return { ok: true };
+  });
+
+// --- وظائف الملاحظات والتقارير والأسئلة ---
+export const getAdminDataSummary = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async () => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const [gr, st, at] = await Promise.all([
+      supabaseAdmin.from("groups").select("id,name").order("name"),
+      supabaseAdmin.from("students").select("id,full_name,code,group_id").eq("active", true).order("full_name"),
+      supabaseAdmin.from("attendance").select("*"),
+    ]);
+    return { groups: gr.data || [], students: st.data || [], attendance: at.data || [] };
+  });
+
+export const getDashboardStatsAdmin = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async () => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const today = new Date().toISOString().slice(0, 10);
+    const [st, gr, ap, aa, pay, groups] = await Promise.all([
+      supabaseAdmin.from("students").select("id", { count: "exact" }).eq("active", true),
+      supabaseAdmin.from("groups").select("id"),
+      supabaseAdmin.from("attendance").select("id", { count: "exact", head: true }).eq("date", today).eq("status", "present"),
+      supabaseAdmin.from("attendance").select("id", { count: "exact", head: true }).eq("date", today).eq("status", "absent"),
+      supabaseAdmin.from("payments").select("amount,kind"),
+      supabaseAdmin.from("groups").select("monthly_fee"),
+    ]);
+    const income = (pay.data || []).filter((p: any) => p.kind === "payment").reduce((a, b) => a + Number(b.amount || 0), 0);
+    const manualDues = (pay.data || []).filter((p: any) => p.kind === "charge").reduce((a, b) => a + Number(b.amount || 0), 0);
+    const estimatedDues = manualDues || ((st.count || 0) * (groups.data?.[0]?.monthly_fee || 0));
+    return { students: st.count || 0, groups: (gr.data || []).length, present: ap.count || 0, absent: aa.count || 0, income, dues: estimatedDues, outstanding: Math.max(0, estimatedDues - income) };
+  });
+
 export const getReportsDataAdmin = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => d as { from: string; to: string })
@@ -317,6 +302,33 @@ export const getReportsDataAdmin = createServerFn({ method: "POST" })
       supabaseAdmin.from("payments").select("student_id,amount,kind,month"),
     ]);
     return { students: s.data || [], groups: g.data || [], attendance: a.data || [], payments: p.data || [] };
+  });
+
+export const getStudentNotesAdmin = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => d as { student_id: string })
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: notes } = await supabaseAdmin.from("student_notes").select("*").eq("student_id", data.student_id).order("created_at", { ascending: false });
+    return { notes: notes || [] };
+  });
+
+export const addStudentNoteAdmin = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => d as { student_id: string; title: string; body: string })
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    await supabaseAdmin.from("student_notes").insert(data);
+    return { ok: true };
+  });
+
+export const deleteStudentNoteAdmin = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => d as { id: string })
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    await supabaseAdmin.from("student_notes").delete().eq("id", data.id);
+    return { ok: true };
   });
 
 export const getStudentQuestionsAdmin = createServerFn({ method: "GET" })
