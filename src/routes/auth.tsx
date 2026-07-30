@@ -1,10 +1,8 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast, Toaster } from "sonner";
-import { LogIn, ShieldCheck, Lock, Loader2, Sparkles, Wand2 } from "lucide-react";
+import { LogIn, UserPlus, Mail, Lock, Loader2, ShieldCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { useServerFn } from "@tanstack/react-start";
-import { getAdminMagicLink } from "@/lib/admin.functions";
 import { BrandLogo } from "@/components/BrandLogo";
 
 export const Route = createFileRoute("/auth")({
@@ -14,65 +12,59 @@ export const Route = createFileRoute("/auth")({
 
 function AuthPage() {
   const navigate = useNavigate();
-  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [masterKey, setMasterKey] = useState("");
   const [loading, setLoading] = useState(false);
-  const [magicLoading, setMagicLoading] = useState(false);
-
-  const getMagicFn = useServerFn(getAdminMagicLink);
-  const ADMIN_EMAIL = "admin@negm-center.local";
+  const [mode, setMode] = useState<"login" | "register">("login");
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => { 
-      if (data.session && data.session.user.email === ADMIN_EMAIL) {
-        navigate({ to: "/dashboard" }); 
+    // التحقق مما إذا كان المستخدم مسجلاً وله رتبة معلم فعلاً
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (session) {
+        const { data: isTeacher } = await supabase.rpc("is_teacher");
+        if (isTeacher) navigate({ to: "/dashboard" });
       }
     });
   }, [navigate]);
 
-  async function handleMagicLogin() {
-    if (!masterKey.trim()) {
-      toast.error("يرجى إدخال المفتاح الرئيسي");
-      return;
-    }
-    setMagicLoading(true);
-    const t = toast.loading("جاري توليد رابط الدخول الآمن...");
-    try {
-      const res = await getMagicFn({ data: { secret: masterKey.trim() } });
-      toast.success("تم التحقق بنجاح. جاري توجيهك...", { id: t });
-      // التوجيه إلى الرابط السحري الذي يسجل الدخول تلقائياً
-      window.location.href = res.loginUrl;
-    } catch (err: any) {
-      toast.error("خطأ: " + err.message, { id: t });
-    } finally {
-      setMagicLoading(false);
-    }
-  }
-
-  async function submit(e: React.FormEvent) {
+  async function handleAuth(e: React.FormEvent) {
     e.preventDefault();
-    if (username.toLowerCase() !== "admin") {
-      toast.error("اسم المستخدم غير صحيح");
-      return;
-    }
-
     setLoading(true);
+
     try {
-      await supabase.auth.signOut();
-      const { error } = await supabase.auth.signInWithPassword({ 
-        email: ADMIN_EMAIL, 
-        password 
-      });
-      
-      if (!error) {
-        toast.success("مرحباً بك يا أستاذ محمد");
-        navigate({ to: "/dashboard" });
+      if (mode === "register") {
+        // 1. محاولة إنشاء حساب جديد
+        const { data, error } = await supabase.auth.signUp({ email, password });
+        if (error) throw error;
+        
+        // 2. محاولة حجز رتبة "الأستاذ" (ستنجح فقط لأول مستخدم في النظام)
+        const { data: claimed, error: rpcError } = await supabase.rpc("claim_teacher_role");
+        
+        if (claimed) {
+          toast.success("تم تسجيلك كمسئول أول للنظام بنجاح");
+          navigate({ to: "/dashboard" });
+        } else {
+          // إذا فشل حجز الرتبة، يعني هناك مسئول آخر مسبقاً
+          await supabase.auth.signOut();
+          throw new Error("عذراً، هذا النظام محجوز لمسئول آخر بالفعل. لا يمكن تسجيل حسابات إضافية.");
+        }
       } else {
-        toast.error("كلمة المرور غير صحيحة. استخدم 'الدخول السحري' بالأسفل لتخطي القيود.");
+        // تسجيل الدخول العادي
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+
+        // التحقق من الصلاحية
+        const { data: isTeacher } = await supabase.rpc("is_teacher");
+        if (isTeacher) {
+          toast.success("مرحباً بك يا أستاذ محمد");
+          navigate({ to: "/dashboard" });
+        } else {
+          await supabase.auth.signOut();
+          throw new Error("عذراً، هذا الحساب لا يملك صلاحيات الإدارة.");
+        }
       }
     } catch (err: any) {
-      toast.error(err.message || "حدث خطأ غير متوقع");
+      toast.error(err.message || "حدث خطأ في عملية الدخول");
     } finally {
       setLoading(false);
     }
@@ -87,77 +79,76 @@ function AuthPage() {
             <BrandLogo size={100} className="!shadow-md" />
           </div>
           
-          <h1 className="text-center text-2xl font-black text-primary">دخول الأستاذ</h1>
-          <p className="mt-1 text-center text-sm text-muted-foreground mb-8">اختر طريقة الدخول المناسبة لك</p>
+          <h1 className="text-center text-2xl font-black text-primary">لوحة تحكم الأستاذ</h1>
+          <p className="mt-1 text-center text-sm text-muted-foreground mb-8">
+            {mode === "login" ? "سجل دخولك بإيميلك الشخصي" : "سجل كمسئول أول (للمرة الأولى فقط)"}
+          </p>
 
-          <div className="space-y-6">
-            {/* خيار الدخول السحري - الحل النهائي */}
-            <div className="rounded-2xl border-2 border-dashed border-gold/40 bg-gold/5 p-5">
-              <h2 className="mb-3 text-center text-sm font-black text-gold-foreground flex items-center justify-center gap-2">
-                <Sparkles className="h-4 w-4" /> الدخول السحري (بدون كلمة مرور)
-              </h2>
-              <div className="space-y-3">
-                <input 
-                  type="password" 
-                  value={masterKey}
-                  onChange={(e) => setMasterKey(e.target.value)}
-                  placeholder="أدخل المفتاح الرئيسي (N@031274)"
-                  className="w-full rounded-xl border border-gold/20 bg-white px-4 py-2.5 text-center text-sm font-black outline-none focus:ring-2 focus:ring-gold/30"
-                />
-                <button 
-                  onClick={handleMagicLogin}
-                  disabled={magicLoading || loading}
-                  className="w-full flex items-center justify-center gap-2 rounded-xl bg-gold py-3 text-sm font-black text-gold-foreground shadow-lg shadow-gold/20 hover:opacity-90 disabled:opacity-50"
-                >
-                  {magicLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
-                  توليد رابط الدخول والدخول فوراً
-                </button>
-              </div>
+          <form onSubmit={handleAuth} className="space-y-4">
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-500 flex items-center gap-1.5 ms-1">
+                <Mail className="h-3.5 w-3.5" /> البريد الإلكتروني الشخصي
+              </label>
+              <input 
+                type="email" 
+                required 
+                value={email} 
+                onChange={(e) => setEmail(e.target.value)} 
+                placeholder="example@gmail.com"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all font-bold" 
+              />
             </div>
 
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-slate-200"></span></div>
-              <div className="relative flex justify-center text-xs uppercase"><span className="bg-white px-2 text-muted-foreground font-bold">أو الدخول التقليدي</span></div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-500 flex items-center gap-1.5 ms-1">
+                <Lock className="h-3.5 w-3.5" /> كلمة المرور
+              </label>
+              <input 
+                type="password" 
+                required 
+                value={password} 
+                onChange={(e) => setPassword(e.target.value)} 
+                placeholder="••••••••"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all font-mono" 
+              />
             </div>
 
-            <form onSubmit={submit} className="space-y-4 opacity-60 hover:opacity-100 transition-opacity">
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-500 flex items-center gap-1.5 ms-1">
-                  <ShieldCheck className="h-3.5 w-3.5" /> اسم المستخدم
-                </label>
-                <input 
-                  type="text" 
-                  value={username} 
-                  onChange={(e) => setUsername(e.target.value)} 
-                  placeholder="admin"
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-bold outline-none" 
-                />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-500 flex items-center gap-1.5 ms-1">
-                  <Lock className="h-3.5 w-3.5" /> كلمة المرور
-                </label>
-                <input 
-                  type="password" 
-                  value={password} 
-                  onChange={(e) => setPassword(e.target.value)} 
-                  placeholder="••••••••"
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-mono outline-none" 
-                />
-              </div>
-              <button 
-                type="submit" 
-                disabled={loading || magicLoading} 
-                className="w-full rounded-xl bg-slate-800 py-2.5 text-sm font-bold text-white transition-all hover:bg-slate-900 disabled:opacity-50"
-              >
-                {loading ? "جاري التحقق..." : "دخول بالكلمة"}
-              </button>
-            </form>
-          </div>
+            <button 
+              type="submit" 
+              disabled={loading} 
+              className="group relative w-full overflow-hidden rounded-xl bg-primary py-3.5 font-black text-primary-foreground shadow-lg shadow-primary/20 transition-all hover:opacity-95 active:scale-[0.98] disabled:opacity-70"
+            >
+              <span className="flex items-center justify-center gap-2">
+                {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : (
+                  <>
+                    {mode === "login" ? <LogIn className="h-5 w-5" /> : <UserPlus className="h-5 w-5" />}
+                    {mode === "login" ? "دخول النظام" : "إنشاء حساب مسئول أول"}
+                  </>
+                )}
+              </span>
+            </button>
+          </form>
           
-          <div className="mt-6 text-center">
-            <Link to="/" className="text-xs font-bold text-primary hover:underline">العودة للموقع الرئيسي</Link>
+          <div className="mt-6 flex flex-col gap-3">
+             <button 
+               onClick={() => setMode(mode === "login" ? "register" : "login")}
+               className="text-xs font-bold text-slate-500 hover:text-primary transition-colors text-center"
+             >
+               {mode === "login" ? "هل هذه أول مرة تدخل فيها؟ سجل هنا كمسئول أول" : "لديك حساب بالفعل؟ سجل دخولك من هنا"}
+             </button>
+             <div className="h-px bg-slate-100 my-2"></div>
+             <Link to="/" className="text-center text-sm font-bold text-primary hover:underline">العودة للموقع الرئيسي</Link>
           </div>
+        </div>
+
+        <div className="mt-6 p-4 bg-white/10 backdrop-blur-sm rounded-2xl border border-white/10">
+           <div className="flex gap-3">
+             <ShieldCheck className="h-5 w-5 text-white shrink-0" />
+             <p className="text-[11px] text-white leading-relaxed">
+               <b className="block mb-1">نظام حماية المسئول:</b>
+               بناءً على طلبك، النظام مبرمج لقبول مسئول واحد فقط (أول من يسجل). أي محاولة تسجيل أخرى بإيميل مختلف سيتم رفضها قسرياً لحماية بيانات السنتر.
+             </p>
+           </div>
         </div>
       </div>
     </div>

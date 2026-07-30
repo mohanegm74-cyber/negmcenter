@@ -9,7 +9,15 @@ export const Route = createFileRoute("/_authenticated")({
   ssr: false,
   beforeLoad: async () => {
     const { data: { session } } = await supabase.auth.getSession();
-    if (!session || session.user.email !== "admin@negm-center.local") {
+    if (!session) {
+      throw redirect({ to: "/auth" });
+    }
+    
+    // التحقق من أن المستخدم يملك رتبة teacher في جدول user_roles
+    const { data: isTeacher } = await supabase.rpc("is_teacher");
+    if (!isTeacher) {
+      // إذا لم يكن معلماً، نقوم بتسجيل خروجه فوراً وإعادته لصفحة الدخول
+      await supabase.auth.signOut();
       throw redirect({ to: "/auth" });
     }
   },
@@ -52,7 +60,7 @@ function TeacherShell() {
             <BrandLogo size={44} className="!shadow-none" />
             <div>
               <div className="text-sm font-black text-primary">سنتر الأستاذ محمد نجم</div>
-              <div className="text-[10px] text-muted-foreground">لوحة تحكم المسئول (admin)</div>
+              <div className="text-[10px] text-muted-foreground">لوحة تحكم الأستاذ</div>
             </div>
           </div>
           <div className="flex items-center gap-2">
