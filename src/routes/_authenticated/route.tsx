@@ -1,7 +1,7 @@
 import { createFileRoute, Outlet, Link, redirect, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { LayoutDashboard, Users, Boxes, ClipboardCheck, ScanLine, LogOut, Home, Wallet, BookOpen, FileBarChart, IdCard, Award, MessageCircleQuestion, FileQuestion, DatabaseBackup, ListChecks } from "lucide-react";
+import { LayoutDashboard, Users, Boxes, ClipboardCheck, ScanLine, LogOut, Home, Wallet, BookOpen, FileBarChart, IdCard, Award, MessageCircleQuestion, FileQuestion, DatabaseBackup, ListChecks, Settings } from "lucide-react";
 import { Toaster } from "sonner";
 import { BrandLogo } from "@/components/BrandLogo";
 
@@ -9,7 +9,9 @@ export const Route = createFileRoute("/_authenticated")({
   ssr: false,
   beforeLoad: async () => {
     const { data: { session } } = await supabase.auth.getSession();
-    if (!session) throw redirect({ to: "/auth" });
+    if (!session || session.user.email !== "admin@negm-center.local") {
+      throw redirect({ to: "/auth" });
+    }
   },
   component: TeacherShell,
 });
@@ -29,6 +31,7 @@ const NAV = [
   { to: "/cards", label: "كروت الطلاب", icon: IdCard },
   { to: "/certificates", label: "شهادات التقدير", icon: Award },
   { to: "/backup", label: "النسخ الاحتياطي", icon: DatabaseBackup },
+  { to: "/settings", label: "الإعدادات", icon: Settings },
 ] as const;
 
 function TeacherShell() {
@@ -49,7 +52,7 @@ function TeacherShell() {
             <BrandLogo size={44} className="!shadow-none" />
             <div>
               <div className="text-sm font-black text-primary">سنتر الأستاذ محمد نجم</div>
-              <div className="text-[10px] text-muted-foreground">لوحة تحكم الأستاذ</div>
+              <div className="text-[10px] text-muted-foreground">لوحة تحكم المسئول (admin)</div>
             </div>
           </div>
           <div className="flex items-center gap-2">

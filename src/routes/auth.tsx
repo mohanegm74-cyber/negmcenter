@@ -1,45 +1,66 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast, Toaster } from "sonner";
-import { ArrowRight, LogIn, UserPlus } from "lucide-react";
+import { LogIn, ShieldCheck, Lock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { BrandLogo } from "@/components/BrandLogo";
 
 export const Route = createFileRoute("/auth")({
-  head: () => ({ meta: [{ title: "دخول الأستاذ — سنتر الأستاذ محمد نجم" }, { name: "description", content: "تسجيل دخول الأستاذ إلى لوحة التحكم." }] }),
+  head: () => ({ meta: [{ title: "دخول الإدارة — سنتر الأستاذ محمد نجم" }] }),
   component: AuthPage,
 });
 
 function AuthPage() {
   const navigate = useNavigate();
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // البريد الداخلي الموحد للمسئول
+  const ADMIN_EMAIL = "admin@negm-center.local";
+
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => { if (data.session) navigate({ to: "/dashboard" }); });
+    supabase.auth.getSession().then(({ data }) => { 
+      if (data.session && data.session.user.email === ADMIN_EMAIL) {
+        navigate({ to: "/dashboard" }); 
+      }
+    });
   }, [navigate]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (username.toLowerCase() !== "admin") {
+      toast.error("اسم المستخدم غير صحيح");
+      return;
+    }
+
     setLoading(true);
     try {
-      if (mode === "signup") {
-        const { data, error } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo: window.location.origin + "/dashboard" } });
-        if (error) throw error;
-        // محاولة منح رتبة معلم فوراً
-        await supabase.rpc("claim_teacher_role");
-        toast.success("تم إنشاء الحساب بنجاح.");
-        navigate({ to: "/dashboard" });
-      } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
-        // التأكد من وجود الرتبة في كل دخول
-        await supabase.rpc("claim_teacher_role");
-        toast.success("مرحباً بعودتك يا أستاذ");
-        navigate({ to: "/dashboard" });
+      // محاولة تسجيل الدخول بالبريد الداخلي
+      const { error } = await supabase.auth.signInWithPassword({ 
+        email: ADMIN_EMAIL, 
+        password 
+      });
+      
+      if (error) {
+        // إذا لم يكن الحساب موجوداً (أول مرة)، نقوم بإنشائه تلقائياً بكلمة المرور الافتراضية
+        if (error.message.includes("Invalid login credentials") && password === "123456") {
+           const { error: signUpError } = await supabase.auth.signUp({ 
+             email: ADMIN_EMAIL, 
+             password: "123456" 
+           });
+           if (signUpError) throw signUpError;
+           await supabase.rpc("claim_teacher_role");
+           toast.success("تم تهيئة نظام الإدارة بنجاح");
+           navigate({ to: "/dashboard" });
+           return;
+        }
+        throw error;
       }
+
+      await supabase.rpc("claim_teacher_role");
+      toast.success("مرحباً بك يا أستاذ محمد");
+      navigate({ to: "/dashboard" });
     } catch (err: any) {
       toast.error(err.message || "فشل تسجيل الدخول");
     } finally {
@@ -48,38 +69,67 @@ function AuthPage() {
   }
 
   return (
-    <div className="min-h-screen" style={{ background: "var(--gradient-hero)" }}>
+    <div className="min-h-screen flex items-center justify-center bg-slate-50" style={{ background: "var(--gradient-hero)" }}>
       <Toaster position="top-center" richColors />
-      <div className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6 py-10">
-        <Link to="/" className="mb-6 inline-flex items-center gap-2 self-start text-sm font-semibold text-white/90 hover:text-white"><ArrowRight className="h-4 w-4" /> الرئيسية</Link>
-        <div className="rounded-2xl bg-white p-8 shadow-2xl">
-          <div className="flex justify-center"><BrandLogo size={88} className="!shadow-md" /></div>
-          <h1 className="mt-4 text-center text-2xl font-black text-primary">لوحة الأستاذ</h1>
-          <p className="mt-1 text-center text-sm text-muted-foreground">سنتر الأستاذ محمد نجم</p>
-
-          <div className="mt-6 grid grid-cols-2 rounded-lg bg-muted p-1 text-sm font-bold">
-            <button onClick={() => setMode("signin")} className={`rounded-md py-2 ${mode === "signin" ? "bg-white shadow" : "text-muted-foreground"}`}>دخول</button>
-            <button onClick={() => setMode("signup")} className={`rounded-md py-2 ${mode === "signup" ? "bg-white shadow" : "text-muted-foreground"}`}>إنشاء حساب</button>
+      <div className="w-full max-w-md px-6">
+        <div className="rounded-3xl bg-white p-8 shadow-2xl border border-white/20">
+          <div className="flex justify-center mb-6">
+            <BrandLogo size={100} className="!shadow-md" />
           </div>
+          
+          <h1 className="text-center text-2xl font-black text-primary">دخول المسئول</h1>
+          <p className="mt-1 text-center text-sm text-muted-foreground mb-8">يرجى إدخال بيانات الاعتماد للوصول للوحة التحكم</p>
 
-          <form onSubmit={submit} className="mt-6 space-y-3">
-            <div>
-              <label className="mb-1.5 block text-sm font-semibold">البريد الإلكتروني</label>
-              <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full rounded-lg border border-input px-3 py-2.5 outline-none focus:ring-2 focus:ring-ring" dir="ltr" />
+          <form onSubmit={submit} className="space-y-4">
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-500 flex items-center gap-1.5 ms-1">
+                <ShieldCheck className="h-3.5 w-3.5" /> اسم المستخدم
+              </label>
+              <input 
+                type="text" 
+                required 
+                value={username} 
+                onChange={(e) => setUsername(e.target.value)} 
+                placeholder="مثال: admin"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all font-bold" 
+              />
             </div>
-            <div>
-              <label className="mb-1.5 block text-sm font-semibold">كلمة المرور</label>
-              <input type="password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} className="w-full rounded-lg border border-input px-3 py-2.5 outline-none focus:ring-2 focus:ring-ring" dir="ltr" />
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-500 flex items-center gap-1.5 ms-1">
+                <Lock className="h-3.5 w-3.5" /> كلمة المرور
+              </label>
+              <input 
+                type="password" 
+                required 
+                value={password} 
+                onChange={(e) => setPassword(e.target.value)} 
+                placeholder="••••••••"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all font-mono" 
+              />
             </div>
-            <button type="submit" disabled={loading} className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary py-2.5 font-bold text-primary-foreground disabled:opacity-60">
-              {mode === "signup" ? <UserPlus className="h-4 w-4" /> : <LogIn className="h-4 w-4" />}
-              {loading ? "جارٍ التحقق..." : mode === "signup" ? "إنشاء الحساب" : "تسجيل الدخول"}
+
+            <button 
+              type="submit" 
+              disabled={loading} 
+              className="group relative w-full overflow-hidden rounded-xl bg-primary py-3.5 font-black text-primary-foreground shadow-lg shadow-primary/20 transition-all hover:opacity-95 active:scale-[0.98] disabled:opacity-70"
+            >
+              <span className="flex items-center justify-center gap-2">
+                {loading ? "جاري التحقق..." : (
+                  <>
+                    <LogIn className="h-5 w-5" />
+                    دخول النظام
+                  </>
+                )}
+              </span>
             </button>
           </form>
-          <p className="mt-4 text-center text-xs text-muted-foreground leading-relaxed">
-            ملاحظة: إذا كنت قد سجلت مسبقاً، استخدم نفس البريد لاستعادة صلاحياتك.
-          </p>
+          
+          <div className="mt-8 text-center">
+            <Link to="/" className="text-sm font-bold text-primary hover:underline">العودة للموقع الرئيسي</Link>
+          </div>
         </div>
+        <p className="mt-6 text-center text-xs text-white/60 font-medium">نظام إدارة سنتر الأستاذ محمد نجم — جميع الحقوق محفوظة</p>
       </div>
     </div>
   );
