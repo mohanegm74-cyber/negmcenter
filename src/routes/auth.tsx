@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast, Toaster } from "sonner";
-import { LogIn, ShieldCheck, Lock } from "lucide-react";
+import { LogIn, ShieldCheck, Lock, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { BrandLogo } from "@/components/BrandLogo";
 
@@ -30,53 +30,56 @@ function AuthPage() {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (username.toLowerCase() !== "admin") {
-      toast.error("اسم المستخدم غير صحيح");
+      toast.error("اسم المستخدم غير صحيح، استخدم 'admin'");
       return;
     }
 
     setLoading(true);
     try {
-      // محاولة تسجيل الدخول
-      const { error } = await supabase.auth.signInWithPassword({ 
+      // 1. تنظيف أي جلسة سابقة عالقة
+      await supabase.auth.signOut();
+
+      // 2. محاولة تسجيل الدخول مباشرة
+      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ 
         email: ADMIN_EMAIL, 
         password 
       });
       
-      if (error) {
-        // إذا لم يكن الحساب موجوداً (أول مرة)، نقوم بإنشائه تلقائياً بكلمة مرور مقبولة أمنياً
-        if (error.message.includes("Invalid login credentials") && password === "Admin@123456") {
-           const { error: signUpError } = await supabase.auth.signUp({ 
-             email: ADMIN_EMAIL, 
-             password: "Admin@123456" 
-           });
-           
-           if (signUpError) {
-             if (signUpError.message.includes("weak")) {
-                toast.error("كلمة المرور ضعيفة جداً. يرجى استخدام كلمة مرور تحتوي على حروف وأرقام (مثل Admin@123456)");
-                return;
-             }
-             throw signUpError;
-           }
-           
-           await supabase.rpc("claim_teacher_role");
-           toast.success("تم تهيئة نظام الإدارة بنجاح بكلمة المرور الافتراضية");
-           navigate({ to: "/dashboard" });
-           return;
-        }
-        
-        if (error.message.includes("weak")) {
-          toast.error("كلمة المرور المدخلة ضعيفة. جرب كلمة مرور أقوى.");
-        } else {
-          toast.error("بيانات الدخول غير صحيحة. للدخول لأول مرة استخدم Admin@123456");
-        }
+      if (!signInError) {
+        await supabase.rpc("claim_teacher_role");
+        toast.success("مرحباً بك يا أستاذ محمد");
+        navigate({ to: "/dashboard" });
         return;
       }
 
-      await supabase.rpc("claim_teacher_role");
-      toast.success("مرحباً بك يا أستاذ محمد");
-      navigate({ to: "/dashboard" });
+      // 3. إذا فشل الدخول، ربما الحساب غير موجود (أول مرة)
+      // سنحاول إنشاء الحساب فقط إذا كانت كلمة المرور هي الافتراضية
+      if (signInError.message.includes("Invalid login credentials") && password === "Admin@123456") {
+        const { error: signUpError } = await supabase.auth.signUp({ 
+          email: ADMIN_EMAIL, 
+          password: "Admin@123456" 
+        });
+
+        if (signUpError) {
+          if (signUpError.message.includes("already registered")) {
+            // الحساب موجود فعلاً ولكن كلمة المرور المدخلة خاطئة
+            toast.error("كلمة المرور غير صحيحة لهذا المستخدم.");
+          } else {
+            toast.error("خطأ في تهيئة النظام: " + signUpError.message);
+          }
+          return;
+        }
+
+        // الحساب أُنشئ الآن، نمنحه الصلاحيات وندخل
+        await supabase.rpc("claim_teacher_role");
+        toast.success("تم تهيئة نظام الإدارة بنجاح. مرحباً بك!");
+        navigate({ to: "/dashboard" });
+      } else {
+        // خطأ عادي في البيانات
+        toast.error("بيانات الدخول غير صحيحة. تأكد من كلمة المرور.");
+      }
     } catch (err: any) {
-      toast.error(err.message || "فشل تسجيل الدخول");
+      toast.error(err.message || "حدث خطأ غير متوقع");
     } finally {
       setLoading(false);
     }
@@ -104,7 +107,7 @@ function AuthPage() {
                 required 
                 value={username} 
                 onChange={(e) => setUsername(e.target.value)} 
-                placeholder="مثال: admin"
+                placeholder="admin"
                 className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all font-bold" 
               />
             </div>
@@ -118,7 +121,7 @@ function AuthPage() {
                 required 
                 value={password} 
                 onChange={(e) => setPassword(e.target.value)} 
-                placeholder="Admin@123456"
+                placeholder="••••••••"
                 className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all font-mono" 
               />
             </div>
@@ -129,7 +132,7 @@ function AuthPage() {
               className="group relative w-full overflow-hidden rounded-xl bg-primary py-3.5 font-black text-primary-foreground shadow-lg shadow-primary/20 transition-all hover:opacity-95 active:scale-[0.98] disabled:opacity-70"
             >
               <span className="flex items-center justify-center gap-2">
-                {loading ? "جاري التحقق..." : (
+                {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : (
                   <>
                     <LogIn className="h-5 w-5" />
                     دخول النظام
@@ -141,7 +144,7 @@ function AuthPage() {
           
           <div className="mt-4 p-4 bg-blue-50 rounded-xl border border-blue-100">
              <p className="text-[10px] text-blue-800 font-bold leading-relaxed">
-               * للدخول أول مرة، استخدم اسم المستخدم <span className="underline">admin</span> وكلمة المرور <span className="underline">Admin@123456</span>.
+               * إذا كنت تدخل لأول مرة أو بعد تحديث النظام، استخدم كلمة المرور <span className="underline font-black">Admin@123456</span> ليتم إنشاء حسابك تلقائياً.
              </p>
           </div>
 
