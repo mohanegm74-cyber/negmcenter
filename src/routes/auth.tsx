@@ -1,8 +1,10 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast, Toaster } from "sonner";
-import { LogIn, ShieldCheck, Lock, Loader2 } from "lucide-react";
+import { LogIn, ShieldCheck, Lock, Loader2, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useServerFn } from "@tanstack/react-start";
+import { forceResetAdminPassword } from "@/lib/admin.functions";
 import { BrandLogo } from "@/components/BrandLogo";
 
 export const Route = createFileRoute("/auth")({
@@ -15,8 +17,9 @@ function AuthPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [fixing, setFixing] = useState(false);
 
-  // البريد الداخلي الموحد للمسئول
+  const fixFn = useServerFn(forceResetAdminPassword);
   const ADMIN_EMAIL = "admin@negm-center.local";
 
   useEffect(() => {
@@ -27,6 +30,19 @@ function AuthPage() {
     });
   }, [navigate]);
 
+  async function handleFix() {
+    setFixing(true);
+    const t = toast.loading("جارٍ حل التعارضات وتهيئة حساب الإدارة...");
+    try {
+      await fixFn({ data: { secret: "N@031274" } });
+      toast.success("تم إصلاح الحساب بنجاح. يمكنك الدخول الآن بكلمة المرور الجديدة.", { id: t });
+    } catch (err: any) {
+      toast.error("فشل الإصلاح: " + err.message, { id: t });
+    } finally {
+      setFixing(false);
+    }
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (username.toLowerCase() !== "admin") {
@@ -36,47 +52,18 @@ function AuthPage() {
 
     setLoading(true);
     try {
-      // 1. تنظيف أي جلسة سابقة عالقة
       await supabase.auth.signOut();
-
-      // 2. محاولة تسجيل الدخول مباشرة
-      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ 
+      const { error } = await supabase.auth.signInWithPassword({ 
         email: ADMIN_EMAIL, 
         password 
       });
       
-      if (!signInError) {
+      if (!error) {
         await supabase.rpc("claim_teacher_role");
         toast.success("مرحباً بك يا أستاذ محمد");
         navigate({ to: "/dashboard" });
-        return;
-      }
-
-      // 3. إذا فشل الدخول، ربما الحساب غير موجود (أول مرة)
-      // سنحاول إنشاء الحساب فقط إذا كانت كلمة المرور هي الافتراضية
-      if (signInError.message.includes("Invalid login credentials") && password === "Admin@123456") {
-        const { error: signUpError } = await supabase.auth.signUp({ 
-          email: ADMIN_EMAIL, 
-          password: "Admin@123456" 
-        });
-
-        if (signUpError) {
-          if (signUpError.message.includes("already registered")) {
-            // الحساب موجود فعلاً ولكن كلمة المرور المدخلة خاطئة
-            toast.error("كلمة المرور غير صحيحة لهذا المستخدم.");
-          } else {
-            toast.error("خطأ في تهيئة النظام: " + signUpError.message);
-          }
-          return;
-        }
-
-        // الحساب أُنشئ الآن، نمنحه الصلاحيات وندخل
-        await supabase.rpc("claim_teacher_role");
-        toast.success("تم تهيئة نظام الإدارة بنجاح. مرحباً بك!");
-        navigate({ to: "/dashboard" });
       } else {
-        // خطأ عادي في البيانات
-        toast.error("بيانات الدخول غير صحيحة. تأكد من كلمة المرور.");
+        toast.error("بيانات الدخول غير صحيحة. إذا كنت تواجه مشكلة، اضغط على زر 'إصلاح الدخول' بالأسفل.");
       }
     } catch (err: any) {
       toast.error(err.message || "حدث خطأ غير متوقع");
@@ -121,14 +108,14 @@ function AuthPage() {
                 required 
                 value={password} 
                 onChange={(e) => setPassword(e.target.value)} 
-                placeholder="••••••••"
+                placeholder="أدخل كلمة المرور"
                 className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all font-mono" 
               />
             </div>
 
             <button 
               type="submit" 
-              disabled={loading} 
+              disabled={loading || fixing} 
               className="group relative w-full overflow-hidden rounded-xl bg-primary py-3.5 font-black text-primary-foreground shadow-lg shadow-primary/20 transition-all hover:opacity-95 active:scale-[0.98] disabled:opacity-70"
             >
               <span className="flex items-center justify-center gap-2">
@@ -142,14 +129,16 @@ function AuthPage() {
             </button>
           </form>
           
-          <div className="mt-4 p-4 bg-blue-50 rounded-xl border border-blue-100">
-             <p className="text-[10px] text-blue-800 font-bold leading-relaxed">
-               * إذا كنت تدخل لأول مرة أو بعد تحديث النظام، استخدم كلمة المرور <span className="underline font-black">Admin@123456</span> ليتم إنشاء حسابك تلقائياً.
-             </p>
-          </div>
-
-          <div className="mt-6 text-center">
-            <Link to="/" className="text-sm font-bold text-primary hover:underline">العودة للموقع الرئيسي</Link>
+          <div className="mt-6 flex flex-col gap-3">
+             <button 
+               onClick={handleFix}
+               disabled={fixing || loading}
+               className="flex items-center justify-center gap-2 w-full rounded-xl bg-amber-50 border border-amber-200 py-2.5 text-xs font-black text-amber-700 hover:bg-amber-100 transition-colors"
+             >
+               {fixing ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+               إصلاح الدخول والتعارضات (N@031274)
+             </button>
+             <Link to="/" className="text-center text-sm font-bold text-primary hover:underline">العودة للموقع الرئيسي</Link>
           </div>
         </div>
         <p className="mt-6 text-center text-xs text-white/60 font-medium">نظام إدارة سنتر الأستاذ محمد نجم — جميع الحقوق محفوظة</p>

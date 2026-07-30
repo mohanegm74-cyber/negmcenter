@@ -1,7 +1,50 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
-/** جلب ملخص إحصائيات لوحة التحكم المطورة */
+/** وظيفة عامة (بدون ميدل وير) لإصلاح حساب المسئول وحل التعارضات */
+export const forceResetAdminPassword = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) => d as { secret: string })
+  .handler(async ({ data }) => {
+    // التأكد من أن الطلب شرعي (كلمة السر المطلوبة هي المفتاح)
+    if (data.secret !== "N@031274") throw new Error("غير مصرح");
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const ADMIN_EMAIL = "admin@negm-center.local";
+    const NEW_PASS = "N@031274";
+
+    // 1. البحث عن الحساب الحالي
+    const { data: { users }, error: listError } = await supabaseAdmin.auth.admin.listUsers();
+    if (listError) throw listError;
+
+    const existingUser = users.find(u => u.email === ADMIN_EMAIL);
+
+    if (existingUser) {
+      // 2. إذا كان موجوداً، نقوم بتغيير كلمة المرور قسراً وحل التعارض
+      const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
+        existingUser.id,
+        { password: NEW_PASS, email_confirm: true }
+      );
+      if (updateError) throw updateError;
+    } else {
+      // 3. إذا لم يكن موجوداً، نقوم بإنشائه
+      const { error: createError } = await supabaseAdmin.auth.admin.createUser({
+        email: ADMIN_EMAIL,
+        password: NEW_PASS,
+        email_confirm: true
+      });
+      if (createError) throw createError;
+    }
+
+    // 4. منح الصلاحيات (Role) للتأكد من عمل كافة البرمجيات
+    await supabaseAdmin.from("user_roles").upsert({ 
+      user_id: existingUser?.id || (await supabaseAdmin.auth.admin.listUsers()).data.users.find(u => u.email === ADMIN_EMAIL)?.id,
+      role: "teacher" 
+    }, { onConflict: "user_id" });
+
+    return { ok: true };
+  });
+
+/** باقي الوظائف السابقة ... */
 export const getDashboardStatsAdmin = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async () => {
@@ -21,7 +64,6 @@ export const getDashboardStatsAdmin = createServerFn({ method: "GET" })
     const income = (pay.data || []).filter((p: any) => p.kind === "payment").reduce((a, b) => a + Number(b.amount || 0), 0);
     const manualDues = (pay.data || []).filter((p: any) => p.kind === "charge").reduce((a, b) => a + Number(b.amount || 0), 0);
     
-    // حساب الرسوم التقريبية بناءً على عدد الطلاب في كل مجموعة
     const totalStudentsCount = st.count || 0;
     const averageFee = groups.data?.length ? groups.data.reduce((a, b) => a + (b.monthly_fee || 0), 0) / groups.data.length : 0;
     const estimatedDues = manualDues || (totalStudentsCount * averageFee);
@@ -37,7 +79,6 @@ export const getDashboardStatsAdmin = createServerFn({ method: "GET" })
     };
   });
 
-/** ملاحظات الطلاب */
 export const getStudentNotesAdmin = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => d as { student_id: string })
@@ -68,7 +109,6 @@ export const deleteStudentNoteAdmin = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-/** تحديث حركة مالية */
 export const updatePaymentAdmin = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => d as { id: string; payload: any })
@@ -79,7 +119,6 @@ export const updatePaymentAdmin = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-/** وظائف أخرى كما هي مع إضافة تحسينات بسيطة */
 export const getGroupsAdmin = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async () => {
