@@ -4,6 +4,63 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 /** كلمة المرور الافتراضية القوية للسيطرة */
 const DEFAULT_MASTER_PASS = "Negm74!Center#Secure$2024";
 
+/** التحقق من وجود مسئول مسجّل في النظام */
+export const checkAdminSetup = createServerFn({ method: "GET" }).handler(async () => {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { count } = await supabaseAdmin
+    .from("user_roles")
+    .select("*", { count: "exact", head: true })
+    .in("role", ["teacher", "admin"]);
+  return { hasAdmin: (count ?? 0) > 0 };
+});
+
+/** إنشاء حساب المسئول الأول — يعمل فقط إذا لم يكن هناك مسئول مسجّل */
+export const setupFirstAdmin = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) => d as { email: string; password: string })
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    // فحص مزدوج من الـ server: لا يُسمح بالتسجيل إذا كان هناك مسئول
+    const { count } = await supabaseAdmin
+      .from("user_roles")
+      .select("*", { count: "exact", head: true })
+      .in("role", ["teacher", "admin"]);
+
+    if ((count ?? 0) > 0) {
+      throw new Error("يوجد مسئول مسجّل بالفعل. لا يمكن إنشاء حساب جديد.");
+    }
+
+    const email = data.email.trim().toLowerCase();
+    if (!email || !data.password || data.password.length < 6) {
+      throw new Error("يرجى إدخال بريد إلكتروني صحيح وكلمة مرور لا تقل عن 6 أحرف.");
+    }
+
+    // إنشاء المستخدم أو تحديثه إذا كان موجوداً
+    const { data: { users } } = await supabaseAdmin.auth.admin.listUsers();
+    let targetUser = users.find(u => u.email?.toLowerCase() === email);
+
+    if (!targetUser) {
+      const { data: newUser, error } = await supabaseAdmin.auth.admin.createUser({
+        email,
+        password: data.password,
+        email_confirm: true,
+      });
+      if (error) throw error;
+      targetUser = newUser.user;
+    } else {
+      await supabaseAdmin.auth.admin.updateUserById(targetUser.id, {
+        password: data.password,
+        email_confirm: true,
+      });
+    }
+
+    // منح صلاحية المسئول
+    await supabaseAdmin.from("user_roles").delete().eq("user_id", targetUser.id);
+    await supabaseAdmin.from("user_roles").insert({ user_id: targetUser.id, role: "teacher" });
+
+    return { success: true };
+  });
+
 /** وظيفة فرض السيطرة الشاملة (تنظيف رتب + إعادة تعيين كلمة مرور) */
 export const forceSetupAdminMaster = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => d as { email: string; secret: string })
