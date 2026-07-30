@@ -1,48 +1,39 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
-/** وظيفة توليد رابط دخول سحري للمسئول (بواسطة المفتاح الرئيسي) */
-export const getAdminMagicLink = createServerFn({ method: "POST" })
-  .inputValidator((d: unknown) => d as { secret: string })
+/** وظيفة فرض السيطرة وتفعيل المسئول الأول حصرياً (الحل الجذري) */
+export const forceSetupAdminMaster = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) => d as { email: string; secret: string })
   .handler(async ({ data }) => {
-    // التأكد من أن المفتاح هو مفتاح الأستاذ محمد نجم الخاص
+    // 1. التحقق من المفتاح الرئيسي
     if (data.secret !== "N@031274") throw new Error("المفتاح الرئيسي غير صحيح");
-
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const ADMIN_EMAIL = "admin@negm-center.local";
-
-    // 1. التأكد من وجود حساب المسئول أو إنشاؤه
-    const { data: { users } } = await supabaseAdmin.auth.admin.listUsers();
-    let adminUser = users.find(u => u.email === ADMIN_EMAIL);
-
-    if (!adminUser) {
-      const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
-        email: ADMIN_EMAIL,
-        password: "NegmCenter#" + Math.random().toString(36).slice(-8) + "!", // كلمة مرور عشوائية قوية جداً خلف الكواليس
-        email_confirm: true
-      });
-      if (createError) throw createError;
-      adminUser = newUser.user;
+    
+    // 2. التحقق من الإيميل (يجب أن يكون إيميل الأستاذ محمد)
+    if (data.email.trim().toLowerCase() !== "mohanegm74@gmail.com") {
+      throw new Error("عذراً، هذا الإجراء مسموح به فقط للأستاذ محمد نجم");
     }
 
-    // 2. منح الصلاحيات
-    await supabaseAdmin.from("user_roles").upsert({ 
-      user_id: adminUser!.id,
-      role: "teacher" 
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    // 3. البحث عن الـ User ID الخاص بهذا الإيميل
+    const { data: { users }, error: listError } = await supabaseAdmin.auth.admin.listUsers();
+    if (listError) throw listError;
+
+    const targetUser = users.find(u => u.email?.toLowerCase() === data.email.toLowerCase());
+    if (!targetUser) throw new Error("يرجى إنشاء الحساب أولاً قبل محاولة تفعيل السيطرة");
+
+    // 4. الحل الجذري: مسح كافة الرتب الحالية في النظام لضمان التنظيف
+    await supabaseAdmin.from("user_roles").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+
+    // 5. منح رتبة 'teacher' لهذا المستخدم تحديداً
+    const { error: upsertError } = await supabaseAdmin.from("user_roles").upsert({
+      user_id: targetUser.id,
+      role: "teacher"
     }, { onConflict: "user_id" });
 
-    // 3. توليد رابط دخول سحري (Magic Link) يتخطى طلب كلمة المرور
-    const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
-      type: 'magiclink',
-      email: ADMIN_EMAIL,
-      options: {
-        redirectTo: process.env.VITE_SITE_URL || 'http://localhost:3000/dashboard'
-      }
-    });
+    if (upsertError) throw upsertError;
 
-    if (linkError) throw linkError;
-
-    return { loginUrl: linkData.properties.action_link };
+    return { success: true, message: "تم تفعيل سيطرتك على النظام بنجاح" };
   });
 
 /** الوظائف الإدارية الأخرى ... */
