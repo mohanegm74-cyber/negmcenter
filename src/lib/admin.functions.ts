@@ -1,50 +1,51 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
-/** وظيفة عامة (بدون ميدل وير) لإصلاح حساب المسئول وحل التعارضات */
-export const forceResetAdminPassword = createServerFn({ method: "POST" })
+/** وظيفة توليد رابط دخول سحري للمسئول (بواسطة المفتاح الرئيسي) */
+export const getAdminMagicLink = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => d as { secret: string })
   .handler(async ({ data }) => {
-    // التأكد من أن الطلب شرعي (كلمة السر المطلوبة هي المفتاح)
-    if (data.secret !== "N@031274") throw new Error("غير مصرح");
+    // التأكد من أن المفتاح هو مفتاح الأستاذ محمد نجم الخاص
+    if (data.secret !== "N@031274") throw new Error("المفتاح الرئيسي غير صحيح");
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const ADMIN_EMAIL = "admin@negm-center.local";
-    const NEW_PASS = "N@031274";
 
-    // 1. البحث عن الحساب الحالي
-    const { data: { users }, error: listError } = await supabaseAdmin.auth.admin.listUsers();
-    if (listError) throw listError;
+    // 1. التأكد من وجود حساب المسئول أو إنشاؤه
+    const { data: { users } } = await supabaseAdmin.auth.admin.listUsers();
+    let adminUser = users.find(u => u.email === ADMIN_EMAIL);
 
-    const existingUser = users.find(u => u.email === ADMIN_EMAIL);
-
-    if (existingUser) {
-      // 2. إذا كان موجوداً، نقوم بتغيير كلمة المرور قسراً وحل التعارض
-      const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
-        existingUser.id,
-        { password: NEW_PASS, email_confirm: true }
-      );
-      if (updateError) throw updateError;
-    } else {
-      // 3. إذا لم يكن موجوداً، نقوم بإنشائه
-      const { error: createError } = await supabaseAdmin.auth.admin.createUser({
+    if (!adminUser) {
+      const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
         email: ADMIN_EMAIL,
-        password: NEW_PASS,
+        password: "NegmCenter#" + Math.random().toString(36).slice(-8) + "!", // كلمة مرور عشوائية قوية جداً خلف الكواليس
         email_confirm: true
       });
       if (createError) throw createError;
+      adminUser = newUser.user;
     }
 
-    // 4. منح الصلاحيات (Role) للتأكد من عمل كافة البرمجيات
+    // 2. منح الصلاحيات
     await supabaseAdmin.from("user_roles").upsert({ 
-      user_id: existingUser?.id || (await supabaseAdmin.auth.admin.listUsers()).data.users.find(u => u.email === ADMIN_EMAIL)?.id,
+      user_id: adminUser!.id,
       role: "teacher" 
     }, { onConflict: "user_id" });
 
-    return { ok: true };
+    // 3. توليد رابط دخول سحري (Magic Link) يتخطى طلب كلمة المرور
+    const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
+      type: 'magiclink',
+      email: ADMIN_EMAIL,
+      options: {
+        redirectTo: process.env.VITE_SITE_URL || 'http://localhost:3000/dashboard'
+      }
+    });
+
+    if (linkError) throw linkError;
+
+    return { loginUrl: linkData.properties.action_link };
   });
 
-/** باقي الوظائف السابقة ... */
+/** الوظائف الإدارية الأخرى ... */
 export const getDashboardStatsAdmin = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async () => {
