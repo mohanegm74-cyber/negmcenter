@@ -14,13 +14,16 @@ export const checkAdminSetup = createServerFn({ method: "GET" }).handler(async (
   return { hasAdmin: (count ?? 0) > 0 };
 });
 
-/** إنشاء حساب المسئول الأول — يعمل فقط إذا لم يكن هناك مسئول مسجّل */
-export const setupFirstAdmin = createServerFn({ method: "POST" })
-  .inputValidator((d: unknown) => d as { email: string; password: string })
+/**
+ * تعيين صلاحية المسئول لمستخدم موجود — يُستدعى بعد signUp من الـ client.
+ * يرفض الطلب إذا كان هناك مسئول مسجّل بالفعل (حماية server-side).
+ */
+export const assignFirstAdminRole = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) => d as { userId: string })
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-    // فحص مزدوج من الـ server: لا يُسمح بالتسجيل إذا كان هناك مسئول
+    // فحص مزدوج: لا يُسمح إذا كان هناك مسئول
     const { count } = await supabaseAdmin
       .from("user_roles")
       .select("*", { count: "exact", head: true })
@@ -30,33 +33,10 @@ export const setupFirstAdmin = createServerFn({ method: "POST" })
       throw new Error("يوجد مسئول مسجّل بالفعل. لا يمكن إنشاء حساب جديد.");
     }
 
-    const email = data.email.trim().toLowerCase();
-    if (!email || !data.password || data.password.length < 6) {
-      throw new Error("يرجى إدخال بريد إلكتروني صحيح وكلمة مرور لا تقل عن 6 أحرف.");
-    }
+    if (!data.userId) throw new Error("معرّف المستخدم غير صحيح.");
 
-    // إنشاء المستخدم أو تحديثه إذا كان موجوداً
-    const { data: { users } } = await supabaseAdmin.auth.admin.listUsers();
-    let targetUser = users.find(u => u.email?.toLowerCase() === email);
-
-    if (!targetUser) {
-      const { data: newUser, error } = await supabaseAdmin.auth.admin.createUser({
-        email,
-        password: data.password,
-        email_confirm: false, // Supabase سيرسل رسالة تأكيد تلقائياً
-      });
-      if (error) throw error;
-      targetUser = newUser.user;
-    } else {
-      await supabaseAdmin.auth.admin.updateUserById(targetUser.id, {
-        password: data.password,
-        email_confirm: false,
-      });
-    }
-
-    // منح صلاحية المسئول
-    await supabaseAdmin.from("user_roles").delete().eq("user_id", targetUser.id);
-    await supabaseAdmin.from("user_roles").insert({ user_id: targetUser.id, role: "teacher" });
+    await supabaseAdmin.from("user_roles").delete().eq("user_id", data.userId);
+    await supabaseAdmin.from("user_roles").insert({ user_id: data.userId, role: "teacher" });
 
     return { success: true };
   });

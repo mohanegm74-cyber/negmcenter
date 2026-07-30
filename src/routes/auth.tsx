@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useServerFn } from "@tanstack/react-start";
-import { checkAdminSetup, setupFirstAdmin } from "@/lib/admin.functions";
+import { checkAdminSetup, assignFirstAdminRole } from "@/lib/admin.functions";
 import { BrandLogo } from "@/components/BrandLogo";
 
 export const Route = createFileRoute("/auth")({
@@ -43,7 +43,7 @@ function AuthPage() {
   const [loading, setLoading] = useState(false);
 
   const checkSetup = useServerFn(checkAdminSetup);
-  const firstAdmin = useServerFn(setupFirstAdmin);
+  const assignRole = useServerFn(assignFirstAdminRole);
 
   // كشف حالة إعادة تعيين كلمة المرور من رابط الإيميل
   useEffect(() => {
@@ -71,7 +71,16 @@ function AuthPage() {
     if (password.length < 6) { toast.error("كلمة المرور يجب أن تكون 6 أحرف على الأقل"); return; }
     setLoading(true);
     try {
-      await firstAdmin({ data: { email: email.trim(), password } });
+      // signUp من الـ client يُرسل إيميل تأكيد لـ Gmail تلقائياً
+      const { data, error } = await supabase.auth.signUp({
+        email: email.trim(),
+        password,
+      });
+      if (error) throw error;
+      if (!data.user) throw new Error("فشل إنشاء الحساب، حاول مجدداً.");
+
+      // تعيين صلاحية المسئول من الـ server (مع فحص مزدوج)
+      await assignRole({ data: { userId: data.user.id } });
       setMode("email-sent");
     } catch (err: any) {
       toast.error(translateError(err.message));
