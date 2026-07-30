@@ -13,10 +13,15 @@ export const Route = createFileRoute("/_authenticated")({
       throw redirect({ to: "/auth" });
     }
     
-    // التحقق من أن المستخدم يملك رتبة teacher في جدول user_roles
-    const { data: isTeacher } = await supabase.rpc("is_teacher");
-    if (!isTeacher) {
-      // إذا لم يكن معلماً، نقوم بتسجيل خروجه فوراً وإعادته لصفحة الدخول
+    // فحص الرتبة مباشرة من الجدول لضمان أعلى مستويات الدقة وتجنب مشاكل الـ RPC
+    const { data: roleData } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", session.user.id)
+      .maybeSingle();
+
+    if (!roleData || (roleData.role !== "teacher" && roleData.role !== "admin")) {
+      // إذا لم يكن معلماً، نقوم بتسجيل خروجه فوراً
       await supabase.auth.signOut();
       throw redirect({ to: "/auth" });
     }

@@ -24,23 +24,22 @@ function AuthPage() {
   const SUGGESTED_PASS = "Negm74!Center#Secure$2024";
   const forceSetup = useServerFn(forceSetupAdminMaster);
 
-  useEffect(() => {
-    supabase.auth.signOut();
-    localStorage.clear();
-  }, []);
+  // نقوم بتسجيل الخروج فقط إذا طلب المستخدم ذلك أو إذا كان هناك خطأ في الجلسة
+  // أزلنا localStorage.clear() لأنه يمسح بيانات الطلاب أيضاً
 
   async function handleForceSetup() {
     if (!masterKey.trim()) {
-      toast.error("يرجى إدخال المفتاح الرئيسي للتنظيف");
+      toast.error("يرجى إدخال المفتاح الرئيسي");
       return;
     }
     setLoading(true);
-    const t = toast.loading("جاري تنظيف النظام وفرض سيطرتك...");
+    const t = toast.loading("جاري إعادة ضبط صلاحيات الأستاذ...");
     try {
       await forceSetup({ data: { email, secret: masterKey.trim() } });
-      toast.success("تم بنجاح! يمكنك الآن تسجيل الدخول مباشرة.", { id: t });
+      toast.success("تم بنجاح! جرب الدخول الآن بكلمة المرور: " + SUGGESTED_PASS, { id: t, duration: 6000 });
       setForceMode(false);
       setMode("login");
+      setPassword(SUGGESTED_PASS);
     } catch (err: any) {
       toast.error(err.message, { id: t });
     } finally {
@@ -51,7 +50,7 @@ function AuthPage() {
   async function handleAuth(e: React.FormEvent) {
     e.preventDefault();
     if (email.trim().toLowerCase() !== "mohanegm74@gmail.com") {
-      toast.error("عذراً، هذا النظام مخصص للأستاذ محمد نجم فقط");
+      toast.error("هذا النظام مخصص للأستاذ محمد نجم فقط");
       return;
     }
 
@@ -60,27 +59,27 @@ function AuthPage() {
       if (mode === "register") {
         const { error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
-        
-        const { data: claimed } = await supabase.rpc("claim_teacher_role");
-        if (claimed) {
-          toast.success("تم إنشاء حسابك كمسئول وحيد");
-          navigate({ to: "/dashboard" });
-        } else {
-          setForceMode(true);
-          throw new Error("النظام محجوز. يرجى استخدام زر 'فرض السيطرة' بالأسفل.");
-        }
+        toast.success("تم إنشاء الحساب، بانتظار تفعيل رتبة المعلم...");
+        setForceMode(true); // نطلب منه فرض السيطرة لتفعيل الرتبة
       } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
 
-        const { data: isTeacher } = await supabase.rpc("is_teacher");
-        if (isTeacher) {
+        // فحص الرتبة مباشرة من الجدول لضمان الدقة
+        const { data: roleData } = await supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", data.user.id)
+          .maybeSingle();
+
+        if (roleData?.role === "teacher" || roleData?.role === "admin") {
           toast.success("مرحباً بك يا أستاذ محمد");
           navigate({ to: "/dashboard" });
         } else {
+          // إذا نجح الباسورد ولكن الرتبة مفقودة
           setForceMode(true);
           await supabase.auth.signOut();
-          throw new Error("حسابك لا يملك صلاحية. استخدم زر 'فرض السيطرة' بالأسفل.");
+          throw new Error("تم تسجيل الدخول ولكن حسابك يفتقد لصلاحية الأستاذ. استخدم زر 'فرض السيطرة' بالأسفل.");
         }
       }
     } catch (err: any) {
@@ -93,7 +92,7 @@ function AuthPage() {
   const copyPass = () => {
     navigator.clipboard.writeText(SUGGESTED_PASS);
     setPassword(SUGGESTED_PASS);
-    toast.success("تم نسخ ووضع كلمة المرور");
+    toast.success("تم وضع كلمة المرور المقترحة");
   };
 
   return (
@@ -111,8 +110,8 @@ function AuthPage() {
             <div className="mt-4 space-y-4 animate-in zoom-in-95">
               <div className="p-4 bg-destructive/10 rounded-2xl border border-destructive/20 text-center">
                 <ShieldAlert className="mx-auto h-8 w-8 text-destructive mb-2" />
-                <h2 className="text-sm font-black text-destructive">تنبيه: فرض السيطرة على النظام</h2>
-                <p className="text-[11px] text-slate-600 mt-1">سيتم مسح أي رتب قديمة ومنحك الصلاحية فوراً.</p>
+                <h2 className="text-sm font-black text-destructive">تفعيل رتبة الأستاذ (إجباري)</h2>
+                <p className="text-[11px] text-slate-600 mt-1">أدخل المفتاح الرئيسي لربط حسابك برتبة "معلم" فوراً.</p>
               </div>
               <div className="space-y-2">
                 <input 
@@ -128,7 +127,7 @@ function AuthPage() {
                   className="w-full flex items-center justify-center gap-2 rounded-xl bg-destructive py-3.5 text-sm font-black text-white shadow-lg hover:opacity-90"
                 >
                   {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Wand2 className="h-5 w-5" />}
-                  تنظيف النظام وفرض سيطرتي
+                  تفعيل رتبة الأستاذ وإعادة الضبط
                 </button>
                 <button onClick={() => setForceMode(false)} className="w-full text-xs font-bold text-slate-400">إلغاء والعودة</button>
               </div>
@@ -136,7 +135,7 @@ function AuthPage() {
           ) : (
             <>
               <p className="mt-1 text-center text-sm text-muted-foreground mb-8">
-                {mode === "login" ? "سجل دخولك بحسابك الرسمي" : "إنشاء حساب المسئول الرئيسي"}
+                {mode === "login" ? "سجل دخولك بصلاحيات الإدارة" : "إنشاء حساب المسئول الرئيسي"}
               </p>
 
               <form onSubmit={handleAuth} className="space-y-4">
@@ -161,26 +160,16 @@ function AuthPage() {
                   />
                 </div>
 
-                {mode === "register" && (
-                  <div className="p-3 bg-amber-50 rounded-xl border border-amber-100">
-                    <p className="text-[10px] font-black text-amber-800 mb-2 flex items-center gap-1"><ShieldCheck className="h-3 w-3" /> كلمة مرور مقترحة:</p>
-                    <div className="flex items-center justify-between gap-2 bg-white p-2 rounded-lg border border-amber-200">
-                      <code className="text-xs font-bold text-primary">{SUGGESTED_PASS}</code>
-                      <button type="button" onClick={copyPass} className="p-1.5 hover:bg-slate-100 rounded text-primary"><Copy className="h-3.5 w-3.5" /></button>
-                    </div>
-                  </div>
-                )}
-
                 <button type="submit" disabled={loading} className="w-full rounded-xl bg-primary py-3.5 font-black text-primary-foreground shadow-lg shadow-primary/20">
                   <span className="flex items-center justify-center gap-2">
-                    {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : (mode === "login" ? "دخول النظام" : "تفعيل حساب الأستاذ")}
+                    {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : (mode === "login" ? "دخول النظام" : "تفعيل الحساب")}
                   </span>
                 </button>
               </form>
               
               <div className="mt-6 flex flex-col gap-3">
-                 <button onClick={() => setMode(mode === "login" ? "register" : "login")} className="text-xs font-bold text-slate-500 hover:text-primary transition-colors text-center">
-                   {mode === "login" ? "تفعيل حساب المسئول لأول مرة" : "العودة لصفحة الدخول"}
+                 <button onClick={() => setForceMode(true)} className="text-xs font-bold text-destructive hover:underline text-center">
+                   مشكلة في الدخول؟ استخدم "فرض السيطرة"
                  </button>
                  <div className="h-px bg-slate-100 my-2"></div>
                  <Link to="/" className="text-center text-sm font-bold text-primary hover:underline">العودة للموقع الرئيسي</Link>
