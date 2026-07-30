@@ -1,59 +1,59 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast, Toaster } from "sonner";
-import { LogIn, UserPlus, Mail, Lock, Loader2, ShieldCheck } from "lucide-react";
+import { LogIn, UserPlus, Mail, Lock, Loader2, ShieldCheck, Copy } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { BrandLogo } from "@/components/BrandLogo";
 
 export const Route = createFileRoute("/auth")({
-  head: () => ({ meta: [{ title: "دخول الإدارة — سنتر الأستاذ محمد نجم" }] }),
+  head: () => ({ meta: [{ title: "دخول الأستاذ محمد نجم" }] }),
   component: AuthPage,
 });
 
 function AuthPage() {
   const navigate = useNavigate();
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState("mohanegm74@gmail.com");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState<"login" | "register">("login");
 
+  const SUGGESTED_PASS = "Negm74!Center#Secure$2024";
+
   useEffect(() => {
-    // التحقق مما إذا كان المستخدم مسجلاً وله رتبة معلم فعلاً
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (session) {
-        const { data: isTeacher } = await supabase.rpc("is_teacher");
-        if (isTeacher) navigate({ to: "/dashboard" });
-      }
-    });
-  }, [navigate]);
+    // 1. عمل خروج إجباري لكل الجلسات القديمة فور فتح الصفحة
+    supabase.auth.signOut();
+    localStorage.clear();
+  }, []);
 
   async function handleAuth(e: React.FormEvent) {
     e.preventDefault();
-    setLoading(true);
+    
+    // تأكيد حماية الإيميل برمجياً
+    if (email.trim().toLowerCase() !== "mohanegm74@gmail.com") {
+      toast.error("عذراً، هذا النظام مخصص للأستاذ محمد نجم فقط (mohanegm74@gmail.com)");
+      return;
+    }
 
+    setLoading(true);
     try {
       if (mode === "register") {
-        // 1. محاولة إنشاء حساب جديد
         const { data, error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
         
-        // 2. محاولة حجز رتبة "الأستاذ" (ستنجح فقط لأول مستخدم في النظام)
+        // منح رتبة الأستاذ حصرياً
         const { data: claimed, error: rpcError } = await supabase.rpc("claim_teacher_role");
         
         if (claimed) {
-          toast.success("تم تسجيلك كمسئول أول للنظام بنجاح");
+          toast.success("تم إنشاء حسابك كمسئول وحيد للنظام");
           navigate({ to: "/dashboard" });
         } else {
-          // إذا فشل حجز الرتبة، يعني هناك مسئول آخر مسبقاً
           await supabase.auth.signOut();
-          throw new Error("عذراً، هذا النظام محجوز لمسئول آخر بالفعل. لا يمكن تسجيل حسابات إضافية.");
+          throw new Error("حدث خطأ أثناء حجز الرتبة. قد يكون الحساب موجوداً بالفعل.");
         }
       } else {
-        // تسجيل الدخول العادي
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
 
-        // التحقق من الصلاحية
         const { data: isTeacher } = await supabase.rpc("is_teacher");
         if (isTeacher) {
           toast.success("مرحباً بك يا أستاذ محمد");
@@ -70,6 +70,12 @@ function AuthPage() {
     }
   }
 
+  const copyPass = () => {
+    navigator.clipboard.writeText(SUGGESTED_PASS);
+    setPassword(SUGGESTED_PASS);
+    toast.success("تم نسخ ووضع كلمة المرور المقترحة");
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50" style={{ background: "var(--gradient-hero)" }}>
       <Toaster position="top-center" richColors />
@@ -79,23 +85,21 @@ function AuthPage() {
             <BrandLogo size={100} className="!shadow-md" />
           </div>
           
-          <h1 className="text-center text-2xl font-black text-primary">لوحة تحكم الأستاذ</h1>
+          <h1 className="text-center text-2xl font-black text-primary">دخول الأستاذ محمد نجم</h1>
           <p className="mt-1 text-center text-sm text-muted-foreground mb-8">
-            {mode === "login" ? "سجل دخولك بإيميلك الشخصي" : "سجل كمسئول أول (للمرة الأولى فقط)"}
+            {mode === "login" ? "سجل دخولك بحسابك الرسمي" : "إنشاء حساب المسئول الرئيسي"}
           </p>
 
           <form onSubmit={handleAuth} className="space-y-4">
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-500 flex items-center gap-1.5 ms-1">
-                <Mail className="h-3.5 w-3.5" /> البريد الإلكتروني الشخصي
+                <Mail className="h-3.5 w-3.5" /> البريد الإلكتروني الرسمي
               </label>
               <input 
                 type="email" 
-                required 
+                readOnly
                 value={email} 
-                onChange={(e) => setEmail(e.target.value)} 
-                placeholder="example@gmail.com"
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all font-bold" 
+                className="w-full rounded-xl border border-slate-200 bg-slate-100 px-4 py-3 outline-none text-slate-500 font-bold cursor-not-allowed" 
               />
             </div>
 
@@ -113,6 +117,20 @@ function AuthPage() {
               />
             </div>
 
+            {mode === "register" && (
+              <div className="p-3 bg-amber-50 rounded-xl border border-amber-100 mb-2">
+                <p className="text-[10px] font-black text-amber-800 mb-2 flex items-center gap-1">
+                  <ShieldCheck className="h-3 w-3" /> كلمة مرور قوية مقترحة لتخطي قيود النظام:
+                </p>
+                <div className="flex items-center justify-between gap-2 bg-white p-2 rounded-lg border border-amber-200">
+                  <code className="text-xs font-bold text-primary">{SUGGESTED_PASS}</code>
+                  <button type="button" onClick={copyPass} className="p-1.5 hover:bg-slate-100 rounded text-primary transition-colors">
+                    <Copy className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+            )}
+
             <button 
               type="submit" 
               disabled={loading} 
@@ -122,7 +140,7 @@ function AuthPage() {
                 {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : (
                   <>
                     {mode === "login" ? <LogIn className="h-5 w-5" /> : <UserPlus className="h-5 w-5" />}
-                    {mode === "login" ? "دخول النظام" : "إنشاء حساب مسئول أول"}
+                    {mode === "login" ? "دخول النظام" : "تفعيل حساب الأستاذ"}
                   </>
                 )}
               </span>
@@ -134,21 +152,11 @@ function AuthPage() {
                onClick={() => setMode(mode === "login" ? "register" : "login")}
                className="text-xs font-bold text-slate-500 hover:text-primary transition-colors text-center"
              >
-               {mode === "login" ? "هل هذه أول مرة تدخل فيها؟ سجل هنا كمسئول أول" : "لديك حساب بالفعل؟ سجل دخولك من هنا"}
+               {mode === "login" ? "هل هذه أول مرة؟ اضغط هنا لتفعيل الحساب الرئيسي" : "لديك حساب بالفعل؟ سجل دخولك من هنا"}
              </button>
              <div className="h-px bg-slate-100 my-2"></div>
              <Link to="/" className="text-center text-sm font-bold text-primary hover:underline">العودة للموقع الرئيسي</Link>
           </div>
-        </div>
-
-        <div className="mt-6 p-4 bg-white/10 backdrop-blur-sm rounded-2xl border border-white/10">
-           <div className="flex gap-3">
-             <ShieldCheck className="h-5 w-5 text-white shrink-0" />
-             <p className="text-[11px] text-white leading-relaxed">
-               <b className="block mb-1">نظام حماية المسئول:</b>
-               بناءً على طلبك، النظام مبرمج لقبول مسئول واحد فقط (أول من يسجل). أي محاولة تسجيل أخرى بإيميل مختلف سيتم رفضها قسرياً لحماية بيانات السنتر.
-             </p>
-           </div>
         </div>
       </div>
     </div>
