@@ -33,19 +33,23 @@ function Dashboard() {
     { icon: Boxes, label: "المجموعات", value: s.groups, tone: "secondary" },
     { icon: ClipboardCheck, label: "حضور اليوم", value: s.present, tone: "gold" },
     { icon: CalendarX, label: "غياب اليوم", value: s.absent, tone: "destructive" },
-    { icon: Wallet, label: "إجمالي المدفوع", value: `${s.income.toLocaleString("ar-EG")} ج.م`, tone: "secondary" },
-    { icon: TrendingUp, label: "إجمالي الرسوم", value: `${s.dues.toLocaleString("ar-EG")} ج.م`, tone: "primary" },
-    { icon: AlertCircle, label: "المتأخرات", value: `${s.outstanding.toLocaleString("ar-EG")} ج.م`, tone: "destructive" },
+    { icon: Wallet, label: "المحصل فعلياً", value: `${s.income.toLocaleString("ar-EG")} ج.م`, tone: "secondary" },
+    { icon: TrendingUp, label: "إجمالي الرسوم المستحقة", value: `${s.dues.toLocaleString("ar-EG")} ج.م`, tone: "primary" },
+    { icon: AlertCircle, label: "إجمالي المتأخرات", value: `${s.outstanding.toLocaleString("ar-EG")} ج.م`, tone: "destructive" },
   ] as const;
 
   if (loading) return <div className="flex h-64 items-center justify-center text-muted-foreground"><Loader2 className="h-8 w-8 animate-spin" /></div>;
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-black">إحصائيات السنتر العامة</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-black">إحصائيات السنتر العامة</h1>
+        <button onClick={load} className="rounded-lg p-2 hover:bg-muted transition-colors"><TrendingUp className="h-5 w-5 text-primary" /></button>
+      </div>
+      
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
         {cards.map((c) => (
-          <div key={c.label} className="rounded-2xl bg-white p-5 shadow-sm">
+          <div key={c.label} className="rounded-2xl bg-white p-5 shadow-sm border border-transparent hover:border-primary/20 transition-all">
             <div className={`mb-3 inline-flex h-11 w-11 items-center justify-center rounded-xl text-white ${c.tone === "primary" ? "bg-primary" : c.tone === "secondary" ? "bg-secondary" : c.tone === "gold" ? "bg-gold text-gold-foreground" : "bg-destructive"}`}>
               <c.icon className="h-5 w-5" />
             </div>
@@ -56,17 +60,17 @@ function Dashboard() {
       </div>
 
       <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <Link to="/scan" className="block rounded-2xl bg-white p-6 shadow-sm transition hover:-translate-y-0.5">
+        <Link to="/scan" className="block rounded-2xl bg-white p-6 shadow-sm transition hover:-translate-y-0.5 border border-primary/5">
           <h3 className="text-lg font-bold text-primary">سجل الحضور</h3>
-          <p className="mt-1 text-sm text-muted-foreground">افتح شاشة مسح QR أو سجل الحضور.</p>
+          <p className="mt-1 text-sm text-muted-foreground">افتح شاشة مسح QR أو سجل الحضور يدوياً.</p>
         </Link>
-        <Link to="/finance" className="block rounded-2xl bg-white p-6 shadow-sm transition hover:-translate-y-0.5">
+        <Link to="/finance" className="block rounded-2xl bg-white p-6 shadow-sm transition hover:-translate-y-0.5 border border-secondary/5">
           <h3 className="text-lg font-bold text-secondary">الماليات</h3>
-          <p className="mt-1 text-sm text-muted-foreground">تابع مدفوعات الطلاب والمتأخرات.</p>
+          <p className="mt-1 text-sm text-muted-foreground">تابع مدفوعات الطلاب، المتأخرات، وحركات الخزينة.</p>
         </Link>
-        <Link to="/reports" className="block rounded-2xl bg-white p-6 shadow-sm transition hover:-translate-y-0.5">
+        <Link to="/reports" className="block rounded-2xl bg-white p-6 shadow-sm transition hover:-translate-y-0.5 border border-gold/5">
           <h3 className="text-lg font-bold text-gold-foreground">التقارير</h3>
-          <p className="mt-1 text-sm text-muted-foreground">تقارير شاملة عن أداء السنتر.</p>
+          <p className="mt-1 text-sm text-muted-foreground">تقارير شاملة عن أداء السنتر والحضور والماليات.</p>
         </Link>
       </div>
     </div>

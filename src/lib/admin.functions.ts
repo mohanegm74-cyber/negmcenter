@@ -1,7 +1,85 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
-/** جلب كافة المجموعات للأستاذ */
+/** جلب ملخص إحصائيات لوحة التحكم المطورة */
+export const getDashboardStatsAdmin = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async () => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const db = supabaseAdmin;
+    const today = new Date().toISOString().slice(0, 10);
+    
+    const [st, gr, ap, aa, pay, groups] = await Promise.all([
+      db.from("students").select("id", { count: "exact" }).eq("active", true),
+      db.from("groups").select("id"),
+      db.from("attendance").select("id", { count: "exact", head: true }).eq("date", today).eq("status", "present"),
+      db.from("attendance").select("id", { count: "exact", head: true }).eq("date", today).eq("status", "absent"),
+      db.from("payments").select("amount,kind"),
+      db.from("groups").select("monthly_fee"),
+    ]);
+
+    const income = (pay.data || []).filter((p: any) => p.kind === "payment").reduce((a, b) => a + Number(b.amount || 0), 0);
+    const manualDues = (pay.data || []).filter((p: any) => p.kind === "charge").reduce((a, b) => a + Number(b.amount || 0), 0);
+    
+    // حساب الرسوم التقريبية بناءً على عدد الطلاب في كل مجموعة
+    const totalStudentsCount = st.count || 0;
+    const averageFee = groups.data?.length ? groups.data.reduce((a, b) => a + (b.monthly_fee || 0), 0) / groups.data.length : 0;
+    const estimatedDues = manualDues || (totalStudentsCount * averageFee);
+
+    return {
+      students: totalStudentsCount,
+      groups: (gr.data || []).length,
+      present: ap.count || 0,
+      absent: aa.count || 0,
+      income,
+      dues: estimatedDues,
+      outstanding: Math.max(0, estimatedDues - income)
+    };
+  });
+
+/** ملاحظات الطلاب */
+export const getStudentNotesAdmin = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => d as { student_id: string })
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: notes, error } = await supabaseAdmin.from("student_notes").select("*").eq("student_id", data.student_id).order("created_at", { ascending: false });
+    if (error) throw new Error(error.message);
+    return { notes: notes || [] };
+  });
+
+export const addStudentNoteAdmin = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => d as { student_id: string; title: string; body: string })
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await supabaseAdmin.from("student_notes").insert(data);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const deleteStudentNoteAdmin = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => d as { id: string })
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await supabaseAdmin.from("student_notes").delete().eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+/** تحديث حركة مالية */
+export const updatePaymentAdmin = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => d as { id: string; payload: any })
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await supabaseAdmin.from("payments").update(data.payload).eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+/** وظائف أخرى كما هي مع إضافة تحسينات بسيطة */
 export const getGroupsAdmin = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async () => {
@@ -11,37 +89,6 @@ export const getGroupsAdmin = createServerFn({ method: "GET" })
     return { groups: data || [] };
   });
 
-/** جلب ملخص إحصائيات لوحة التحكم */
-export const getDashboardStatsAdmin = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
-  .handler(async () => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const db = supabaseAdmin;
-    const today = new Date().toISOString().slice(0, 10);
-    
-    const [st, gr, ap, aa, pay] = await Promise.all([
-      db.from("students").select("id", { count: "exact" }).eq("active", true),
-      db.from("groups").select("id"),
-      db.from("attendance").select("id", { count: "exact", head: true }).eq("date", today).eq("status", "present"),
-      db.from("attendance").select("id", { count: "exact", head: true }).eq("date", today).eq("status", "absent"),
-      db.from("payments").select("amount,kind"),
-    ]);
-
-    const income = (pay.data || []).filter((p: any) => p.kind === "payment").reduce((a, b) => a + Number(b.amount || 0), 0);
-    const dues = (pay.data || []).filter((p: any) => p.kind === "charge").reduce((a, b) => a + Number(b.amount || 0), 0);
-
-    return {
-      students: st.count || 0,
-      groups: (gr.data || []).length,
-      present: ap.count || 0,
-      absent: aa.count || 0,
-      income,
-      dues,
-      outstanding: Math.max(0, dues - income)
-    };
-  });
-
-/** تسجيل الحضور */
 export const markAttendanceAdmin = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => d as { student_id: string; group_id: string; date: string; status: string })
@@ -52,7 +99,6 @@ export const markAttendanceAdmin = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-/** حفظ أو تحديث مجموعة */
 export const saveGroup = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => d as { id?: string; payload: any })
@@ -65,7 +111,6 @@ export const saveGroup = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-/** حذف مجموعة */
 export const deleteGroup = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => d as { id: string })
@@ -76,7 +121,6 @@ export const deleteGroup = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-/** تعديل بيانات الطالب (شامل المجموعة) */
 export const updateStudentAdmin = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => d as { id: string; payload: any })
@@ -88,7 +132,6 @@ export const updateStudentAdmin = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-/** الرد على سؤال طالب */
 export const answerStudentQuestionAdmin = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => d as { id: string; answer: string })
@@ -103,7 +146,6 @@ export const answerStudentQuestionAdmin = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-/** حذف سؤال طالب */
 export const deleteStudentQuestionAdmin = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => d as { id: string })
@@ -114,7 +156,6 @@ export const deleteStudentQuestionAdmin = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-/** حذف طالب */
 export const deleteStudentAdmin = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => d as { id: string })
@@ -125,7 +166,6 @@ export const deleteStudentAdmin = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-/** حفظ أو تحديث واجب */
 export const saveHomeworkAdmin = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => d as { id?: string; payload: any })
@@ -138,7 +178,6 @@ export const saveHomeworkAdmin = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-/** تقييم واجب طالب */
 export const upsertHomeworkSubmissionAdmin = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => d as { id?: string; payload: any })
@@ -149,7 +188,6 @@ export const upsertHomeworkSubmissionAdmin = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-/** حذف واجب */
 export const deleteHomeworkAdmin = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => d as { id: string })
@@ -160,7 +198,6 @@ export const deleteHomeworkAdmin = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-/** حذف اختبار تفاعلي بصلاحيات الأدمن */
 export const deleteExamAdmin = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => d as { id: string })
@@ -171,7 +208,6 @@ export const deleteExamAdmin = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-/** جلب نتائج اختبار تفصيلية للأستاذ */
 export const getExamDetailedResultsAdmin = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => d as { exam_id: string })
@@ -195,7 +231,6 @@ export const getExamDetailedResultsAdmin = createServerFn({ method: "POST" })
     return { questions: q.data || [], attempts: at.data || [], answers: ans };
   });
 
-/** حفظ اختبار كامل بأسئلته */
 export const saveExamFullAdmin = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => d as { exam: any; questions: any[] })
@@ -213,7 +248,6 @@ export const saveExamFullAdmin = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-/** تحديث حالة الاختبار */
 export const updateExamStatusAdmin = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => d as { id: string; status: string })
@@ -224,7 +258,6 @@ export const updateExamStatusAdmin = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-/** تسجيل حركة مالية */
 export const addPaymentAdmin = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => d as { student_id: string; group_id: string | null; amount: number; kind: string; month: string; paid_at: string; note: string | null })
@@ -235,7 +268,6 @@ export const addPaymentAdmin = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-/** حذف حركة مالية */
 export const deletePaymentAdmin = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => d as { id: string })
@@ -246,7 +278,6 @@ export const deletePaymentAdmin = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-/** جلب بيانات المجموعات والطلاب للحضور */
 export const getAdminDataSummary = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async () => {
@@ -260,7 +291,6 @@ export const getAdminDataSummary = createServerFn({ method: "GET" })
     return { groups: gr.data || [], students: st.data || [], attendance: at.data || [] };
   });
 
-/** جلب كافة بيانات التقارير والطلاب */
 export const getAllStudentsAdmin = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async () => {
@@ -271,7 +301,6 @@ export const getAllStudentsAdmin = createServerFn({ method: "GET" })
     return { students: st || [], groups: gr || [] };
   });
 
-/** جلب بيانات الواجبات */
 export const getHomeworkDataAdmin = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async () => {
@@ -286,7 +315,6 @@ export const getHomeworkDataAdmin = createServerFn({ method: "GET" })
     return { groups: g.data || [], items: h.data || [], students: s.data || [], subs: sb.data || [] };
   });
 
-/** جلب بيانات الاختبارات */
 export const getExamsDataAdmin = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async () => {
@@ -301,7 +329,6 @@ export const getExamsDataAdmin = createServerFn({ method: "GET" })
     return { groups: g.data || [], students: s.data || [], exams: e.data || [], attempts: at.data || [] };
   });
 
-/** جلب بيانات التقارير */
 export const getReportsDataAdmin = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => d as { from: string; to: string })
@@ -317,7 +344,6 @@ export const getReportsDataAdmin = createServerFn({ method: "POST" })
     return { students: s.data || [], groups: g.data || [], attendance: a.data || [], payments: p.data || [] };
   });
 
-/** جلب بيانات المالية */
 export const getFinanceDataAdmin = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async () => {
@@ -331,7 +357,6 @@ export const getFinanceDataAdmin = createServerFn({ method: "GET" })
     return { students: st.data || [], groups: gr.data || [], payments: py.data || [] };
   });
 
-/** جلب أسئلة الطلاب للأستاذ */
 export const getStudentQuestionsAdmin = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async () => {
@@ -341,7 +366,6 @@ export const getStudentQuestionsAdmin = createServerFn({ method: "GET" })
     return { questions: q || [], students: s || [] };
   });
 
-/** تهيئة النظام (تصفير) */
 export const factoryResetSystem = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async () => {
