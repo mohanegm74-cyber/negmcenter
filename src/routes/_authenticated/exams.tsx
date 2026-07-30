@@ -3,10 +3,9 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { Sparkles, Trash2, Send, BarChart3, X, Loader2, FileQuestion, Printer, Plus } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import { generateExam } from "@/lib/exams.functions";
 import { generateExamClassAnalysis } from "@/lib/ai-report.functions";
-import { updateExamStatusAdmin, getExamsDataAdmin, saveExamFullAdmin } from "@/lib/admin.functions";
+import { updateExamStatusAdmin, getExamsDataAdmin, saveExamFullAdmin, deleteExamAdmin, getExamDetailedResultsAdmin } from "@/lib/admin.functions";
 import { QUESTION_KINDS, DIFFICULTIES, TERMS, GRADES, answerToText } from "@/lib/exam-constants";
 import { openPrint, esc } from "@/lib/print";
 
@@ -43,7 +42,6 @@ function ExamsPage() {
   const [groups, setGroups] = useState<Group[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [exams, setExams] = useState<Exam[]>([]);
-  const [allAttempts, setAllAttempts] = useState<Attempt[]>([]);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [detail, setDetail] = useState<Exam | null>(null);
@@ -52,6 +50,7 @@ function ExamsPage() {
   const updateStatusFn = useServerFn(updateExamStatusAdmin);
   const loadFn = useServerFn(getExamsDataAdmin);
   const saveFullExamFn = useServerFn(saveExamFullAdmin);
+  const deleteExamFn = useServerFn(deleteExamAdmin);
 
   const [form, setForm] = useState({
     grade: GRADES[0], term: TERMS[0], group_id: "", subject: "", lesson: "",
@@ -66,7 +65,6 @@ function ExamsPage() {
       setGroups(res.groups as Group[]);
       setStudents(res.students as Student[]);
       setExams(res.exams as Exam[]);
-      setAllAttempts(res.attempts as Attempt[]);
     } catch (e: any) {
       toast.error("فشل تحميل بيانات الاختبارات");
     } finally {
@@ -155,9 +153,13 @@ function ExamsPage() {
 
   async function remove(ex: Exam) {
     if (!confirm(`حذف الاختبار «${ex.title}» وكل نتائجه؟`)) return;
-    const { error } = await supabase.from("exams").delete().eq("id", ex.id);
-    if (error) return toast.error(error.message);
-    toast.success("تم الحذف"); load();
+    try {
+      await deleteExamFn({ data: { id: ex.id } });
+      toast.success("تم الحذف بنجاح");
+      load();
+    } catch (err: any) {
+      toast.error(err.message || "فشل الحذف");
+    }
   }
 
   if (loading) return <div className="flex h-64 items-center justify-center text-muted-foreground"><Loader2 className="h-8 w-8 animate-spin" /></div>;
@@ -284,22 +286,21 @@ function ExamDetail({ exam, students, onClose }: { exam: Exam; students: Student
   const [view, setView] = useState<"students" | "questions" | "ai" | "bank">("students");
   const [aiText, setAiText] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
+  const [loadingResults, setLoadingResults] = useState(true);
+  
   const genAnalysis = useServerFn(generateExamClassAnalysis);
+  const loadDetailedResults = useServerFn(getExamDetailedResultsAdmin);
 
   useEffect(() => {
-    (async () => {
-      const [q, a] = await Promise.all([
-        supabase.from("exam_questions").select("*").eq("exam_id", exam.id).order("position"),
-        supabase.from("exam_attempts").select("*").eq("exam_id", exam.id),
-      ]);
-      setQuestions((q.data as Q[]) || []);
-      const at = (a.data as Attempt[]) || [];
-      setAttempts(at);
-      if (at.length) {
-        const { data: ans } = await supabase.from("exam_answers").select("id,attempt_id,question_id,is_correct").in("attempt_id", at.map((x) => x.id));
-        setAnswers((ans as Answer[]) || []);
-      }
-    })();
+    setLoadingResults(true);
+    loadDetailedResults({ data: { exam_id: exam.id } })
+      .then(res => {
+        setQuestions(res.questions as Q[]);
+        setAttempts(res.attempts as Attempt[]);
+        setAnswers(res.answers as Answer[]);
+      })
+      .catch(e => toast.error("تعذر جلب النتائج"))
+      .finally(() => setLoadingResults(false));
   }, [exam.id]);
 
   async function runAiAnalysis() {
@@ -359,95 +360,99 @@ function ExamDetail({ exam, students, onClose }: { exam: Exam; students: Student
           <button onClick={onClose} className="rounded-lg p-1 hover:bg-accent"><X className="h-5 w-5" /></button>
         </div>
 
-        <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <Kpi label="لم يدخل" value={eligible.length - attempts.length} />
-          <Kpi label="بدأ" value={attempts.filter((a) => a.status === "in_progress").length} />
-          <Kpi label="أنهى" value={done.length} />
-          <Kpi label="متوسط النتيجة" value={`${avg}%`} />
-        </div>
+        {loadingResults ? <div className="flex h-32 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div> : (
+          <>
+            <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <Kpi label="لم يدخل" value={eligible.length - attempts.length} />
+              <Kpi label="بدأ" value={attempts.filter((a) => a.status === "in_progress").length} />
+              <Kpi label="أنهى" value={done.length} />
+              <Kpi label="متوسط النتيجة" value={`${avg}%`} />
+            </div>
 
-        <div className="mb-3 flex gap-1.5 overflow-x-auto pb-1">
-          <TabBtn active={view === "students"} onClick={() => setView("students")} label="الطلاب والترتيب" />
-          <TabBtn active={view === "questions"} onClick={() => setView("questions")} label="تحليل الأسئلة" />
-          <TabBtn active={view === "ai"} onClick={() => setView("ai")} label="التحليل الذكي (AI)" icon={<Sparkles className="h-3.5 w-3.5" />} />
-          <TabBtn active={view === "bank"} onClick={() => setView("bank")} label="بنك الأسئلة" />
-        </div>
+            <div className="mb-3 flex gap-1.5 overflow-x-auto pb-1">
+              <TabBtn active={view === "students"} onClick={() => setView("students")} label="الطلاب والترتيب" />
+              <TabBtn active={view === "questions"} onClick={() => setView("questions")} label="تحليل الأسئلة" />
+              <TabBtn active={view === "ai"} onClick={() => setView("ai")} label="التحليل الذكي (AI)" icon={<Sparkles className="h-3.5 w-3.5" />} />
+              <TabBtn active={view === "bank"} onClick={() => setView("bank")} label="بنك الأسئلة" />
+            </div>
 
-        {view === "ai" && (
-          <div className="space-y-4">
-            {!aiText && (
-              <div className="text-center py-8">
-                <Sparkles className="mx-auto h-12 w-12 text-gold mb-3 opacity-20" />
-                <p className="text-sm text-muted-foreground mb-4">احصل على تحليل تربوي عميق لأداء مجموعتك في هذا الاختبار.</p>
-                <button onClick={runAiAnalysis} disabled={aiLoading} className="inline-flex items-center gap-2 rounded-xl bg-gold px-6 py-2.5 text-sm font-black text-gold-foreground">
-                  {aiLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />} بدء التحليل الذكي
-                </button>
+            {view === "ai" && (
+              <div className="space-y-4">
+                {!aiText && (
+                  <div className="text-center py-8">
+                    <Sparkles className="mx-auto h-12 w-12 text-gold mb-3 opacity-20" />
+                    <p className="text-sm text-muted-foreground mb-4">احصل على تحليل تربوي عميق لأداء مجموعتك في هذا الاختبار.</p>
+                    <button onClick={runAiAnalysis} disabled={aiLoading} className="inline-flex items-center gap-2 rounded-xl bg-gold px-6 py-2.5 text-sm font-black text-gold-foreground">
+                      {aiLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />} بدء التحليل الذكي
+                    </button>
+                  </div>
+                )}
+                {aiText && (
+                  <div className="rounded-2xl bg-muted/10 p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <h4 className="font-black text-primary flex items-center gap-2"><Sparkles className="h-4 w-4 text-gold" /> نتائج التحليل التربوي</h4>
+                      <button onClick={() => {
+                        const w = window.open("", "_blank"); if (!w) return;
+                        w.document.write(`<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/><title>تحليل الاختبار</title><style>body{font-family:system-ui;padding:40px;line-height:1.8}h1{color:#1e3a8a}</style></head><body><h1>تحليل الاختبار: ${exam.title}</h1><div style="white-space:pre-wrap">${aiText}</div></body></html>`);
+                        w.document.close();
+                      }} className="text-xs font-bold text-primary underline">طباعة التحليل</button>
+                    </div>
+                    <div className="whitespace-pre-wrap text-sm leading-relaxed">{aiText}</div>
+                  </div>
+                )}
               </div>
             )}
-            {aiText && (
-              <div className="rounded-2xl bg-muted/10 p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h4 className="font-black text-primary flex items-center gap-2"><Sparkles className="h-4 w-4 text-gold" /> نتائج التحليل التربوي</h4>
-                  <button onClick={() => {
-                    const w = window.open("", "_blank"); if (!w) return;
-                    w.document.write(`<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/><title>تحليل الاختبار</title><style>body{font-family:system-ui;padding:40px;line-height:1.8}h1{color:#1e3a8a}</style></head><body><h1>تحليل الاختبار: ${exam.title}</h1><div style="white-space:pre-wrap">${aiText}</div></body></html>`);
-                    w.document.close();
-                  }} className="text-xs font-bold text-primary underline">طباعة التحليل</button>
-                </div>
-                <div className="whitespace-pre-wrap text-sm leading-relaxed">{aiText}</div>
+
+            {view === "students" && (
+              <div className="overflow-x-auto rounded-xl border">
+                <table className="w-full text-right text-sm">
+                  <thead className="bg-muted/50 text-xs text-muted-foreground"><tr>
+                    <th className="p-2">#</th><th className="p-2">الطالب</th><th className="p-2">الكود</th><th className="p-2">الحالة</th>
+                    <th className="p-2">الدرجة</th><th className="p-2">النسبة</th><th className="p-2">الزمن</th>
+                  </tr></thead>
+                  <tbody>
+                    {eligible.map((s) => {
+                      const mine = attempts.filter((a) => a.student_id === s.id);
+                      const best = mine.sort((a, b) => Number(b.percentage) - Number(a.percentage))[0];
+                      const rank = best ? done.filter((d) => Number(d.percentage) > Number(best.percentage)).length + 1 : "—";
+                      return (
+                        <tr key={s.id} className="border-t">
+                          <td className="p-2">{rank}</td>
+                          <td className="p-2 font-semibold">{s.full_name}</td>
+                          <td className="p-2 font-mono text-xs">{s.code}</td>
+                          <td className="p-2">{!best ? <span className="text-muted-foreground">لم يدخل</span> : best.status === "submitted" ? <span className="text-emerald-700">أنهى</span> : <span className="text-amber-700">جارٍ الحل</span>}</td>
+                          <td className="p-2">{best ? `${Number(best.score)} / ${Number(best.max_score)}` : "—"}</td>
+                          <td className="p-2 font-bold">{best ? `${Number(best.percentage)}%` : "—"}</td>
+                          <td className="p-2">{best ? `${Math.round(best.time_spent_seconds / 60)} د` : "—"}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             )}
-          </div>
-        )}
 
-        {view === "students" && (
-          <div className="overflow-x-auto rounded-xl border">
-            <table className="w-full text-right text-sm">
-              <thead className="bg-muted/50 text-xs text-muted-foreground"><tr>
-                <th className="p-2">#</th><th className="p-2">الطالب</th><th className="p-2">الكود</th><th className="p-2">الحالة</th>
-                <th className="p-2">الدرجة</th><th className="p-2">النسبة</th><th className="p-2">الزمن</th>
-              </tr></thead>
-              <tbody>
-                {eligible.map((s) => {
-                  const mine = attempts.filter((a) => a.student_id === s.id);
-                  const best = mine.sort((a, b) => Number(b.percentage) - Number(a.percentage))[0];
-                  const rank = best ? done.filter((d) => Number(d.percentage) > Number(best.percentage)).length + 1 : "—";
-                  return (
-                    <tr key={s.id} className="border-t">
-                      <td className="p-2">{rank}</td>
-                      <td className="p-2 font-semibold">{s.full_name}</td>
-                      <td className="p-2 font-mono text-xs">{s.code}</td>
-                      <td className="p-2">{!best ? <span className="text-muted-foreground">لم يدخل</span> : best.status === "submitted" ? <span className="text-emerald-700">أنهى</span> : <span className="text-amber-700">جارٍ الحل</span>}</td>
-                      <td className="p-2">{best ? `${Number(best.score)} / ${Number(best.max_score)}` : "—"}</td>
-                      <td className="p-2 font-bold">{best ? `${Number(best.percentage)}%` : "—"}</td>
-                      <td className="p-2">{best ? `${Math.round(best.time_spent_seconds / 60)} د` : "—"}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {view === "questions" && (
-          <div className="overflow-x-auto rounded-xl border">
-            <table className="w-full text-right text-sm">
-              <thead className="bg-muted/50 text-xs text-muted-foreground"><tr>
-                <th className="p-2">#</th><th className="p-2">السؤال</th><th className="p-2">أجاب</th><th className="p-2">نسبة الصواب</th><th className="p-2">التمييز</th>
-              </tr></thead>
-              <tbody>
-                {qStats.map((s) => (
-                  <tr key={s.q.id} className="border-t">
-                    <td className="p-2">{s.q.position}</td>
-                    <td className="p-2 max-w-md">{s.q.prompt}</td>
-                    <td className="p-2">{s.answered}</td>
-                    <td className="p-2 font-bold text-primary">{s.answered ? `${s.ease}%` : "—"}</td>
-                    <td className="p-2">{s.answered ? `${s.disc}%` : "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+            {view === "questions" && (
+              <div className="overflow-x-auto rounded-xl border">
+                <table className="w-full text-right text-sm">
+                  <thead className="bg-muted/50 text-xs text-muted-foreground"><tr>
+                    <th className="p-2">#</th><th className="p-2">السؤال</th><th className="p-2">أجاب</th><th className="p-2">نسبة الصواب</th><th className="p-2">التمييز</th>
+                  </tr></thead>
+                  <tbody>
+                    {qStats.map((s) => (
+                      <tr key={s.q.id} className="border-t">
+                        <td className="p-2">{s.q.position}</td>
+                        <td className="p-2 max-w-md">{s.q.prompt}</td>
+                        <td className="p-2">{s.answered}</td>
+                        <td className="p-2 font-bold text-primary">{s.answered ? `${s.ease}%` : "—"}</td>
+                        <td className="p-2">{s.answered ? `${s.disc}%` : "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

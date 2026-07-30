@@ -160,6 +160,41 @@ export const deleteHomeworkAdmin = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+/** حذف اختبار تفاعلي بصلاحيات الأدمن */
+export const deleteExamAdmin = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => d as { id: string })
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await supabaseAdmin.from("exams").delete().eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+/** جلب نتائج اختبار تفصيلية للأستاذ */
+export const getExamDetailedResultsAdmin = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => d as { exam_id: string })
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const db = supabaseAdmin;
+    
+    const [q, at] = await Promise.all([
+      db.from("exam_questions").select("*").eq("exam_id", data.exam_id).order("position"),
+      db.from("exam_attempts").select("*").eq("exam_id", data.exam_id),
+    ]);
+
+    if (q.error || at.error) throw new Error(q.error?.message || at.error?.message);
+
+    let ans: any[] = [];
+    if (at.data && at.data.length > 0) {
+      const { data: ansData, error: ansError } = await db.from("exam_answers").select("id,attempt_id,question_id,is_correct").in("attempt_id", at.data.map(x => x.id));
+      if (!ansError) ans = ansData || [];
+    }
+
+    return { questions: q.data || [], attempts: at.data || [], answers: ans };
+  });
+
 /** حفظ اختبار كامل بأسئلته */
 export const saveExamFullAdmin = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
