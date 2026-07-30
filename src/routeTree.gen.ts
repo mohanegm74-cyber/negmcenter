@@ -25,6 +25,7 @@ import { Route as AuthenticatedHomeworkRouteImport } from './routes/_authenticat
 import { Route as AuthenticatedQuestionsRouteImport } from './routes/_authenticated/questions'
 import { Route as AuthenticatedReportsRouteImport } from './routes/_authenticated/reports'
 import { Route as AuthenticatedScanRouteImport } from './routes/_authenticated/scan'
+import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedStudentsRouteImport } from './routes/_authenticated/students'
 import { Route as StudentPortalRouteImport } from './routes/student.portal'
 import { Route as StudentRegisterRouteImport } from './routes/student.register'
@@ -109,6 +110,11 @@ const AuthenticatedScanRoute = AuthenticatedScanRouteImport.update({
   path: '/scan',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedStudentsRoute = AuthenticatedStudentsRouteImport.update({
   id: '/students',
   path: '/students',
@@ -141,6 +147,7 @@ export interface FileRoutesByFullPath {
   '/questions': typeof AuthenticatedQuestionsRoute
   '/reports': typeof AuthenticatedReportsRoute
   '/scan': typeof AuthenticatedScanRoute
+  '/settings': typeof AuthenticatedSettingsRoute
   '/students': typeof AuthenticatedStudentsRoute
   '/student/portal': typeof StudentPortalRoute
   '/student/register': typeof StudentRegisterRoute
@@ -161,6 +168,7 @@ export interface FileRoutesByTo {
   '/questions': typeof AuthenticatedQuestionsRoute
   '/reports': typeof AuthenticatedReportsRoute
   '/scan': typeof AuthenticatedScanRoute
+  '/settings': typeof AuthenticatedSettingsRoute
   '/students': typeof AuthenticatedStudentsRoute
   '/student/portal': typeof StudentPortalRoute
   '/student/register': typeof StudentRegisterRoute
@@ -183,6 +191,7 @@ export interface FileRoutesById {
   '/_authenticated/questions': typeof AuthenticatedQuestionsRoute
   '/_authenticated/reports': typeof AuthenticatedReportsRoute
   '/_authenticated/scan': typeof AuthenticatedScanRoute
+  '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/students': typeof AuthenticatedStudentsRoute
   '/student/portal': typeof StudentPortalRoute
   '/student/register': typeof StudentRegisterRoute
@@ -205,6 +214,7 @@ export interface FileRouteTypes {
     | '/questions'
     | '/reports'
     | '/scan'
+    | '/settings'
     | '/students'
     | '/student/portal'
     | '/student/register'
@@ -225,6 +235,7 @@ export interface FileRouteTypes {
     | '/questions'
     | '/reports'
     | '/scan'
+    | '/settings'
     | '/students'
     | '/student/portal'
     | '/student/register'
@@ -246,6 +257,7 @@ export interface FileRouteTypes {
     | '/_authenticated/questions'
     | '/_authenticated/reports'
     | '/_authenticated/scan'
+    | '/_authenticated/settings'
     | '/_authenticated/students'
     | '/student/portal'
     | '/student/register'
@@ -373,6 +385,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedScanRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/settings': {
+      id: '/_authenticated/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof AuthenticatedSettingsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/students': {
       id: '/_authenticated/students'
       path: '/students'
@@ -411,6 +430,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedQuestionsRoute: typeof AuthenticatedQuestionsRoute
   AuthenticatedReportsRoute: typeof AuthenticatedReportsRoute
   AuthenticatedScanRoute: typeof AuthenticatedScanRoute
+  AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedStudentsRoute: typeof AuthenticatedStudentsRoute
 }
 
@@ -428,6 +448,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedQuestionsRoute: AuthenticatedQuestionsRoute,
   AuthenticatedReportsRoute: AuthenticatedReportsRoute,
   AuthenticatedScanRoute: AuthenticatedScanRoute,
+  AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedStudentsRoute: AuthenticatedStudentsRoute,
 }
 

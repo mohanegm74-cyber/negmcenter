@@ -36,26 +36,40 @@ function AuthPage() {
 
     setLoading(true);
     try {
-      // محاولة تسجيل الدخول بالبريد الداخلي
+      // محاولة تسجيل الدخول
       const { error } = await supabase.auth.signInWithPassword({ 
         email: ADMIN_EMAIL, 
         password 
       });
       
       if (error) {
-        // إذا لم يكن الحساب موجوداً (أول مرة)، نقوم بإنشائه تلقائياً بكلمة المرور الافتراضية
-        if (error.message.includes("Invalid login credentials") && password === "123456") {
+        // إذا لم يكن الحساب موجوداً (أول مرة)، نقوم بإنشائه تلقائياً بكلمة مرور مقبولة أمنياً
+        if (error.message.includes("Invalid login credentials") && password === "Admin@123456") {
            const { error: signUpError } = await supabase.auth.signUp({ 
              email: ADMIN_EMAIL, 
-             password: "123456" 
+             password: "Admin@123456" 
            });
-           if (signUpError) throw signUpError;
+           
+           if (signUpError) {
+             if (signUpError.message.includes("weak")) {
+                toast.error("كلمة المرور ضعيفة جداً. يرجى استخدام كلمة مرور تحتوي على حروف وأرقام (مثل Admin@123456)");
+                return;
+             }
+             throw signUpError;
+           }
+           
            await supabase.rpc("claim_teacher_role");
-           toast.success("تم تهيئة نظام الإدارة بنجاح");
+           toast.success("تم تهيئة نظام الإدارة بنجاح بكلمة المرور الافتراضية");
            navigate({ to: "/dashboard" });
            return;
         }
-        throw error;
+        
+        if (error.message.includes("weak")) {
+          toast.error("كلمة المرور المدخلة ضعيفة. جرب كلمة مرور أقوى.");
+        } else {
+          toast.error("بيانات الدخول غير صحيحة. للدخول لأول مرة استخدم Admin@123456");
+        }
+        return;
       }
 
       await supabase.rpc("claim_teacher_role");
@@ -104,7 +118,7 @@ function AuthPage() {
                 required 
                 value={password} 
                 onChange={(e) => setPassword(e.target.value)} 
-                placeholder="••••••••"
+                placeholder="Admin@123456"
                 className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all font-mono" 
               />
             </div>
@@ -125,7 +139,13 @@ function AuthPage() {
             </button>
           </form>
           
-          <div className="mt-8 text-center">
+          <div className="mt-4 p-4 bg-blue-50 rounded-xl border border-blue-100">
+             <p className="text-[10px] text-blue-800 font-bold leading-relaxed">
+               * للدخول أول مرة، استخدم اسم المستخدم <span className="underline">admin</span> وكلمة المرور <span className="underline">Admin@123456</span>.
+             </p>
+          </div>
+
+          <div className="mt-6 text-center">
             <Link to="/" className="text-sm font-bold text-primary hover:underline">العودة للموقع الرئيسي</Link>
           </div>
         </div>
