@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
-import { Sparkles, Trash2, Send, BarChart3, X, Loader2, FileQuestion, Printer, Plus } from "lucide-react";
+import { Sparkles, Trash2, Send, BarChart3, X, Loader2, FileQuestion, Printer, Plus, Save, Edit3, CheckCircle2 } from "lucide-react";
 import { generateExam } from "@/lib/exams.functions";
 import { generateExamClassAnalysis } from "@/lib/ai-report.functions";
 import { updateExamStatusAdmin, getExamsDataAdmin, saveExamFullAdmin, deleteExamAdmin, getExamDetailedResultsAdmin } from "@/lib/admin.functions";
@@ -27,7 +27,7 @@ type Exam = {
   adaptive: boolean; status: string; sources: any; created_at: string;
 };
 type Q = {
-  id: string; exam_id: string; position: number; kind: string; prompt: string; passage: string | null;
+  id?: string; exam_id?: string; position: number; kind: string; prompt: string; passage: string | null;
   options: any; correct_answer: any; rationale: string | null; distractor_explanations: any;
   skill: string | null; learning_outcome: string | null; difficulty: string; expected_seconds: number; score: number;
 };
@@ -45,6 +45,9 @@ function ExamsPage() {
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [detail, setDetail] = useState<Exam | null>(null);
+  
+  // حالات المعاينة والتعديل
+  const [previewExam, setPreviewExam] = useState<{ exam: any; questions: Q[] } | null>(null);
   
   const gen = useServerFn(generateExam);
   const updateStatusFn = useServerFn(updateExamStatusAdmin);
@@ -77,11 +80,11 @@ function ExamsPage() {
     setKinds((prev) => (prev.includes(k) ? prev.filter((x) => x !== k) : [...prev, k]));
   }
 
-  async function create() {
+  async function startBuild() {
     if (!form.grade.trim() || !form.lesson.trim()) { toast.error("أدخل الصف والدرس على الأقل"); return; }
     if (kinds.length === 0) { toast.error("اختر نوع أسئلة واحداً على الأقل"); return; }
     setBusy(true);
-    const t = toast.loading("جاري بناء الاختبار بالذكاء الاصطناعي…");
+    const t = toast.loading("جاري جلب الأسئلة من منصات الوزارة والكتب الخارجية…");
     try {
       const res = await gen({
         data: {
@@ -91,16 +94,9 @@ function ExamsPage() {
           difficulty: form.difficulty, kinds,
         },
       });
+      
       const examTitle = `${form.subject || "اختبار"} — ${form.lesson} (${form.grade})`;
       
-      const examPayload = {
-        title: examTitle, grade: form.grade, term: form.term, group_id: form.group_id || null,
-        subject: form.subject || null, unit: null, lesson: form.lesson,
-        question_count: res.questions.length, duration_minutes: Number(form.duration_minutes),
-        total_score: Number(form.total_score), difficulty: form.difficulty,
-        question_types: kinds, adaptive: form.adaptive, status: "draft", sources: res.sources,
-      };
-
       const questionsPayload = res.questions.map((q, i) => ({
         position: i + 1, kind: q.kind || "اختيار من متعدد",
         prompt: q.prompt, passage: q.passage || null,
@@ -111,33 +107,34 @@ function ExamsPage() {
         score: Number(q.score) || Number(form.total_score) / res.questions.length,
       }));
 
-      await saveFullExamFn({ data: { exam: examPayload, questions: questionsPayload } });
-      toast.success(`تم إنشاء الاختبار بنجاح`, { id: t });
-      load();
-    } catch (err: any) {
-      toast.error(err?.message || "فشل إنشاء الاختبار", { id: t });
-    } finally { setBusy(false); toast.dismiss(t); }
-  }
-
-  async function createManual() {
-    if (!form.lesson.trim()) { toast.error("أدخل اسم الدرس"); return; }
-    const examTitle = `${form.subject || "اختبار"} — ${form.lesson} (${form.grade})`;
-    
-    try {
-      await saveFullExamFn({ data: { 
+      setPreviewExam({
         exam: {
           title: examTitle, grade: form.grade, term: form.term, group_id: form.group_id || null,
           subject: form.subject || null, unit: null, lesson: form.lesson,
-          question_count: 0, duration_minutes: Number(form.duration_minutes),
+          question_count: questionsPayload.length, duration_minutes: Number(form.duration_minutes),
           total_score: Number(form.total_score), difficulty: form.difficulty,
-          question_types: kinds, adaptive: form.adaptive, status: "draft", sources: [],
-        }, 
-        questions: [] 
-      } });
-      toast.success("تم إنشاء اختبار يدوي");
+          question_types: kinds, adaptive: form.adaptive, status: "draft", sources: res.sources,
+        },
+        questions: questionsPayload
+      });
+      toast.success(`تم جلب ${questionsPayload.length} سؤال بنجاح. راجعها الآن.`, { id: t });
+    } catch (err: any) {
+      toast.error(err?.message || "فشل توليد الأسئلة", { id: t });
+    } finally { setBusy(false); }
+  }
+
+  async function finalizeSave() {
+    if (!previewExam) return;
+    setBusy(true);
+    try {
+      await saveFullExamFn({ data: { exam: previewExam.exam, questions: previewExam.questions } });
+      toast.success("تم حفظ الاختبار بنجاح في المسودات");
+      setPreviewExam(null);
       load();
     } catch (err: any) {
       toast.error(err.message);
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -172,7 +169,7 @@ function ExamsPage() {
       </div>
 
       <section className="rounded-2xl border bg-white p-5 shadow-sm">
-        <h2 className="mb-4 flex items-center gap-2 text-sm font-black text-primary"><Sparkles className="h-4 w-4" /> إنشاء اختبار جديد بالذكاء الاصطناعي</h2>
+        <h2 className="mb-4 flex items-center gap-2 text-sm font-black text-primary"><Sparkles className="h-4 w-4" /> توليد اختبار من الكتب والمنصات المصرية</h2>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Field label="الصف">
             <select className={inp} value={form.grade} onChange={(e) => setForm({ ...form, grade: e.target.value })}>
@@ -194,7 +191,7 @@ function ExamsPage() {
           <Field label="الدرس"><input className={inp} value={form.lesson} onChange={(e) => setForm({ ...form, lesson: e.target.value })} /></Field>
           <Field label="عدد الأسئلة"><input type="number" min={1} max={40} className={inp} value={form.question_count} onChange={(e) => setForm({ ...form, question_count: +e.target.value })} /></Field>
           <Field label="زمن الاختبار (دقيقة)"><input type="number" min={1} className={inp} value={form.duration_minutes} onChange={(e) => setForm({ ...form, duration_minutes: +e.target.value })} /></Field>
-          <Field label="درجة الاختبار"><input type="number" min={1} className={inp} value={form.total_score} onChange={(e) => setForm({ ...form, total_score: +e.target.value })} /></Field>
+          <Field label="درجة الاختبار الكلية"><input type="number" min={1} className={inp} value={form.total_score} onChange={(e) => setForm({ ...form, total_score: +e.target.value })} /></Field>
           <Field label="مستوى الصعوبة">
             <select className={inp} value={form.difficulty} onChange={(e) => setForm({ ...form, difficulty: e.target.value })}>
               {DIFFICULTIES.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
@@ -207,7 +204,7 @@ function ExamsPage() {
         </div>
 
         <div className="mt-4">
-          <div className="mb-2 text-xs font-bold text-muted-foreground">أنواع الأسئلة</div>
+          <div className="mb-2 text-xs font-bold text-muted-foreground">أنواع الأسئلة المطلوبة</div>
           <div className="flex flex-wrap gap-1.5">
             {QUESTION_KINDS.map((k) => (
               <button key={k} type="button" onClick={() => toggleKind(k)}
@@ -218,18 +215,126 @@ function ExamsPage() {
           </div>
         </div>
 
-        <button onClick={create} disabled={busy}
-          className="mt-5 inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-black text-primary-foreground shadow disabled:opacity-60">
-          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />} بناء الاختبار بالذكاء الاصطناعي
-        </button>
-        <button onClick={createManual} disabled={busy}
-          className="mt-5 mr-2 inline-flex items-center gap-2 rounded-xl border border-primary px-5 py-2.5 text-sm font-black text-primary disabled:opacity-60">
-          <Plus className="h-4 w-4" /> إنشاء اختبار يدوي
+        <button onClick={startBuild} disabled={busy}
+          className="mt-5 inline-flex items-center gap-2 rounded-xl bg-primary px-6 py-3 text-sm font-black text-primary-foreground shadow-lg hover:opacity-90 disabled:opacity-60">
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />} جلب الأسئلة وتحليلها
         </button>
       </section>
 
+      {previewExam && (
+        <section className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4">
+          <div className="w-full max-w-4xl rounded-2xl bg-white p-6 shadow-2xl">
+            <div className="mb-4 flex items-center justify-between border-b pb-4">
+              <div>
+                <h2 className="text-xl font-black text-primary">معاينة وتعديل الاختبار</h2>
+                <p className="text-xs text-muted-foreground">يمكنك تعديل الأسئلة أو حذفها قبل الحفظ النهائي.</p>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={finalizeSave} disabled={busy} className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-black text-white shadow hover:bg-emerald-700">
+                  <CheckCircle2 className="h-4 w-4" /> اعتماد وحفظ الاختبار
+                </button>
+                <button onClick={() => setPreviewExam(null)} className="rounded-lg bg-muted px-4 py-2 text-sm font-bold">إلغاء</button>
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field label="عنوان الاختبار">
+                  <input className={inp} value={previewExam.exam.title} onChange={e => setPreviewExam({ ...previewExam, exam: { ...previewExam.exam, title: e.target.value } })} />
+                </Field>
+                <Field label="الدرجة الكلية">
+                   <input type="number" className={inp} value={previewExam.exam.total_score} readOnly />
+                </Field>
+              </div>
+
+              <div className="space-y-4">
+                <h3 className="font-bold border-r-4 border-primary pr-3">مراجعة الأسئلة ({previewExam.questions.length})</h3>
+                {previewExam.questions.map((q, idx) => (
+                  <div key={idx} className="group relative rounded-xl border-2 bg-muted/5 p-4 transition-all hover:border-primary/30">
+                    <button onClick={() => {
+                      const n = [...previewExam.questions]; n.splice(idx, 1);
+                      setPreviewExam({ ...previewExam, questions: n });
+                    }} className="absolute -left-2 -top-2 rounded-full bg-destructive p-1.5 text-white shadow-lg opacity-0 transition-opacity group-hover:opacity-100">
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                    
+                    <div className="grid gap-3">
+                      <div className="flex items-center gap-2">
+                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-white">{idx+1}</span>
+                        <input className="flex-1 rounded-lg border-0 bg-transparent text-sm font-bold focus:ring-0" 
+                               value={q.prompt} 
+                               onChange={e => {
+                                 const n = [...previewExam.questions]; n[idx].prompt = e.target.value;
+                                 setPreviewExam({ ...previewExam, questions: n });
+                               }} />
+                        <input type="number" className="w-16 rounded-lg border bg-white p-1 text-center text-xs font-bold" 
+                               value={q.score}
+                               onChange={e => {
+                                 const n = [...previewExam.questions]; n[idx].score = Number(e.target.value);
+                                 setPreviewExam({ ...previewExam, questions: n });
+                               }} />
+                        <span className="text-[10px] text-muted-foreground">درجة</span>
+                      </div>
+
+                      {q.passage && (
+                        <textarea className="w-full rounded-lg border bg-white p-2 text-xs italic" rows={3}
+                                  value={q.passage}
+                                  onChange={e => {
+                                    const n = [...previewExam.questions]; n[idx].passage = e.target.value;
+                                    setPreviewExam({ ...previewExam, questions: n });
+                                  }} />
+                      )}
+
+                      {Array.isArray(q.options) && q.options.length > 0 && (
+                        <div className="grid grid-cols-2 gap-2">
+                          {q.options.map((opt, oIdx) => (
+                            <div key={oIdx} className="flex items-center gap-2">
+                              <input type="radio" checked={q.correct_answer === opt} readOnly className="text-primary" />
+                              <input className="flex-1 rounded-lg border bg-white p-1.5 text-xs" 
+                                     value={opt}
+                                     onChange={e => {
+                                       const n = [...previewExam.questions];
+                                       n[idx].options[oIdx] = e.target.value;
+                                       setPreviewExam({ ...previewExam, questions: n });
+                                     }} />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      <div className="flex items-center gap-4 border-t pt-2 mt-1">
+                         <div className="text-[10px]"><b className="text-primary">النوع:</b> {q.kind}</div>
+                         <div className="text-[10px]"><b className="text-primary">المهارة:</b> {q.skill || "—"}</div>
+                         <div className="text-[10px]"><b className="text-primary">الصعوبة:</b> {q.difficulty || "—"}</div>
+                         <div className="mr-auto">
+                            <label className="text-[10px] font-bold ml-2">الإجابة الصحيحة:</label>
+                            <input className="rounded border bg-white px-2 py-0.5 text-[10px] font-bold text-secondary" 
+                                   value={q.correct_answer || ""}
+                                   onChange={e => {
+                                     const n = [...previewExam.questions]; n[idx].correct_answer = e.target.value;
+                                     setPreviewExam({ ...previewExam, questions: n });
+                                   }} />
+                         </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                
+                <button onClick={() => {
+                  const n = [...previewExam.questions];
+                  n.push({ position: n.length+1, kind: "اختيار من متعدد", prompt: "اكتب السؤال هنا...", options: ["","","",""], correct_answer: "", rationale: null, distractor_explanations: [], skill: "تطبيق", learning_outcome: null, difficulty: "medium", expected_seconds: 60, score: 1, passage: null });
+                  setPreviewExam({ ...previewExam, questions: n });
+                }} className="w-full rounded-xl border-2 border-dashed p-3 text-sm font-bold text-muted-foreground hover:bg-muted hover:text-primary">
+                  + إضافة سؤال يدوي للاختبار
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
       <section className="rounded-2xl border bg-white shadow-sm">
-        <div className="border-b px-5 py-3 text-sm font-black">الاختبارات ({exams.length})</div>
+        <div className="border-b px-5 py-3 text-sm font-black">بنك الاختبارات المحفوظة ({exams.length})</div>
         <div className="overflow-x-auto">
           <table className="w-full text-right text-sm">
             <thead className="bg-muted/50 text-xs text-muted-foreground">
@@ -257,9 +362,8 @@ function ExamsPage() {
                   <td className="p-3">
                     <div className="flex flex-wrap gap-1.5">
                       {ex.status !== "published" && <button onClick={() => setStatus(ex, "published")} className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-bold text-white"><Send className="h-3 w-3" /> نشر</button>}
-                      {ex.status === "published" && <button onClick={() => setStatus(ex, "closed")} className="rounded-lg bg-slate-600 px-2.5 py-1 text-xs font-bold text-white">إغلاق</button>}
-                      <button onClick={() => setDetail(ex)} className="inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-bold"><BarChart3 className="h-3 w-3" /> النتائج والتحليل</button>
-                      <button onClick={() => remove(ex)} className="rounded-lg bg-destructive/10 px-2 py-1 text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
+                      <button onClick={() => setDetail(ex)} className="inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-bold"><BarChart3 className="h-3 w-3" /> النتائج</button>
+                      <button onClick={() => remove(ex)} className="rounded-lg bg-destructive/10 px-2 py-1 text-destructive hover:bg-destructive hover:text-white"><Trash2 className="h-3.5 w-3.5" /></button>
                     </div>
                   </td>
                 </tr>
