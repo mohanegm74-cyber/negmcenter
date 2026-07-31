@@ -4,6 +4,43 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 /** كلمة المرور الافتراضية القوية للسيطرة */
 const DEFAULT_MASTER_PASS = "Negm74!Center#Secure$2024";
 
+/** التحقق من وجود مسئول مسجّل في النظام */
+export const checkAdminSetup = createServerFn({ method: "GET" }).handler(async () => {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { count } = await supabaseAdmin
+    .from("user_roles")
+    .select("*", { count: "exact", head: true })
+    .in("role", ["teacher", "admin"]);
+  return { hasAdmin: (count ?? 0) > 0 };
+});
+
+/**
+ * تعيين صلاحية المسئول لمستخدم موجود — يُستدعى بعد signUp من الـ client.
+ * يرفض الطلب إذا كان هناك مسئول مسجّل بالفعل (حماية server-side).
+ */
+export const assignFirstAdminRole = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) => d as { userId: string })
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    // فحص مزدوج: لا يُسمح إذا كان هناك مسئول
+    const { count } = await supabaseAdmin
+      .from("user_roles")
+      .select("*", { count: "exact", head: true })
+      .in("role", ["teacher", "admin"]);
+
+    if ((count ?? 0) > 0) {
+      throw new Error("يوجد مسئول مسجّل بالفعل. لا يمكن إنشاء حساب جديد.");
+    }
+
+    if (!data.userId) throw new Error("معرّف المستخدم غير صحيح.");
+
+    await supabaseAdmin.from("user_roles").delete().eq("user_id", data.userId);
+    await supabaseAdmin.from("user_roles").insert({ user_id: data.userId, role: "teacher" });
+
+    return { success: true };
+  });
+
 /** وظيفة فرض السيطرة الشاملة (تنظيف رتب + إعادة تعيين كلمة مرور) */
 export const forceSetupAdminMaster = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => d as { email: string; secret: string })
