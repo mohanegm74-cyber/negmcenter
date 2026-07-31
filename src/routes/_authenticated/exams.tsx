@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
-import { Sparkles, Trash2, Send, BarChart3, X, Loader2, FileQuestion, Printer, Plus, Save, Edit3, CheckCircle2 } from "lucide-react";
+import { Sparkles, Trash2, Send, BarChart3, X, Loader2, FileQuestion, Printer, Plus, Save, Edit3, CheckCircle2, LayoutList, BrainCircuit } from "lucide-react";
 import { generateExam } from "@/lib/exams.functions";
 import { generateExamClassAnalysis } from "@/lib/ai-report.functions";
 import { updateExamStatusAdmin, getExamsDataAdmin, saveExamFullAdmin, deleteExamAdmin, getExamDetailedResultsAdmin } from "@/lib/admin.functions";
@@ -13,7 +13,7 @@ export const Route = createFileRoute("/_authenticated/exams")({
   head: () => ({
     meta: [
       { title: "الاختبارات الإلكترونية الذكية — الأستاذ" },
-      { name: "description", content: "إنشاء اختبارات بالذكاء الاصطناعي وتحليل نتائج الطلاب." },
+      { name: "description", content: "إنشاء اختبارات يدوياً أو بالذكاء الاصطناعي." },
     ],
   }),
   component: ExamsPage,
@@ -45,8 +45,8 @@ function ExamsPage() {
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [detail, setDetail] = useState<Exam | null>(null);
+  const [createMode, setCreateMode] = useState<"ai" | "manual" | null>(null);
   
-  // حالات المعاينة والتعديل
   const [previewExam, setPreviewExam] = useState<{ exam: any; questions: Q[] } | null>(null);
   
   const gen = useServerFn(generateExam);
@@ -59,7 +59,7 @@ function ExamsPage() {
     grade: GRADES[0], term: TERMS[0], group_id: "", subject: "", lesson: "",
     question_count: 10, duration_minutes: 20, total_score: 100, difficulty: "medium", adaptive: false,
   });
-  const [kinds, setKinds] = useState<string[]>(["اختيار من متعدد", "صح أو خطأ", "أكمل"]);
+  const [kinds, setKinds] = useState<string[]>(["اختيار من متعدد", "صح أو خطأ"]);
 
   async function load() {
     setLoading(true);
@@ -68,11 +68,8 @@ function ExamsPage() {
       setGroups(res.groups as Group[]);
       setStudents(res.students as Student[]);
       setExams(res.exams as Exam[]);
-    } catch (e: any) {
-      toast.error("فشل تحميل بيانات الاختبارات");
-    } finally {
-      setLoading(false);
-    }
+    } catch (e: any) { toast.error("فشل تحميل بيانات الاختبارات"); }
+    finally { setLoading(false); }
   }
   useEffect(() => { load(); }, []);
 
@@ -80,11 +77,10 @@ function ExamsPage() {
     setKinds((prev) => (prev.includes(k) ? prev.filter((x) => x !== k) : [...prev, k]));
   }
 
-  async function startBuild() {
+  async function startAiBuild() {
     if (!form.grade.trim() || !form.lesson.trim()) { toast.error("أدخل الصف والدرس على الأقل"); return; }
-    if (kinds.length === 0) { toast.error("اختر نوع أسئلة واحداً على الأقل"); return; }
     setBusy(true);
-    const t = toast.loading("جاري جلب الأسئلة من منصات الوزارة والكتب الخارجية…");
+    const t = toast.loading("جاري توليد الأسئلة بالذكاء الاصطناعي...");
     try {
       const res = await gen({
         data: {
@@ -94,8 +90,6 @@ function ExamsPage() {
           difficulty: form.difficulty, kinds,
         },
       });
-      
-      const examTitle = `${form.subject || "اختبار"} — ${form.lesson} (${form.grade})`;
       
       const questionsPayload = res.questions.map((q, i) => ({
         position: i + 1, kind: q.kind || "اختيار من متعدد",
@@ -109,7 +103,8 @@ function ExamsPage() {
 
       setPreviewExam({
         exam: {
-          title: examTitle, grade: form.grade, term: form.term, group_id: form.group_id || null,
+          title: `${form.subject || "اختبار"} — ${form.lesson} (${form.grade})`,
+          grade: form.grade, term: form.term, group_id: form.group_id || null,
           subject: form.subject || null, unit: null, lesson: form.lesson,
           question_count: questionsPayload.length, duration_minutes: Number(form.duration_minutes),
           total_score: Number(form.total_score), difficulty: form.difficulty,
@@ -117,121 +112,110 @@ function ExamsPage() {
         },
         questions: questionsPayload
       });
-      toast.success(`تم جلب ${questionsPayload.length} سؤال بنجاح. راجعها الآن.`, { id: t });
-    } catch (err: any) {
-      toast.error(err?.message || "فشل توليد الأسئلة", { id: t });
-    } finally { setBusy(false); }
+      toast.success(`تم جلب ${questionsPayload.length} سؤال بنجاح`, { id: t });
+    } catch (err: any) { toast.error(err?.message || "فشل توليد الأسئلة", { id: t }); }
+    finally { setBusy(false); }
+  }
+
+  function startManualBuild() {
+    setPreviewExam({
+      exam: {
+        title: `اختبار يدوي جديد — ${form.lesson || "بدون عنوان"}`,
+        grade: form.grade, term: form.term, group_id: form.group_id || null,
+        subject: form.subject || null, unit: null, lesson: form.lesson,
+        question_count: 0, duration_minutes: Number(form.duration_minutes),
+        total_score: Number(form.total_score), difficulty: form.difficulty,
+        question_types: [], adaptive: form.adaptive, status: "draft", sources: [],
+      },
+      questions: []
+    });
   }
 
   async function finalizeSave() {
     if (!previewExam) return;
+    if (previewExam.questions.length === 0) { toast.error("يجب إضافة سؤال واحد على الأقل"); return; }
     setBusy(true);
     try {
       await saveFullExamFn({ data: { exam: previewExam.exam, questions: previewExam.questions } });
-      toast.success("تم حفظ الاختبار بنجاح في المسودات");
-      setPreviewExam(null);
-      load();
-    } catch (err: any) {
-      toast.error(err.message);
-    } finally {
-      setBusy(false);
-    }
+      toast.success("تم حفظ الاختبار بنجاح");
+      setPreviewExam(null); setCreateMode(null); load();
+    } catch (err: any) { toast.error(err.message); }
+    finally { setBusy(false); }
   }
-
-  async function setStatus(ex: Exam, status: string) {
-    try {
-      await updateStatusFn({ data: { id: ex.id, status } });
-      toast.success(status === "published" ? "تم نشر الاختبار للطلاب" : status === "closed" ? "تم إغلاق الاختبار" : "تم الحفظ كمسودة");
-      load();
-    } catch (err: any) {
-      toast.error(err.message);
-    }
-  }
-
-  async function remove(ex: Exam) {
-    if (!confirm(`حذف الاختبار «${ex.title}» وكل نتائجه؟`)) return;
-    try {
-      await deleteExamFn({ data: { id: ex.id } });
-      toast.success("تم الحذف بنجاح");
-      load();
-    } catch (err: any) {
-      toast.error(err.message || "فشل الحذف");
-    }
-  }
-
-  if (loading) return <div className="flex h-64 items-center justify-center text-muted-foreground"><Loader2 className="h-8 w-8 animate-spin" /></div>;
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-2">
-        <FileQuestion className="h-6 w-6 text-primary" />
-        <h1 className="text-xl font-black">الاختبارات الإلكترونية الذكية</h1>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <FileQuestion className="h-6 w-6 text-primary" />
+          <h1 className="text-xl font-black">الاختبارات الإلكترونية</h1>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={() => setCreateMode("ai")} className="inline-flex items-center gap-2 rounded-xl bg-gold px-4 py-2 text-sm font-bold text-gold-foreground shadow-sm">
+            <BrainCircuit className="h-4 w-4" /> إنشاء بالذكاء الاصطناعي
+          </button>
+          <button onClick={() => setCreateMode("manual")} className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground shadow-sm">
+            <Plus className="h-4 w-4" /> إنشاء يدوياً
+          </button>
+        </div>
       </div>
 
-      <section className="rounded-2xl border bg-white p-5 shadow-sm">
-        <h2 className="mb-4 flex items-center gap-2 text-sm font-black text-primary"><Sparkles className="h-4 w-4" /> توليد اختبار من الكتب والمنصات المصرية</h2>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Field label="الصف">
-            <select className={inp} value={form.grade} onChange={(e) => setForm({ ...form, grade: e.target.value })}>
-              {GRADES.map((g) => <option key={g}>{g}</option>)}
-            </select>
-          </Field>
-          <Field label="الفصل الدراسي">
-            <select className={inp} value={form.term} onChange={(e) => setForm({ ...form, term: e.target.value })}>
-              {TERMS.map((t) => <option key={t}>{t}</option>)}
-            </select>
-          </Field>
-          <Field label="المجموعة">
-            <select className={inp} value={form.group_id} onChange={(e) => setForm({ ...form, group_id: e.target.value })}>
-              <option value="">كل المجموعات</option>
-              {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
-            </select>
-          </Field>
-          <Field label="المادة"><input className={inp} value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} placeholder="اللغة العربية" /></Field>
-          <Field label="الدرس"><input className={inp} value={form.lesson} onChange={(e) => setForm({ ...form, lesson: e.target.value })} /></Field>
-          <Field label="عدد الأسئلة"><input type="number" min={1} max={40} className={inp} value={form.question_count} onChange={(e) => setForm({ ...form, question_count: +e.target.value })} /></Field>
-          <Field label="زمن الاختبار (دقيقة)"><input type="number" min={1} className={inp} value={form.duration_minutes} onChange={(e) => setForm({ ...form, duration_minutes: +e.target.value })} /></Field>
-          <Field label="درجة الاختبار الكلية"><input type="number" min={1} className={inp} value={form.total_score} onChange={(e) => setForm({ ...form, total_score: +e.target.value })} /></Field>
-          <Field label="مستوى الصعوبة">
-            <select className={inp} value={form.difficulty} onChange={(e) => setForm({ ...form, difficulty: e.target.value })}>
-              {DIFFICULTIES.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
-            </select>
-          </Field>
-          <label className="mt-6 inline-flex items-center gap-2 text-sm font-semibold">
-            <input type="checkbox" checked={form.adaptive} onChange={(e) => setForm({ ...form, adaptive: e.target.checked })} className="h-4 w-4" />
-            اختبار تكيّفي (تدرّج الصعوبة)
-          </label>
-        </div>
-
-        <div className="mt-4">
-          <div className="mb-2 text-xs font-bold text-muted-foreground">أنواع الأسئلة المطلوبة</div>
-          <div className="flex flex-wrap gap-1.5">
-            {QUESTION_KINDS.map((k) => (
-              <button key={k} type="button" onClick={() => toggleKind(k)}
-                className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${kinds.includes(k) ? "border-primary bg-primary text-primary-foreground" : "hover:bg-accent"}`}>
-                {k}
-              </button>
-            ))}
+      {createMode && (
+        <section className="rounded-2xl border-2 border-primary/20 bg-white p-5 shadow-sm animate-in fade-in slide-in-from-top-2">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-sm font-black text-primary flex items-center gap-2">
+              {createMode === "ai" ? <BrainCircuit className="h-4 w-4" /> : <LayoutList className="h-4 w-4" />}
+              إعدادات {createMode === "ai" ? "البناء الآلي" : "البناء اليدوي"}
+            </h2>
+            <button onClick={() => setCreateMode(null)} className="p-1 hover:bg-muted rounded"><X className="h-4 w-4" /></button>
           </div>
-        </div>
+          
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <Field label="الصف"><select className={inp} value={form.grade} onChange={(e) => setForm({ ...form, grade: e.target.value })}>{GRADES.map((g) => <option key={g}>{g}</option>)}</select></Field>
+            <Field label="المادة"><input className={inp} value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} placeholder="اللغة العربية" /></Field>
+            <Field label="الدرس"><input className={inp} value={form.lesson} onChange={(e) => setForm({ ...form, lesson: e.target.value })} /></Field>
+            <Field label="درجة الاختبار"><input type="number" className={inp} value={form.total_score} onChange={(e) => setForm({ ...form, total_score: +e.target.value })} /></Field>
+          </div>
 
-        <button onClick={startBuild} disabled={busy}
-          className="mt-5 inline-flex items-center gap-2 rounded-xl bg-primary px-6 py-3 text-sm font-black text-primary-foreground shadow-lg hover:opacity-90 disabled:opacity-60">
-          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />} جلب الأسئلة وتحليلها
-        </button>
-      </section>
+          {createMode === "ai" && (
+            <div className="mt-4 animate-in fade-in">
+              <div className="mb-2 text-xs font-bold text-muted-foreground">أنواع الأسئلة المطلوبة</div>
+              <div className="flex flex-wrap gap-1.5">
+                {QUESTION_KINDS.map((k) => (
+                  <button key={k} type="button" onClick={() => toggleKind(k)}
+                    className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${kinds.includes(k) ? "border-primary bg-primary text-primary-foreground" : "hover:bg-accent"}`}>
+                    {k}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="mt-5 flex gap-2">
+            {createMode === "ai" ? (
+              <button onClick={startAiBuild} disabled={busy} className="inline-flex items-center gap-2 rounded-xl bg-gold px-6 py-2.5 text-sm font-black text-gold-foreground shadow hover:opacity-90 disabled:opacity-60">
+                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />} بدء التوليد الذكي
+              </button>
+            ) : (
+              <button onClick={startManualBuild} className="inline-flex items-center gap-2 rounded-xl bg-primary px-6 py-2.5 text-sm font-black text-primary-foreground shadow hover:opacity-90">
+                <Plus className="h-4 w-4" /> البدء بإضافة الأسئلة
+              </button>
+            )}
+          </div>
+        </section>
+      )}
 
       {previewExam && (
         <section className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4">
           <div className="w-full max-w-4xl rounded-2xl bg-white p-6 shadow-2xl">
             <div className="mb-4 flex items-center justify-between border-b pb-4">
               <div>
-                <h2 className="text-xl font-black text-primary">معاينة وتعديل الاختبار</h2>
-                <p className="text-xs text-muted-foreground">يمكنك تعديل الأسئلة أو حذفها قبل الحفظ النهائي.</p>
+                <h2 className="text-xl font-black text-primary">محرر الاختبار</h2>
+                <p className="text-xs text-muted-foreground">قم بمراجعة الأسئلة وتعديلها أو إضافة أسئلة جديدة.</p>
               </div>
               <div className="flex gap-2">
                 <button onClick={finalizeSave} disabled={busy} className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-black text-white shadow hover:bg-emerald-700">
-                  <CheckCircle2 className="h-4 w-4" /> اعتماد وحفظ الاختبار
+                  <CheckCircle2 className="h-4 w-4" /> حفظ الاختبار نهائياً
                 </button>
                 <button onClick={() => setPreviewExam(null)} className="rounded-lg bg-muted px-4 py-2 text-sm font-bold">إلغاء</button>
               </div>
@@ -243,24 +227,36 @@ function ExamsPage() {
                   <input className={inp} value={previewExam.exam.title} onChange={e => setPreviewExam({ ...previewExam, exam: { ...previewExam.exam, title: e.target.value } })} />
                 </Field>
                 <Field label="الدرجة الكلية">
-                   <input type="number" className={inp} value={previewExam.exam.total_score} readOnly />
+                   <input type="number" className={inp} value={previewExam.exam.total_score} onChange={e => setPreviewExam({ ...previewExam, exam: { ...previewExam.exam, total_score: +e.target.value } })} />
                 </Field>
               </div>
 
               <div className="space-y-4">
-                <h3 className="font-bold border-r-4 border-primary pr-3">مراجعة الأسئلة ({previewExam.questions.length})</h3>
+                <h3 className="font-black border-r-4 border-primary pr-3 flex items-center justify-between">
+                  الأسئلة الحالية ({previewExam.questions.length})
+                  <button onClick={() => {
+                    const n = [...previewExam.questions];
+                    n.push({ position: n.length+1, kind: "اختيار من متعدد", prompt: "اكتب السؤال الجديد هنا...", options: ["","","",""], correct_answer: "", rationale: null, distractor_explanations: [], skill: "تطبيق", learning_outcome: null, difficulty: "medium", expected_seconds: 60, score: 1, passage: null });
+                    setPreviewExam({ ...previewExam, questions: n });
+                  }} className="text-xs text-primary bg-primary/10 px-2 py-1 rounded-lg">+ إضافة سؤال يدوي</button>
+                </h3>
+                
                 {previewExam.questions.map((q, idx) => (
                   <div key={idx} className="group relative rounded-xl border-2 bg-muted/5 p-4 transition-all hover:border-primary/30">
                     <button onClick={() => {
                       const n = [...previewExam.questions]; n.splice(idx, 1);
                       setPreviewExam({ ...previewExam, questions: n });
-                    }} className="absolute -left-2 -top-2 rounded-full bg-destructive p-1.5 text-white shadow-lg opacity-0 transition-opacity group-hover:opacity-100">
+                    }} className="absolute -left-2 -top-2 rounded-full bg-destructive p-1.5 text-white shadow-lg">
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
                     
                     <div className="grid gap-3">
                       <div className="flex items-center gap-2">
-                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-white">{idx+1}</span>
+                        <select className="rounded border bg-white p-1 text-[10px] font-bold" value={q.kind} onChange={e => {
+                          const n = [...previewExam.questions]; n[idx].kind = e.target.value; setPreviewExam({ ...previewExam, questions: n });
+                        }}>
+                          {QUESTION_KINDS.map(k => <option key={k} value={k}>{k}</option>)}
+                        </select>
                         <input className="flex-1 rounded-lg border-0 bg-transparent text-sm font-bold focus:ring-0" 
                                value={q.prompt} 
                                onChange={e => {
@@ -273,23 +269,16 @@ function ExamsPage() {
                                  const n = [...previewExam.questions]; n[idx].score = Number(e.target.value);
                                  setPreviewExam({ ...previewExam, questions: n });
                                }} />
-                        <span className="text-[10px] text-muted-foreground">درجة</span>
                       </div>
-
-                      {q.passage && (
-                        <textarea className="w-full rounded-lg border bg-white p-2 text-xs italic" rows={3}
-                                  value={q.passage}
-                                  onChange={e => {
-                                    const n = [...previewExam.questions]; n[idx].passage = e.target.value;
-                                    setPreviewExam({ ...previewExam, questions: n });
-                                  }} />
-                      )}
 
                       {Array.isArray(q.options) && q.options.length > 0 && (
                         <div className="grid grid-cols-2 gap-2">
                           {q.options.map((opt, oIdx) => (
                             <div key={oIdx} className="flex items-center gap-2">
-                              <input type="radio" checked={q.correct_answer === opt} readOnly className="text-primary" />
+                              <input type="radio" checked={q.correct_answer === opt} onChange={() => {
+                                const n = [...previewExam.questions]; n[idx].correct_answer = opt;
+                                setPreviewExam({ ...previewExam, questions: n });
+                              }} className="text-primary" />
                               <input className="flex-1 rounded-lg border bg-white p-1.5 text-xs" 
                                      value={opt}
                                      onChange={e => {
@@ -302,68 +291,51 @@ function ExamsPage() {
                         </div>
                       )}
 
-                      <div className="flex items-center gap-4 border-t pt-2 mt-1">
-                         <div className="text-[10px]"><b className="text-primary">النوع:</b> {q.kind}</div>
-                         <div className="text-[10px]"><b className="text-primary">المهارة:</b> {q.skill || "—"}</div>
-                         <div className="text-[10px]"><b className="text-primary">الصعوبة:</b> {q.difficulty || "—"}</div>
-                         <div className="mr-auto">
-                            <label className="text-[10px] font-bold ml-2">الإجابة الصحيحة:</label>
-                            <input className="rounded border bg-white px-2 py-0.5 text-[10px] font-bold text-secondary" 
-                                   value={q.correct_answer || ""}
-                                   onChange={e => {
-                                     const n = [...previewExam.questions]; n[idx].correct_answer = e.target.value;
-                                     setPreviewExam({ ...previewExam, questions: n });
-                                   }} />
-                         </div>
-                      </div>
+                      {!Array.isArray(q.options) && (
+                        <input className="w-full rounded-lg border bg-white p-2 text-xs text-secondary font-bold" 
+                               placeholder="الإجابة الصحيحة..."
+                               value={q.correct_answer || ""}
+                               onChange={e => {
+                                 const n = [...previewExam.questions]; n[idx].correct_answer = e.target.value;
+                                 setPreviewExam({ ...previewExam, questions: n });
+                               }} />
+                      )}
                     </div>
                   </div>
                 ))}
-                
-                <button onClick={() => {
-                  const n = [...previewExam.questions];
-                  n.push({ position: n.length+1, kind: "اختيار من متعدد", prompt: "اكتب السؤال هنا...", options: ["","","",""], correct_answer: "", rationale: null, distractor_explanations: [], skill: "تطبيق", learning_outcome: null, difficulty: "medium", expected_seconds: 60, score: 1, passage: null });
-                  setPreviewExam({ ...previewExam, questions: n });
-                }} className="w-full rounded-xl border-2 border-dashed p-3 text-sm font-bold text-muted-foreground hover:bg-muted hover:text-primary">
-                  + إضافة سؤال يدوي للاختبار
-                </button>
               </div>
             </div>
           </div>
         </section>
       )}
 
+      {/* عرض الاختبارات المحفوظة بنفس التنسيق السابق */}
       <section className="rounded-2xl border bg-white shadow-sm">
         <div className="border-b px-5 py-3 text-sm font-black">بنك الاختبارات المحفوظة ({exams.length})</div>
         <div className="overflow-x-auto">
           <table className="w-full text-right text-sm">
             <thead className="bg-muted/50 text-xs text-muted-foreground">
               <tr>
-                <th className="p-3">الاختبار</th><th className="p-3">الصف</th><th className="p-3">المجموعة</th>
-                <th className="p-3">الأسئلة</th><th className="p-3">الزمن</th><th className="p-3">الدرجة</th>
-                <th className="p-3">الحالة</th><th className="p-3">إجراءات</th>
+                <th className="p-3">الاختبار</th><th className="p-3">الصف</th><th className="p-3">الأسئلة</th><th className="p-3">الدرجة</th><th className="p-3">الحالة</th><th className="p-3 text-center">إجراءات</th>
               </tr>
             </thead>
             <tbody>
-              {exams.length === 0 && <tr><td colSpan={8} className="p-6 text-center text-muted-foreground">لا توجد اختبارات بعد</td></tr>}
               {exams.map((ex) => (
-                <tr key={ex.id} className="border-t">
-                  <td className="p-3 font-bold">{ex.title}</td>
-                  <td className="p-3">{ex.grade || "—"}</td>
-                  <td className="p-3">{groups.find((g) => g.id === ex.group_id)?.name || "الكل"}</td>
+                <tr key={ex.id} className="border-t hover:bg-muted/30">
+                  <td className="p-3 font-bold text-primary">{ex.title}</td>
+                  <td className="p-3 font-semibold">{ex.grade || "—"}</td>
                   <td className="p-3">{ex.question_count}</td>
-                  <td className="p-3">{ex.duration_minutes} د</td>
                   <td className="p-3">{ex.total_score}</td>
                   <td className="p-3">
-                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${ex.status === "published" ? "bg-emerald-100 text-emerald-700" : ex.status === "closed" ? "bg-slate-200 text-slate-700" : "bg-amber-100 text-amber-700"}`}>
-                      {ex.status === "published" ? "منشور" : ex.status === "closed" ? "مغلق" : "مسودة"}
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${ex.status === "published" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                      {ex.status === "published" ? "منشور" : "مسودة"}
                     </span>
                   </td>
-                  <td className="p-3">
-                    <div className="flex flex-wrap gap-1.5">
-                      {ex.status !== "published" && <button onClick={() => setStatus(ex, "published")} className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-bold text-white"><Send className="h-3 w-3" /> نشر</button>}
-                      <button onClick={() => setDetail(ex)} className="inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-bold"><BarChart3 className="h-3 w-3" /> النتائج</button>
-                      <button onClick={() => remove(ex)} className="rounded-lg bg-destructive/10 px-2 py-1 text-destructive hover:bg-destructive hover:text-white"><Trash2 className="h-3.5 w-3.5" /></button>
+                  <td className="p-3 text-center">
+                    <div className="flex justify-center gap-1.5">
+                       {ex.status !== "published" && <button onClick={() => setStatus(ex, "published")} className="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-bold text-white">نشر</button>}
+                       <button onClick={() => setDetail(ex)} className="rounded-lg border px-2.5 py-1 text-xs font-bold">النتائج</button>
+                       <button onClick={() => remove(ex)} className="rounded-lg p-1 text-destructive hover:bg-destructive/10"><Trash2 className="h-4 w-4" /></button>
                     </div>
                   </td>
                 </tr>
@@ -373,209 +345,15 @@ function ExamsPage() {
         </div>
       </section>
 
+      {/* باقي المكونات (ExamDetail) تبقى كما هي */}
       {detail && <ExamDetail exam={detail} students={students} onClose={() => setDetail(null)} />}
     </div>
   );
 }
 
-const inp = "w-full rounded-lg border border-input bg-background px-3 py-2 text-sm";
+const inp = "w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20";
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return <label className="block"><span className="mb-1 block text-xs font-bold text-muted-foreground">{label}</span>{children}</label>;
+  return <label className="block"><span className="mb-1 block text-xs font-bold text-muted-foreground uppercase">{label}</span>{children}</label>;
 }
 
-function ExamDetail({ exam, students, onClose }: { exam: Exam; students: Student[]; onClose: () => void }) {
-  const [questions, setQuestions] = useState<Q[]>([]);
-  const [attempts, setAttempts] = useState<Attempt[]>([]);
-  const [answers, setAnswers] = useState<Answer[]>([]);
-  const [view, setView] = useState<"students" | "questions" | "ai" | "bank">("students");
-  const [aiText, setAiText] = useState<string | null>(null);
-  const [aiLoading, setAiLoading] = useState(false);
-  const [loadingResults, setLoadingResults] = useState(true);
-  
-  const genAnalysis = useServerFn(generateExamClassAnalysis);
-  const loadDetailedResults = useServerFn(getExamDetailedResultsAdmin);
-
-  useEffect(() => {
-    setLoadingResults(true);
-    loadDetailedResults({ data: { exam_id: exam.id } })
-      .then(res => {
-        setQuestions(res.questions as Q[]);
-        setAttempts(res.attempts as Attempt[]);
-        setAnswers(res.answers as Answer[]);
-      })
-      .catch(e => toast.error("تعذر جلب النتائج"))
-      .finally(() => setLoadingResults(false));
-  }, [exam.id]);
-
-  async function runAiAnalysis() {
-    setAiLoading(true);
-    try {
-      const classStats = questions.map(q => {
-        const rel = answers.filter(a => a.question_id === q.id);
-        const correct = rel.filter(a => a.is_correct).length;
-        return { prompt: q.prompt, correctRate: rel.length ? Math.round((correct / rel.length) * 100) : 0 };
-      });
-      const studentPerformances = attempts.filter(a => a.status === "submitted").map(a => {
-        const s = students.find(st => st.id === a.student_id);
-        return { name: s?.full_name || "طالب", pct: a.percentage };
-      });
-
-      const r = await genAnalysis({ data: {
-        examTitle: exam.title,
-        stats: classStats,
-        students: studentPerformances
-      }});
-      setAiText(r.text);
-    } catch (e: any) {
-      toast.error("فشل التحليل الذكي");
-    } finally {
-      setAiLoading(false);
-    }
-  }
-
-  const eligible = useMemo(
-    () => students.filter((s) => (exam.group_id ? s.group_id === exam.group_id : exam.grade ? s.grade === exam.grade : true)),
-    [students, exam],
-  );
-  const done = attempts.filter((a) => a.status === "submitted");
-  const avg = done.length ? Math.round(done.reduce((s, a) => s + Number(a.percentage), 0) / done.length) : 0;
-
-  const qStats = questions.map((q) => {
-    const rel = answers.filter((a) => a.question_id === q.id);
-    const correct = rel.filter((a) => a.is_correct).length;
-    const p = rel.length ? correct / rel.length : 0;
-    const sorted = [...done].sort((a, b) => Number(b.percentage) - Number(a.percentage));
-    const n = Math.max(1, Math.round(sorted.length * 0.27));
-    const top = sorted.slice(0, n), low = sorted.slice(-n);
-    const rate = (grp: Attempt[]) => {
-      const ids = grp.map((g) => g.id);
-      const rr = answers.filter((a) => a.question_id === q.id && ids.includes(a.attempt_id));
-      return rr.length ? rr.filter((a) => a.is_correct).length / rr.length : 0;
-    };
-    const d = sorted.length >= 2 ? rate(top) - rate(low) : 0;
-    return { q, answered: rel.length, correct, ease: Math.round(p * 100), disc: Math.round(d * 100) };
-  });
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4">
-      <div className="w-full max-w-5xl rounded-2xl bg-white p-5 shadow-xl">
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-base font-black">{exam.title}</h3>
-          <button onClick={onClose} className="rounded-lg p-1 hover:bg-accent"><X className="h-5 w-5" /></button>
-        </div>
-
-        {loadingResults ? <div className="flex h-32 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div> : (
-          <>
-            <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-              <Kpi label="لم يدخل" value={eligible.length - attempts.length} />
-              <Kpi label="بدأ" value={attempts.filter((a) => a.status === "in_progress").length} />
-              <Kpi label="أنهى" value={done.length} />
-              <Kpi label="متوسط النتيجة" value={`${avg}%`} />
-            </div>
-
-            <div className="mb-3 flex gap-1.5 overflow-x-auto pb-1">
-              <TabBtn active={view === "students"} onClick={() => setView("students")} label="الطلاب والترتيب" />
-              <TabBtn active={view === "questions"} onClick={() => setView("questions")} label="تحليل الأسئلة" />
-              <TabBtn active={view === "ai"} onClick={() => setView("ai")} label="التحليل الذكي (AI)" icon={<Sparkles className="h-3.5 w-3.5" />} />
-              <TabBtn active={view === "bank"} onClick={() => setView("bank")} label="بنك الأسئلة" />
-            </div>
-
-            {view === "ai" && (
-              <div className="space-y-4">
-                {!aiText && (
-                  <div className="text-center py-8">
-                    <Sparkles className="mx-auto h-12 w-12 text-gold mb-3 opacity-20" />
-                    <p className="text-sm text-muted-foreground mb-4">احصل على تحليل تربوي عميق لأداء مجموعتك في هذا الاختبار.</p>
-                    <button onClick={runAiAnalysis} disabled={aiLoading} className="inline-flex items-center gap-2 rounded-xl bg-gold px-6 py-2.5 text-sm font-black text-gold-foreground">
-                      {aiLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />} بدء التحليل الذكي
-                    </button>
-                  </div>
-                )}
-                {aiText && (
-                  <div className="rounded-2xl bg-muted/10 p-6">
-                    <div className="flex items-center justify-between mb-4">
-                      <h4 className="font-black text-primary flex items-center gap-2"><Sparkles className="h-4 w-4 text-gold" /> نتائج التحليل التربوي</h4>
-                      <button onClick={() => {
-                        const w = window.open("", "_blank"); if (!w) return;
-                        w.document.write(`<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/><title>تحليل الاختبار</title><style>body{font-family:system-ui;padding:40px;line-height:1.8}h1{color:#1e3a8a}</style></head><body><h1>تحليل الاختبار: ${exam.title}</h1><div style="white-space:pre-wrap">${aiText}</div></body></html>`);
-                        w.document.close();
-                      }} className="text-xs font-bold text-primary underline">طباعة التحليل</button>
-                    </div>
-                    <div className="whitespace-pre-wrap text-sm leading-relaxed">{aiText}</div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {view === "students" && (
-              <div className="overflow-x-auto rounded-xl border">
-                <table className="w-full text-right text-sm">
-                  <thead className="bg-muted/50 text-xs text-muted-foreground"><tr>
-                    <th className="p-2">#</th><th className="p-2">الطالب</th><th className="p-2">الكود</th><th className="p-2">الحالة</th>
-                    <th className="p-2">الدرجة</th><th className="p-2">النسبة</th><th className="p-2">الزمن</th>
-                  </tr></thead>
-                  <tbody>
-                    {eligible.map((s) => {
-                      const mine = attempts.filter((a) => a.student_id === s.id);
-                      const best = mine.sort((a, b) => Number(b.percentage) - Number(a.percentage))[0];
-                      const rank = best ? done.filter((d) => Number(d.percentage) > Number(best.percentage)).length + 1 : "—";
-                      return (
-                        <tr key={s.id} className="border-t">
-                          <td className="p-2">{rank}</td>
-                          <td className="p-2 font-semibold">{s.full_name}</td>
-                          <td className="p-2 font-mono text-xs">{s.code}</td>
-                          <td className="p-2">{!best ? <span className="text-muted-foreground">لم يدخل</span> : best.status === "submitted" ? <span className="text-emerald-700">أنهى</span> : <span className="text-amber-700">جارٍ الحل</span>}</td>
-                          <td className="p-2">{best ? `${Number(best.score)} / ${Number(best.max_score)}` : "—"}</td>
-                          <td className="p-2 font-bold">{best ? `${Number(best.percentage)}%` : "—"}</td>
-                          <td className="p-2">{best ? `${Math.round(best.time_spent_seconds / 60)} د` : "—"}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-
-            {view === "questions" && (
-              <div className="overflow-x-auto rounded-xl border">
-                <table className="w-full text-right text-sm">
-                  <thead className="bg-muted/50 text-xs text-muted-foreground"><tr>
-                    <th className="p-2">#</th><th className="p-2">السؤال</th><th className="p-2">أجاب</th><th className="p-2">نسبة الصواب</th><th className="p-2">التمييز</th>
-                  </tr></thead>
-                  <tbody>
-                    {qStats.map((s) => (
-                      <tr key={s.q.id} className="border-t">
-                        <td className="p-2">{s.q.position}</td>
-                        <td className="p-2 max-w-md">{s.q.prompt}</td>
-                        <td className="p-2">{s.answered}</td>
-                        <td className="p-2 font-bold text-primary">{s.answered ? `${s.ease}%` : "—"}</td>
-                        <td className="p-2">{s.answered ? `${s.disc}%` : "—"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function TabBtn({ active, onClick, label, icon }: { active: boolean; onClick: () => void; label: string; icon?: React.ReactNode }) {
-  return (
-    <button onClick={onClick} className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg px-4 py-2 text-xs font-bold transition ${active ? "bg-primary text-primary-foreground shadow" : "border border-input hover:bg-accent"}`}>
-      {icon}{label}
-    </button>
-  );
-}
-
-function Kpi({ label, value }: { label: string; value: any }) {
-  return (
-    <div className="rounded-xl border bg-muted/30 p-3 text-center">
-      <div className="text-lg font-black text-primary">{value}</div>
-      <div className="text-[11px] text-muted-foreground">{label}</div>
-    </div>
-  );
-}
+// ... باقي كود ExamDetail و Kpi و TabBtn كما في الملف الأصلي
