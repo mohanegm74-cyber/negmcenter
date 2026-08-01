@@ -248,6 +248,15 @@ export const deletePaymentAdmin = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const updatePaymentAdmin = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => d as { id: string; payload: { amount: number; kind: string; month: string; paid_at: string; note: string | null } })
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    await supabaseAdmin.from("payments").update(data.payload).eq("id", data.id);
+    return { ok: true };
+  });
+
 // --- الشهادات (وظيفة الإرسال للبوابة) ---
 export const sendCertificateToPortal = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
