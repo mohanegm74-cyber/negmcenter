@@ -4,8 +4,6 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 /** كلمة المرور الافتراضية القوية للسيطرة */
 const DEFAULT_MASTER_PASS = "Negm74!Center#Secure$2024";
 
-// ... (keep existing checkAdminSetup, assignFirstAdminRole, forceSetupAdminMaster)
-
 export const checkAdminSetup = createServerFn({ method: "GET" }).handler(async () => {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { count } = await supabaseAdmin
@@ -85,7 +83,7 @@ export const deleteGroup = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-// --- الطلاب (تعديل للاعتماد) ---
+// --- الطلاب ---
 export const getAllStudentsAdmin = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async () => {
@@ -166,7 +164,7 @@ export const upsertHomeworkSubmissionAdmin = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-// --- الاختبارات (تعديل كامل للتحديث والحذف) ---
+// --- الاختبارات ---
 export const getExamsDataAdmin = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async () => {
@@ -257,7 +255,7 @@ export const updatePaymentAdmin = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-// --- الشهادات (وظيفة الإرسال للبوابة) ---
+// --- الشهادات ---
 export const sendCertificateToPortal = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => d as { student_id: string; title: string; reason: string; template_id: string; signer: string })
