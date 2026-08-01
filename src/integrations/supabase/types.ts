@@ -59,6 +59,44 @@ export type Database = {
           },
         ]
       }
+      certificates: {
+        Row: {
+          created_at: string
+          id: string
+          reason: string | null
+          signer: string | null
+          student_id: string
+          template_id: string
+          title: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          reason?: string | null
+          signer?: string | null
+          student_id: string
+          template_id?: string
+          title: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          reason?: string | null
+          signer?: string | null
+          student_id?: string
+          template_id?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "certificates_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       exam_answers: {
         Row: {
           answer: Json | null
