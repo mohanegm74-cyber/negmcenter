@@ -5,7 +5,7 @@ export const registerStudent = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { admin, str } = await import("./student.server");
     const FIELDS = ["full_name", "phone", "parent_phone", "gender", "birth_date", "national_id", "address", "governorate", "education_dept", "school", "grade", "section", "subject", "teacher_name", "notes", "group_id"];
-    const payload: Record<string, any> = { active: true };
+    const payload: Record<string, any> = { active: false }; // الطلاب الجدد غير مفعلين افتراضياً
     for (const k of FIELDS) {
       const v = str(data?.[k], k === "notes" || k === "address" ? 1000 : 120);
       if (v) payload[k] = v;
@@ -30,7 +30,13 @@ export const getStudentPortal = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { requireStudent } = await import("./student.server");
     const { db, student } = await requireStudent(data?.code);
-    const [a, hs, p, n, q, g, hw] = await Promise.all([
+    
+    // إذا كان الطالب غير مفعل، نمنعه من الدخول ونخبره بالانتظار
+    if (!student.active) {
+      throw new Error("حسابك قيد المراجعة من قبل الأستاذ. يرجى المحاولة لاحقاً.");
+    }
+
+    const [a, hs, p, n, q, g, hw, certs] = await Promise.all([
       db.from("attendance").select("id,date,status").eq("student_id", student.id).order("date", { ascending: false }).limit(100),
       db.from("homework_submissions").select("*").eq("student_id", student.id),
       db.from("payments").select("*").eq("student_id", student.id).order("paid_at", { ascending: false }),
@@ -38,10 +44,12 @@ export const getStudentPortal = createServerFn({ method: "POST" })
       db.from("questions").select("*").eq("student_id", student.id).order("created_at", { ascending: false }),
       student.group_id ? db.from("groups").select("*").eq("id", student.group_id).maybeSingle() : Promise.resolve({ data: null }),
       student.group_id ? db.from("homework").select("*").eq("group_id", student.group_id).order("created_at", { ascending: false }) : db.from("homework").select("*").is("group_id", null),
+      db.from("certificates").select("*").eq("student_id", student.id).order("created_at", { ascending: false }),
     ]);
-    return { student, group: g.data, attendance: a.data || [], subs: hs.data || [], payments: p.data || [], notes: n.data || [], questions: q.data || [], homework: hw.data || [] };
+    return { student, group: g.data, attendance: a.data || [], subs: hs.data || [], payments: p.data || [], notes: n.data || [], questions: q.data || [], homework: hw.data || [], certificates: certs.data || [] };
   });
 
+// ... (keep rest of the file same)
 export const updateStudentProfile = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => d as { code: string; fields: Record<string, string> })
   .handler(async ({ data }) => {
@@ -75,28 +83,11 @@ export const submitHomeworkText = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { requireStudent, str } = await import("./student.server");
     const { db, student } = await requireStudent(data.code);
-    
-    // البحث يدويًا لتخطي خطأ الـ Unique Constraint
-    const { data: existing } = await db.from("homework_submissions")
-      .select("id")
-      .eq("student_id", student.id)
-      .eq("homework_id", data.homework_id)
-      .maybeSingle();
-
+    const { data: existing } = await db.from("homework_submissions").select("id").eq("student_id", student.id).eq("homework_id", data.homework_id).maybeSingle();
     if (existing) {
-      await db.from("homework_submissions").update({ 
-        answer_text: str(data.answer_text, 5000), 
-        status: "submitted", 
-        submitted_at: new Date().toISOString() 
-      }).eq("id", existing.id);
+      await db.from("homework_submissions").update({ answer_text: str(data.answer_text, 5000), status: "submitted", submitted_at: new Date().toISOString() }).eq("id", existing.id);
     } else {
-      await db.from("homework_submissions").insert({ 
-        student_id: student.id, 
-        homework_id: data.homework_id, 
-        answer_text: str(data.answer_text, 5000), 
-        status: "submitted", 
-        submitted_at: new Date().toISOString() 
-      });
+      await db.from("homework_submissions").insert({ student_id: student.id, homework_id: data.homework_id, answer_text: str(data.answer_text, 5000), status: "submitted", submitted_at: new Date().toISOString() });
     }
     return { ok: true };
   });
@@ -117,28 +108,11 @@ export const finalizeHomeworkUpload = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { requireStudent } = await import("./student.server");
     const { db, student } = await requireStudent(data.code);
-
-    // البحث يدويًا لتخطي خطأ الـ Unique Constraint
-    const { data: existing } = await db.from("homework_submissions")
-      .select("id")
-      .eq("student_id", student.id)
-      .eq("homework_id", data.homework_id)
-      .maybeSingle();
-
+    const { data: existing } = await db.from("homework_submissions").select("id").eq("student_id", student.id).eq("homework_id", data.homework_id).maybeSingle();
     if (existing) {
-      await db.from("homework_submissions").update({ 
-        file_url: data.path, 
-        status: "submitted", 
-        submitted_at: new Date().toISOString() 
-      }).eq("id", existing.id);
+      await db.from("homework_submissions").update({ file_url: data.path, status: "submitted", submitted_at: new Date().toISOString() }).eq("id", existing.id);
     } else {
-      await db.from("homework_submissions").insert({ 
-        student_id: student.id, 
-        homework_id: data.homework_id, 
-        file_url: data.path, 
-        status: "submitted", 
-        submitted_at: new Date().toISOString() 
-      });
+      await db.from("homework_submissions").insert({ student_id: student.id, homework_id: data.homework_id, file_url: data.path, status: "submitted", submitted_at: new Date().toISOString() });
     }
     return { ok: true };
   });

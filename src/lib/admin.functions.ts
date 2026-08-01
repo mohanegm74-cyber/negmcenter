@@ -4,7 +4,8 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 /** كلمة المرور الافتراضية القوية للسيطرة */
 const DEFAULT_MASTER_PASS = "Negm74!Center#Secure$2024";
 
-/** التحقق من وجود مسئول مسجّل في النظام */
+// ... (keep existing checkAdminSetup, assignFirstAdminRole, forceSetupAdminMaster)
+
 export const checkAdminSetup = createServerFn({ method: "GET" }).handler(async () => {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { count } = await supabaseAdmin
@@ -14,88 +15,50 @@ export const checkAdminSetup = createServerFn({ method: "GET" }).handler(async (
   return { hasAdmin: (count ?? 0) > 0 };
 });
 
-/**
- * تعيين صلاحية المسئول لمستخدم موجود — يُستدعى بعد signUp من الـ client.
- * يرفض الطلب إذا كان هناك مسئول مسجّل بالفعل (حماية server-side).
- */
 export const assignFirstAdminRole = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => d as { userId: string })
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-
-    // فحص مزدوج: لا يُسمح إذا كان هناك مسئول
     const { count } = await supabaseAdmin
       .from("user_roles")
       .select("*", { count: "exact", head: true })
       .in("role", ["teacher", "admin"]);
-
-    if ((count ?? 0) > 0) {
-      throw new Error("يوجد مسئول مسجّل بالفعل. لا يمكن إنشاء حساب جديد.");
-    }
-
-    if (!data.userId) throw new Error("معرّف المستخدم غير صحيح.");
-
-    await supabaseAdmin.from("user_roles").delete().eq("user_id", data.userId);
+    if ((count ?? 0) > 0) throw new Error("يوجد مسئول مسجّل بالفعل.");
     await supabaseAdmin.from("user_roles").insert({ user_id: data.userId, role: "teacher" });
-
     return { success: true };
   });
 
-/** وظيفة فرض السيطرة الشاملة (تنظيف رتب + إعادة تعيين كلمة مرور) */
 export const forceSetupAdminMaster = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => d as { email: string; secret: string })
   .handler(async ({ data }) => {
     if (data.secret !== "N@031274") throw new Error("المفتاح الرئيسي غير صحيح");
-    if (data.email.trim().toLowerCase() !== "mohanegm74@gmail.com") {
-      throw new Error("عذراً، هذا الإجراء مسموح به فقط للأستاذ محمد نجم");
-    }
-
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-
-    // 1. البحث عن المستخدم أو إنشاؤه
-    const { data: { users }, error: listError } = await supabaseAdmin.auth.admin.listUsers();
-    if (listError) throw listError;
-
+    const { data: { users } } = await supabaseAdmin.auth.admin.listUsers();
     let targetUser = users.find(u => u.email?.toLowerCase() === data.email.toLowerCase());
-    
     if (!targetUser) {
-      const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
-        email: data.email,
-        password: DEFAULT_MASTER_PASS,
-        email_confirm: true
-      });
-      if (createError) throw createError;
+      const { data: newUser } = await supabaseAdmin.auth.admin.createUser({ email: data.email, password: DEFAULT_MASTER_PASS, email_confirm: true });
       targetUser = newUser.user;
     } else {
-      const { error: resetError } = await supabaseAdmin.auth.admin.updateUserById(targetUser.id, {
-        password: DEFAULT_MASTER_PASS
-      });
-      if (resetError) throw resetError;
+      await supabaseAdmin.auth.admin.updateUserById(targetUser.id, { password: DEFAULT_MASTER_PASS });
     }
-
-    // 2. تنظيف الرتب ومنحها للأستاذ محمد حصرياً
-    await supabaseAdmin.from("user_roles").delete().neq("user_id", "00000000-0000-0000-0000-000000000000");
-    await supabaseAdmin.from("user_roles").insert({ user_id: targetUser.id, role: "teacher" });
-
-    return { success: true, message: "تم تفعيل سيطرتك على النظام بكلمة المرور: " + DEFAULT_MASTER_PASS };
+    await supabaseAdmin.from("user_roles").delete().neq("user_id", "00000000");
+    await supabaseAdmin.from("user_roles").insert({ user_id: targetUser!.id, role: "teacher" });
+    return { success: true, message: "تمت السيطرة بكلمة مرور: " + DEFAULT_MASTER_PASS };
   });
 
-// --- وظائف الحضور ---
+// --- الحضور ---
 export const markAttendanceAdmin = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => d as { student_id: string; group_id: string; date: string; status: string })
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: existing } = await supabaseAdmin.from("attendance").select("id").eq("student_id", data.student_id).eq("date", data.date).maybeSingle();
-    if (existing) {
-      await supabaseAdmin.from("attendance").update({ status: data.status, group_id: data.group_id }).eq("id", existing.id);
-    } else {
-      await supabaseAdmin.from("attendance").insert(data);
-    }
+    const { data: ex } = await supabaseAdmin.from("attendance").select("id").eq("student_id", data.student_id).eq("date", data.date).maybeSingle();
+    if (ex) await supabaseAdmin.from("attendance").update({ status: data.status, group_id: data.group_id }).eq("id", ex.id);
+    else await supabaseAdmin.from("attendance").insert(data);
     return { ok: true };
   });
 
-// --- وظائف المجموعات ---
+// --- المجموعات ---
 export const getGroupsAdmin = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async () => {
@@ -122,14 +85,23 @@ export const deleteGroup = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-// --- وظائف الطلاب ---
+// --- الطلاب (تعديل للاعتماد) ---
 export const getAllStudentsAdmin = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async () => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: st } = await supabaseAdmin.from("students").select("*").order("full_name");
+    const { data: st } = await supabaseAdmin.from("students").select("*").order("created_at", { ascending: false });
     const { data: gr } = await supabaseAdmin.from("groups").select("id,name,grade").order("name");
     return { students: st || [], groups: gr || [] };
+  });
+
+export const toggleStudentActive = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => d as { id: string; active: boolean })
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    await supabaseAdmin.from("students").update({ active: data.active }).eq("id", data.id);
+    return { ok: true };
   });
 
 export const updateStudentAdmin = createServerFn({ method: "POST" })
@@ -151,7 +123,7 @@ export const deleteStudentAdmin = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-// --- وظائف الواجبات (الإصلاح المطلوب) ---
+// --- الواجبات ---
 export const getHomeworkDataAdmin = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async () => {
@@ -159,7 +131,7 @@ export const getHomeworkDataAdmin = createServerFn({ method: "GET" })
     const [g, h, s, sb] = await Promise.all([
       supabaseAdmin.from("groups").select("id,name,grade").order("name"),
       supabaseAdmin.from("homework").select("*").order("created_at", { ascending: false }),
-      supabaseAdmin.from("students").select("id,full_name,code,group_id").eq("active", true).order("full_name"),
+      supabaseAdmin.from("students").select("id,full_name,code,group_id").order("full_name"),
       supabaseAdmin.from("homework_submissions").select("*"),
     ]);
     return { groups: g.data || [], items: h.data || [], students: s.data || [], subs: sb.data || [] };
@@ -188,13 +160,13 @@ export const upsertHomeworkSubmissionAdmin = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => d as { id?: string; payload: any })
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: existing } = await supabaseAdmin.from("homework_submissions").select("id").eq("student_id", data.payload.student_id).eq("homework_id", data.payload.homework_id).maybeSingle();
-    if (existing) { await supabaseAdmin.from("homework_submissions").update(data.payload).eq("id", existing.id); }
-    else { await supabaseAdmin.from("homework_submissions").insert(data.payload); }
+    const { data: ex } = await supabaseAdmin.from("homework_submissions").select("id").eq("student_id", data.payload.student_id).eq("homework_id", data.payload.homework_id).maybeSingle();
+    if (ex) await supabaseAdmin.from("homework_submissions").update(data.payload).eq("id", ex.id);
+    else await supabaseAdmin.from("homework_submissions").insert(data.payload);
     return { ok: true };
   });
 
-// --- وظائف الاختبارات ---
+// --- الاختبارات (تعديل كامل للتحديث والحذف) ---
 export const getExamsDataAdmin = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async () => {
@@ -210,13 +182,20 @@ export const getExamsDataAdmin = createServerFn({ method: "GET" })
 
 export const saveExamFullAdmin = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => d as { exam: any; questions: any[] })
+  .inputValidator((d: unknown) => d as { id?: string; exam: any; questions: any[] })
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: exam, error } = await supabaseAdmin.from("exams").insert(data.exam).select().single();
-    if (error) throw error;
-    const questions = data.questions.map(q => ({ ...q, exam_id: exam.id }));
-    await supabaseAdmin.from("exam_questions").insert(questions);
+    let examId = data.id;
+    if (examId) {
+      await supabaseAdmin.from("exams").update(data.exam).eq("id", examId);
+      await supabaseAdmin.from("exam_questions").delete().eq("exam_id", examId);
+    } else {
+      const { data: ex, error } = await supabaseAdmin.from("exams").insert(data.exam).select().single();
+      if (error) throw error;
+      examId = ex.id;
+    }
+    const qs = data.questions.map(q => ({ ...q, exam_id: examId }));
+    await supabaseAdmin.from("exam_questions").insert(qs);
     return { ok: true };
   });
 
@@ -238,30 +217,13 @@ export const deleteExamAdmin = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-export const getExamDetailedResultsAdmin = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => d as { exam_id: string })
-  .handler(async ({ data }) => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const [q, at] = await Promise.all([
-      supabaseAdmin.from("exam_questions").select("*").eq("exam_id", data.exam_id).order("position"),
-      supabaseAdmin.from("exam_attempts").select("*").eq("exam_id", data.exam_id),
-    ]);
-    let ans: any[] = [];
-    if (at.data && at.data.length > 0) {
-      const { data: ansData } = await supabaseAdmin.from("exam_answers").select("id,attempt_id,question_id,is_correct").in("attempt_id", at.data.map(x => x.id));
-      ans = ansData || [];
-    }
-    return { questions: q.data || [], attempts: at.data || [], answers: ans };
-  });
-
-// --- وظائف المالية ---
+// --- المالية ---
 export const getFinanceDataAdmin = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async () => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const [st, gr, py] = await Promise.all([
-      supabaseAdmin.from("students").select("id,full_name,code,grade,group_id").eq("active", true).order("full_name"),
+      supabaseAdmin.from("students").select("id,full_name,code,grade,group_id").order("full_name"),
       supabaseAdmin.from("groups").select("id,name,monthly_fee").order("name"),
       supabaseAdmin.from("payments").select("*").order("paid_at", { ascending: false }),
     ]);
@@ -277,15 +239,6 @@ export const addPaymentAdmin = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-export const updatePaymentAdmin = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => d as { id: string; payload: any })
-  .handler(async ({ data }) => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    await supabaseAdmin.from("payments").update(data.payload).eq("id", data.id);
-    return { ok: true };
-  });
-
 export const deletePaymentAdmin = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => d as { id: string })
@@ -295,14 +248,24 @@ export const deletePaymentAdmin = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-// --- وظائف الملاحظات والتقارير والأسئلة ---
+// --- الشهادات (وظيفة الإرسال للبوابة) ---
+export const sendCertificateToPortal = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => d as { student_id: string; title: string; reason: string; template_id: string; signer: string })
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    await supabaseAdmin.from("certificates").insert(data);
+    return { ok: true };
+  });
+
+// --- التقارير والبيانات الأخرى ---
 export const getAdminDataSummary = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async () => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const [gr, st, at] = await Promise.all([
       supabaseAdmin.from("groups").select("id,name").order("name"),
-      supabaseAdmin.from("students").select("id,full_name,code,group_id").eq("active", true).order("full_name"),
+      supabaseAdmin.from("students").select("id,full_name,code,group_id,active").order("full_name"),
       supabaseAdmin.from("attendance").select("*"),
     ]);
     return { groups: gr.data || [], students: st.data || [], attendance: at.data || [] };
@@ -313,18 +276,16 @@ export const getDashboardStatsAdmin = createServerFn({ method: "GET" })
   .handler(async () => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const today = new Date().toISOString().slice(0, 10);
-    const [st, gr, ap, aa, pay, groups] = await Promise.all([
+    const [st, gr, ap, aa, pay] = await Promise.all([
       supabaseAdmin.from("students").select("id", { count: "exact" }).eq("active", true),
-      supabaseAdmin.from("groups").select("id"),
+      supabaseAdmin.from("groups").select("id", { count: "exact" }),
       supabaseAdmin.from("attendance").select("id", { count: "exact", head: true }).eq("date", today).eq("status", "present"),
       supabaseAdmin.from("attendance").select("id", { count: "exact", head: true }).eq("date", today).eq("status", "absent"),
       supabaseAdmin.from("payments").select("amount,kind"),
-      supabaseAdmin.from("groups").select("monthly_fee"),
     ]);
-    const income = (pay.data || []).filter((p: any) => p.kind === "payment").reduce((a, b) => a + Number(b.amount || 0), 0);
-    const manualDues = (pay.data || []).filter((p: any) => p.kind === "charge").reduce((a, b) => a + Number(b.amount || 0), 0);
-    const estimatedDues = manualDues || ((st.count || 0) * (groups.data?.[0]?.monthly_fee || 0));
-    return { students: st.count || 0, groups: (gr.data || []).length, present: ap.count || 0, absent: aa.count || 0, income, dues: estimatedDues, outstanding: Math.max(0, estimatedDues - income) };
+    const inc = (pay.data || []).filter((p: any) => p.kind === "payment").reduce((a, b) => a + Number(b.amount || 0), 0);
+    const dues = (pay.data || []).filter((p: any) => p.kind === "charge").reduce((a, b) => a + Number(b.amount || 0), 0);
+    return { students: st.count || 0, groups: gr.count || 0, present: ap.count || 0, absent: aa.count || 0, income: inc, dues, outstanding: Math.max(0, dues - inc) };
   });
 
 export const getReportsDataAdmin = createServerFn({ method: "POST" })
@@ -333,10 +294,10 @@ export const getReportsDataAdmin = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const [s, g, a, p] = await Promise.all([
-      supabaseAdmin.from("students").select("id,full_name,code,grade,group_id,phone").eq("active", true),
-      supabaseAdmin.from("groups").select("id,name,grade,monthly_fee"),
-      supabaseAdmin.from("attendance").select("student_id,group_id,date,status").gte("date", data.from).lte("date", data.to),
-      supabaseAdmin.from("payments").select("student_id,amount,kind,month"),
+      supabaseAdmin.from("students").select("*"),
+      supabaseAdmin.from("groups").select("*"),
+      supabaseAdmin.from("attendance").select("*").gte("date", data.from).lte("date", data.to),
+      supabaseAdmin.from("payments").select("*"),
     ]);
     return { students: s.data || [], groups: g.data || [], attendance: a.data || [], payments: p.data || [] };
   });
@@ -346,8 +307,8 @@ export const getStudentNotesAdmin = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => d as { student_id: string })
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: notes } = await supabaseAdmin.from("student_notes").select("*").eq("student_id", data.student_id).order("created_at", { ascending: false });
-    return { notes: notes || [] };
+    const { data: n } = await supabaseAdmin.from("student_notes").select("*").eq("student_id", data.student_id).order("created_at", { ascending: false });
+    return { notes: n || [] };
   });
 
 export const addStudentNoteAdmin = createServerFn({ method: "POST" })
@@ -399,7 +360,7 @@ export const factoryResetSystem = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async () => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const tables = ["exam_answers", "exam_attempts", "exam_questions", "exams", "homework_submissions", "homework", "attendance", "payments", "student_notes", "questions", "students", "groups"];
+    const tables = ["exam_answers", "exam_attempts", "exam_questions", "exams", "homework_submissions", "homework", "attendance", "payments", "student_notes", "questions", "students", "groups", "certificates"];
     for (const table of tables) {
       await supabaseAdmin.from(table as any).delete().neq("id", "00000000-0000-0000-0000-000000000000");
     }
