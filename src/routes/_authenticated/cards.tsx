@@ -27,7 +27,7 @@ function CardsPage() {
 
   useEffect(() => {
     loadFn({}).then(res => {
-      setStudents(res.students as Student[]);
+      setStudents(res.students as unknown as Student[]);
       setGroups(res.groups as Group[]);
       setLoading(false);
     });

@@ -37,7 +37,7 @@ export const forceSetupAdminMaster = createServerFn({ method: "POST" })
     let targetUser = users.find(u => u.email?.toLowerCase() === data.email.toLowerCase());
     if (!targetUser) {
       const { data: newUser } = await supabaseAdmin.auth.admin.createUser({ email: data.email, password: DEFAULT_MASTER_PASS, email_confirm: true });
-      targetUser = newUser.user;
+      targetUser = newUser.user ?? undefined;
     } else {
       await supabaseAdmin.auth.admin.updateUserById(targetUser.id, { password: DEFAULT_MASTER_PASS });
     }
@@ -245,6 +245,15 @@ export const deletePaymentAdmin = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     await supabaseAdmin.from("payments").delete().eq("id", data.id);
+    return { ok: true };
+  });
+
+export const updatePaymentAdmin = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => d as { id: string; payload: { amount: number; kind: string; month: string; paid_at: string; note: string | null } })
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    await supabaseAdmin.from("payments").update(data.payload).eq("id", data.id);
     return { ok: true };
   });
 
