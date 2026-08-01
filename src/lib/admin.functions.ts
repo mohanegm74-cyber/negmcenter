@@ -37,7 +37,7 @@ export const forceSetupAdminMaster = createServerFn({ method: "POST" })
     let targetUser = users.find(u => u.email?.toLowerCase() === data.email.toLowerCase());
     if (!targetUser) {
       const { data: newUser } = await supabaseAdmin.auth.admin.createUser({ email: data.email, password: DEFAULT_MASTER_PASS, email_confirm: true });
-      targetUser = newUser.user;
+      targetUser = newUser.user ?? undefined;
     } else {
       await supabaseAdmin.auth.admin.updateUserById(targetUser.id, { password: DEFAULT_MASTER_PASS });
     }

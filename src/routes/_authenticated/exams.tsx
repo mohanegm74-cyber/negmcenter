@@ -49,7 +49,7 @@ function ExamsPage() {
       const res = await gen({
         data: { grade: form.grade, term: form.term, subject: form.subject || "—", unit: "—", lesson: form.lesson, questionCount: Number(form.question_count), totalScore: Number(form.total_score), difficulty: form.difficulty, kinds },
       });
-      const qs = res.questions.map((q, i) => ({
+      const qs = res.questions.map((q: any, i: number) => ({
         position: i + 1, kind: q.kind || "اختيار من متعدد", prompt: q.prompt, passage: q.passage || null,
         options: q.options || [], correct_answer: q.correct_answer ?? null, rationale: q.rationale || null,
         skill: q.skill || null, difficulty: q.difficulty || form.difficulty, score: Number(q.score) || 1,
