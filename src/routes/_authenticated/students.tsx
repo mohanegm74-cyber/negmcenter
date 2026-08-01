@@ -98,29 +98,30 @@ function StudentsPage() {
         <Link to="/student/register" className="rounded-xl bg-primary px-5 py-2.5 text-sm font-black text-primary-foreground shadow-lg hover:opacity-90">إضافة طالب جديد</Link>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5 bg-white p-4 rounded-2xl shadow-sm">
+      {/* الفلاتر */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5 bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
         <div className="relative">
           <Search className="absolute right-3 top-2.5 h-4 w-4 text-muted-foreground" />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="بحث..." className="w-full rounded-lg border bg-muted/20 py-2 ps-9 text-sm" />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="بحث بالاسم أو الكود..." className="w-full rounded-lg border bg-muted/20 py-2 ps-9 text-sm focus:bg-white transition-all" />
         </div>
-        <select value={gradeFilter} onChange={e => setGradeFilter(e.target.value)} className="rounded-lg border bg-muted/20 py-2 px-3 text-sm">
+        <select value={gradeFilter} onChange={e => setGradeFilter(e.target.value)} className="rounded-lg border bg-muted/20 py-2 px-3 text-sm focus:bg-white">
           <option value="">كل الصفوف</option>
           {GRADES.map(g => <option key={g} value={g}>{g}</option>)}
         </select>
-        <select value={groupFilter} onChange={e => setGroupFilter(e.target.value)} className="rounded-lg border bg-muted/20 py-2 px-3 text-sm">
+        <select value={groupFilter} onChange={e => setGroupFilter(e.target.value)} className="rounded-lg border bg-muted/20 py-2 px-3 text-sm focus:bg-white">
           <option value="">كل المجموعات</option>
           {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
         </select>
-        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as any)} className="rounded-lg border bg-muted/20 py-2 px-3 text-sm font-bold">
+        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as any)} className="rounded-lg border bg-muted/20 py-2 px-3 text-sm font-bold focus:bg-white">
           <option value="all">كل الحالات</option>
           <option value="active" className="text-secondary">المعتمدون</option>
           <option value="pending" className="text-destructive">بانتظار الاعتماد</option>
         </select>
-        <button onClick={() => {setSearch(""); setGradeFilter(""); setGroupFilter(""); setStatusFilter("all");}} className="flex items-center justify-center gap-2 rounded-lg border border-dashed py-2 text-sm"><FilterX className="h-4 w-4" /> مسح</button>
+        <button onClick={() => {setSearch(""); setGradeFilter(""); setGroupFilter(""); setStatusFilter("all");}} className="flex items-center justify-center gap-2 rounded-lg border border-dashed py-2 text-sm text-muted-foreground hover:bg-muted/50 transition-all"><FilterX className="h-4 w-4" /> مسح الفلاتر</button>
       </div>
 
       {editing && (
-        <form onSubmit={saveEdit} className="rounded-2xl bg-white p-6 shadow-xl border-2 border-primary">
+        <form onSubmit={saveEdit} className="rounded-2xl bg-white p-6 shadow-xl border-2 border-primary animate-in zoom-in-95">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-xl font-black text-primary">تعديل: {editing.full_name}</h2>
             <button type="button" onClick={() => setEditing(null)} className="p-2 hover:bg-muted rounded-full"><X className="h-5 w-5" /></button>
@@ -149,7 +150,40 @@ function StudentsPage() {
 
       {noting && <NotesModal student={noting} onClose={() => setNoting(null)} />}
 
-      <div className="overflow-hidden rounded-2xl border bg-white shadow-sm">
+      {/* عرض الموبايل (كروت) */}
+      <div className="grid grid-cols-1 gap-4 md:hidden">
+        {filtered.map(s => (
+          <div key={s.id} className={`bg-white p-5 rounded-2xl shadow-sm border-r-4 ${s.active ? "border-emerald-500" : "border-rose-500"}`}>
+            <div className="flex justify-between items-start mb-3">
+              <div>
+                <div className="font-black text-slate-800">{s.full_name}</div>
+                <div className="text-[10px] bg-slate-100 px-2 py-0.5 rounded-full font-mono mt-1 w-fit">{s.code}</div>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => setEditing(s)} className="p-2 bg-slate-50 rounded-xl text-primary"><Pencil className="h-4 w-4" /></button>
+                <button onClick={() => remove(s.id, s.full_name)} className="p-2 bg-slate-50 rounded-xl text-destructive"><Trash2 className="h-4 w-4" /></button>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-y-2 text-xs font-bold border-t pt-3">
+              <div className="text-muted-foreground">المجموعة: <span className="text-slate-700">{groupMap[s.group_id!] || "—"}</span></div>
+              <div className="text-muted-foreground">الصف: <span className="text-slate-700">{s.grade || "—"}</span></div>
+              <div className="text-muted-foreground">الهاتف: <span className="text-slate-700">{s.phone || "—"}</span></div>
+              <div className="text-muted-foreground">ولي الأمر: <span className="text-slate-700">{s.parent_phone || "—"}</span></div>
+            </div>
+            <div className="mt-4 flex gap-2">
+              {!s.active ? (
+                <button onClick={() => handleStatus(s.id, true)} className="flex-1 py-2 bg-emerald-600 text-white rounded-xl text-[11px] font-black shadow-lg shadow-emerald-100 flex items-center justify-center gap-1"><CheckCircle className="h-3.5 w-3.5" /> اعتماد الطالب</button>
+              ) : (
+                <button onClick={() => handleStatus(s.id, false)} className="flex-1 py-2 bg-amber-50 text-amber-700 rounded-xl text-[11px] font-black flex items-center justify-center gap-1"><UserX className="h-3.5 w-3.5" /> إلغاء الاعتماد</button>
+              )}
+              <button onClick={() => setNoting(s)} className="px-4 py-2 bg-secondary/10 text-secondary rounded-xl"><MessageSquarePlus className="h-4 w-4" /></button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* عرض الكمبيوتر (جدول) */}
+      <div className="hidden md:block overflow-hidden rounded-2xl border bg-white shadow-sm">
         <table className="w-full text-right text-sm">
           <thead className="bg-primary text-primary-foreground">
             <tr><th className="p-4">الطالب</th><th className="p-4">المجموعة</th><th className="p-4">التواصل</th><th className="p-4 text-center">الحالة / إجراءات</th></tr>
@@ -159,20 +193,20 @@ function StudentsPage() {
               <tr key={s.id} className={`hover:bg-muted/30 transition-colors ${!s.active ? "bg-destructive/5" : ""}`}>
                 <td className="p-4">
                   <div className="font-bold text-base">{s.full_name}</div>
-                  <div className="flex gap-2 items-center mt-1"><span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-mono">{s.code}</span></div>
+                  <div className="flex gap-2 items-center mt-1"><span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-mono">{s.code}</span> <span className="text-[10px] text-muted-foreground">{s.grade}</span></div>
                 </td>
                 <td className="p-4"><div className="font-bold">{groupMap[s.group_id!] || "—"}</div></td>
                 <td className="p-4 text-xs font-semibold">طالب: {s.phone || "—"}<br/><span className="text-muted-foreground">ولي أمر: {s.parent_phone || "—"}</span></td>
                 <td className="p-4">
                   <div className="flex justify-center gap-2">
                     {!s.active ? (
-                      <button onClick={() => handleStatus(s.id, true)} className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-[11px] font-black text-white shadow-sm"><CheckCircle className="h-3.5 w-3.5" /> اعتماد الطالب</button>
+                      <button onClick={() => handleStatus(s.id, true)} className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-[11px] font-black text-white shadow-sm hover:scale-105 transition-transform"><CheckCircle className="h-3.5 w-3.5" /> اعتماد الطالب</button>
                     ) : (
-                      <button onClick={() => handleStatus(s.id, false)} className="flex items-center gap-1.5 rounded-lg bg-amber-600/10 px-3 py-1.5 text-[11px] font-black text-amber-700"><UserX className="h-3.5 w-3.5" /> إلغاء الاعتماد</button>
+                      <button onClick={() => handleStatus(s.id, false)} className="flex items-center gap-1.5 rounded-lg bg-amber-600/10 px-3 py-1.5 text-[11px] font-black text-amber-700 hover:bg-amber-100 transition-colors"><UserX className="h-3.5 w-3.5" /> إلغاء الاعتماد</button>
                     )}
-                    <button onClick={() => setNoting(s)} className="rounded-lg bg-secondary/10 p-2 text-secondary"><MessageSquarePlus className="h-4 w-4" /></button>
-                    <button onClick={() => setEditing(s)} className="rounded-lg bg-primary/10 p-2 text-primary"><Pencil className="h-4 w-4" /></button>
-                    <button onClick={() => remove(s.id, s.full_name)} className="rounded-lg bg-destructive/10 p-2 text-destructive"><Trash2 className="h-4 w-4" /></button>
+                    <button onClick={() => setNoting(s)} className="rounded-lg bg-secondary/10 p-2 text-secondary hover:bg-secondary/20 transition-colors" title="ملاحظات ولي الأمر"><MessageSquarePlus className="h-4 w-4" /></button>
+                    <button onClick={() => setEditing(s)} className="rounded-lg bg-primary/10 p-2 text-primary hover:bg-primary/20 transition-colors"><Pencil className="h-4 w-4" /></button>
+                    <button onClick={() => remove(s.id, s.full_name)} className="rounded-lg bg-destructive/10 p-2 text-destructive hover:bg-destructive/20 transition-colors"><Trash2 className="h-4 w-4" /></button>
                   </div>
                 </td>
               </tr>
@@ -180,6 +214,10 @@ function StudentsPage() {
           </tbody>
         </table>
       </div>
+      
+      {filtered.length === 0 && (
+        <div className="p-20 text-center text-muted-foreground bg-white rounded-2xl border border-dashed">لا يوجد طلاب يطابقون البحث حالياً.</div>
+      )}
     </div>
   );
 }
@@ -188,12 +226,11 @@ function F({ name, label, defaultValue, required = false }: any) {
   return (
     <div className="space-y-1">
       <label className="text-[11px] font-black text-muted-foreground uppercase">{label}</label>
-      <input name={name} defaultValue={defaultValue} required={required} className="w-full rounded-xl border bg-white px-4 py-2 text-sm font-bold" />
+      <input name={name} defaultValue={defaultValue} required={required} className="w-full rounded-xl border bg-white px-4 py-2 text-sm font-bold focus:ring-2 focus:ring-primary/20 outline-none transition-all" />
     </div>
   );
 }
 
-// ... (keep NotesModal identical to the original file)
 function NotesModal({ student, onClose }: { student: any; onClose: () => void }) {
   const [notes, setNotes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -224,23 +261,26 @@ function NotesModal({ student, onClose }: { student: any; onClose: () => void })
     catch { toast.error("فشل الحذف"); }
   }
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-2xl max-h-[90vh] overflow-hidden rounded-3xl bg-white shadow-2xl flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-2xl max-h-[90vh] overflow-hidden rounded-3xl bg-white shadow-2xl flex flex-col animate-in slide-in-from-bottom-8">
         <div className="p-5 border-b flex justify-between items-center bg-primary/5">
           <div><h2 className="text-xl font-black text-primary">تواصل مع ولي الأمر</h2><p className="text-xs text-muted-foreground font-bold">{student.full_name}</p></div>
-          <button onClick={onClose} className="p-2 hover:bg-white rounded-full"><X className="h-6 w-6" /></button>
+          <button onClick={onClose} className="p-2 hover:bg-white rounded-full transition-all"><X className="h-6 w-6" /></button>
         </div>
         <div className="flex-1 overflow-y-auto p-5 space-y-6">
-          <form onSubmit={handleAdd} className="p-5 bg-secondary/5 rounded-2xl border space-y-4">
-            <input name="title" placeholder="عنوان الملاحظة..." required className="w-full rounded-xl border p-3 text-sm font-bold" />
-            <textarea name="body" placeholder="نص الملاحظة..." required rows={3} className="w-full rounded-xl border p-3 text-sm" />
-            <button type="submit" disabled={busy} className="w-full rounded-xl bg-secondary py-3 text-sm font-black text-white">إرسال الملاحظة لولي الأمر</button>
+          <form onSubmit={handleAdd} className="p-5 bg-secondary/5 rounded-2xl border border-secondary/10 space-y-4">
+            <input name="title" placeholder="عنوان الملاحظة (مثال: مستوى الطالب في الحصة)" required className="w-full rounded-xl border p-3 text-sm font-bold outline-none focus:ring-2 focus:ring-secondary/20" />
+            <textarea name="body" placeholder="نص الملاحظة الموجهة لولي الأمر..." required rows={3} className="w-full rounded-xl border p-3 text-sm outline-none focus:ring-2 focus:ring-secondary/20" />
+            <button type="submit" disabled={busy} className="w-full rounded-xl bg-secondary py-3 text-sm font-black text-white shadow-lg shadow-secondary/10 hover:opacity-90 transition-all flex items-center justify-center gap-2">
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageSquarePlus className="h-4 w-4" />} إرسال الملاحظة لولي الأمر
+            </button>
           </form>
           <div className="space-y-3">
-            {loading ? <Loader2 className="mx-auto h-8 w-8 animate-spin" /> : notes.map(n => (
-              <div key={n.id} className="p-4 border rounded-2xl flex justify-between gap-3">
-                <div className="flex-1"><div className="font-black text-secondary">{n.title}</div><p className="text-sm mt-1 whitespace-pre-wrap">{n.body}</p></div>
-                <button onClick={() => handleDel(n.id)} className="text-destructive"><Trash2 className="h-5 w-5" /></button>
+            <h3 className="text-xs font-black text-muted-foreground uppercase flex items-center gap-2 px-1"><MessageSquareQuote className="h-3.5 w-3.5" /> السجل السابق</h3>
+            {loading ? <Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground/30" /> : notes.length === 0 ? <p className="text-center py-4 text-xs text-muted-foreground">لا يوجد ملاحظات سابقة مرسلة</p> : notes.map(n => (
+              <div key={n.id} className="p-4 border rounded-2xl flex justify-between items-start gap-3 bg-white hover:border-secondary/30 transition-all">
+                <div className="flex-1"><div className="font-black text-secondary">{n.title}</div><p className="text-sm mt-1 whitespace-pre-wrap leading-relaxed text-slate-600">{n.body}</p></div>
+                <button onClick={() => handleDel(n.id)} className="text-rose-400 hover:text-rose-600 p-1 transition-all"><Trash2 className="h-4 w-4" /></button>
               </div>
             ))}
           </div>
