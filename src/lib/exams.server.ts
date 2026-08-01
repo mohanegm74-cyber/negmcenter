@@ -1,26 +1,8 @@
 /** Server-only helpers for the smart exams module. */
+import { callAi as unifiedCallAi } from "./ai.server";
 
-export async function callAi(system: string, prompt: string, json = false) {
-  const key = process.env.LOVABLE_API_KEY;
-  if (!key) throw new Error("Missing LOVABLE_API_KEY");
-  const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: { "content-type": "application/json", "Lovable-API-Key": key },
-    body: JSON.stringify({
-      model: "google/gemini-3.6-flash",
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: prompt },
-      ],
-      ...(json ? { response_format: { type: "json_object" } } : {}),
-    }),
-  });
-  if (r.status === 429) throw new Error("تم تجاوز حد الاستخدام، حاول بعد قليل.");
-  if (r.status === 402) throw new Error("انتهى رصيد الذكاء الاصطناعي، يرجى شحن الرصيد.");
-  if (!r.ok) throw new Error(`AI error ${r.status}: ${await r.text()}`);
-  const j = await r.json();
-  return (j?.choices?.[0]?.message?.content as string) || "";
-}
+// إعادة توجيه وظيفة callAi للوظيفة الموحدة التي تحتوي على مفتاحك المجاني
+export const callAi = unifiedCallAi;
 
 export function parseJson(text: string): any {
   const cleaned = text.replace(/```json/gi, "").replace(/```/g, "").trim();
