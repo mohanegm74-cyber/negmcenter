@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Users, Boxes, ClipboardCheck, CalendarX, Wallet, TrendingUp, AlertCircle, Loader2, Sparkles, ArrowUpRight, RefreshCw } from "lucide-react";
+import { Users, Boxes, ClipboardCheck, CalendarX, Wallet, TrendingUp, AlertCircle, Loader2, Sparkles, ArrowUpRight, RefreshCw, ArrowDownCircle, ArrowUpCircle } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { getDashboardStatsAdmin } from "@/lib/admin.functions";
 
@@ -40,41 +40,43 @@ function Dashboard() {
         <button onClick={load} className="h-12 px-5 rounded-2xl bg-white shadow-sm border border-slate-100 flex items-center justify-center gap-2 hover:bg-primary/5 transition-all text-primary font-bold text-sm"><RefreshCw className="h-4 w-4" /> تحديث البيانات</button>
       </div>
       
-      {/* القسم الأول: إحصائيات عامة */}
+      {/* القسم الأول: إحصائيات عامة ومالية مدمجة */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatCard icon={Users} label="الطلاب المعتمدون" value={s.students} tone="primary" />
         <StatCard icon={Boxes} label="إجمالي المجموعات" value={s.groups} tone="secondary" />
+        <StatCard icon={ArrowUpCircle} label="إجمالي المستحق" value={s.dues} suffix="ج.م" tone="primary" />
+        <StatCard icon={ArrowDownCircle} label="إجمالي المدفوع" value={s.income} suffix="ج.م" tone="secondary" />
+        <StatCard icon={AlertCircle} label="إجمالي المتأخرات" value={s.outstanding} suffix="ج.م" tone="destructive" />
         <StatCard icon={ClipboardCheck} label="حضور اليوم" value={s.present} tone="gold" />
         <StatCard icon={CalendarX} label="غياب اليوم" value={s.absent} tone="destructive" />
       </div>
 
-      {/* القسم الثاني: ملخص المالية (مظهر جديد ومؤتمت) */}
+      {/* القسم الثاني: شريط تقدم التحصيل المالي */}
       <section className="rounded-[2.5rem] bg-slate-900 p-8 text-white shadow-2xl relative overflow-hidden group">
         <Sparkles className="absolute -right-10 -top-10 h-64 w-64 text-white/5 rotate-12 group-hover:scale-110 transition-transform duration-1000" />
         <div className="relative z-10">
           <div className="flex items-center justify-between mb-8">
-            <h2 className="text-xl font-black flex items-center gap-2"><Wallet className="h-6 w-6 text-emerald-400" /> المركز المالي للسنتر</h2>
+            <h2 className="text-xl font-black flex items-center gap-2"><Wallet className="h-6 w-6 text-emerald-400" /> كفاءة التحصيل المالي</h2>
             <Link to="/finance" className="text-xs font-bold text-white/60 hover:text-white flex items-center gap-1 transition-colors underline underline-offset-4 decoration-emerald-400/50">إدارة المالية بالتفصيل <ArrowUpRight className="h-3 w-3" /></Link>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
             <div>
-              <div className="text-[10px] font-black text-white/40 uppercase mb-2 tracking-widest">إجمالي الرسوم المستحقة</div>
-              <div className="text-4xl font-black text-white">{s.dues.toLocaleString("ar-EG")} <span className="text-sm font-normal opacity-60">ج.م</span></div>
-              <div className="text-[10px] font-bold text-white/20 mt-1">رسوم جميع الطلاب المسجلين</div>
-            </div>
-            <div>
-              <div className="text-[10px] font-black text-emerald-400/60 uppercase mb-2 tracking-widest">المحصل فعلياً</div>
-              <div className="text-4xl font-black text-emerald-400">{s.income.toLocaleString("ar-EG")} <span className="text-sm font-normal opacity-60">ج.م</span></div>
-              <div className="mt-3 h-2 w-full bg-white/10 rounded-full overflow-hidden border border-white/5">
+              <div className="text-[10px] font-black text-emerald-400/60 uppercase mb-2 tracking-widest">نسبة التحصيل الفعلي</div>
+              <div className="text-5xl font-black text-emerald-400">{s.dues > 0 ? Math.round((s.income / s.dues) * 100) : 0}%</div>
+              <div className="mt-4 h-3 w-full bg-white/10 rounded-full overflow-hidden border border-white/5">
                 <div className="h-full bg-gradient-to-l from-emerald-400 to-emerald-500 shadow-[0_0_15px_rgba(52,211,153,0.3)] transition-all duration-1000" style={{ width: `${s.dues > 0 ? Math.min(100, (s.income / s.dues) * 100) : 0}%` }}></div>
               </div>
-              <div className="text-[10px] font-bold text-emerald-400/40 mt-2">نسبة التحصيل: {s.dues > 0 ? Math.round((s.income / s.dues) * 100) : 0}%</div>
             </div>
-            <div>
-              <div className="text-[10px] font-black text-rose-400/60 uppercase mb-2 tracking-widest">إجمالي المتأخرات</div>
-              <div className="text-4xl font-black text-rose-400">{s.outstanding.toLocaleString("ar-EG")} <span className="text-sm font-normal opacity-60">ج.م</span></div>
-              <div className="text-[10px] font-bold text-rose-400/30 mt-1 flex items-center gap-1"><AlertCircle className="h-3 w-3" /> يحتاج للمتابعة الفورية</div>
+            <div className="bg-white/5 p-6 rounded-3xl border border-white/10">
+              <div className="flex justify-between items-center mb-4">
+                <span className="text-xs font-bold text-white/40">صافي الأرباح المحصلة:</span>
+                <span className="text-lg font-black text-white">{s.income.toLocaleString("ar-EG")} ج.م</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-xs font-bold text-white/40">الديون المتبقية:</span>
+                <span className="text-lg font-black text-rose-400">{s.outstanding.toLocaleString("ar-EG")} ج.م</span>
+              </div>
             </div>
           </div>
         </div>
@@ -90,7 +92,7 @@ function Dashboard() {
   );
 }
 
-function StatCard({ icon: Icon, label, value, tone }: any) {
+function StatCard({ icon: Icon, label, value, tone, suffix = "" }: any) {
   const bg = tone === "primary" ? "bg-primary text-primary-foreground" : tone === "secondary" ? "bg-secondary text-secondary-foreground" : tone === "gold" ? "bg-gold text-gold-foreground" : "bg-destructive text-white";
   const shadow = tone === "primary" ? "shadow-primary/10" : tone === "secondary" ? "shadow-secondary/10" : tone === "gold" ? "shadow-gold/10" : "shadow-destructive/10";
   
@@ -99,7 +101,7 @@ function StatCard({ icon: Icon, label, value, tone }: any) {
       <div className={`mb-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl ${bg} shadow-lg ${shadow} group-hover:scale-110 group-hover:rotate-3 transition-transform`}>
         <Icon className="h-6 w-6" />
       </div>
-      <div className="text-2xl font-black text-slate-800">{value.toLocaleString("ar-EG")}</div>
+      <div className="text-2xl font-black text-slate-800">{value.toLocaleString("ar-EG")} <span className="text-xs font-normal opacity-60">{suffix}</span></div>
       <div className="mt-1 text-xs font-bold text-muted-foreground uppercase tracking-tight">{label}</div>
     </div>
   );
