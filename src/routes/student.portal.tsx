@@ -4,7 +4,8 @@ import { toast } from "sonner";
 import { 
   User, BookOpen, Wallet, MessageCircleQuestion, Sparkles, 
   Save, Loader2, Award, Calendar, Home, ClipboardList, 
-  MessageSquare, UserCircle, CreditCard, ChevronLeft
+  MessageSquare, UserCircle, CreditCard, ChevronLeft,
+  LogOut, XCircle, CheckCircle2
 } from "lucide-react";
 import { BrandLogo } from "@/components/BrandLogo";
 import { ExamsTab } from "@/components/ExamsTab";
@@ -41,6 +42,7 @@ function Portal() {
     } catch (err: any) {
       toast.error(err.message || "فشل الدخول");
       if (err.message.includes("مراجعة")) localStorage.removeItem("najm_student_code");
+      throw err; // السماح للـ catch الخارجي بالتعامل معه إذا لزم الأمر
     }
   }
 
@@ -52,8 +54,11 @@ function Portal() {
     try {
       await loadData(c);
       localStorage.setItem("najm_student_code", c);
-    } catch (err: any) { toast.error(err.message); }
-    finally { setLoading(false); }
+    } catch (err: any) { 
+      // تم عرض التوست في loadData
+    } finally { 
+      setLoading(false); 
+    }
   }
 
   async function handleUpdateProfile(e: React.FormEvent<HTMLFormElement>) {
@@ -65,7 +70,7 @@ function Portal() {
     try {
       await updateProfile({ data: { code: data.student.code, fields } });
       toast.success("تم تحديث بياناتك بنجاح");
-      loadData(data.student.code);
+      await loadData(data.student.code);
     } catch (err: any) { toast.error(err.message); }
     finally { setIsSaving(false); }
   }
@@ -79,7 +84,7 @@ function Portal() {
       await askFn({ data: { code: data.student.code, body } });
       toast.success("تم إرسال سؤالك للأستاذ");
       e.currentTarget.reset();
-      loadData(data.student.code);
+      await loadData(data.student.code);
     } catch (err: any) { toast.error(err.message); }
   }
 
@@ -108,8 +113,8 @@ function Portal() {
   const { student, group, payments, notes, homework, certificates, questions } = data;
 
   // حساب الموقف المالي
-  const totalPaid = payments.filter((p: any) => p.kind === "payment").reduce((acc: number, p: any) => acc + Number(p.amount), 0);
-  const totalDues = payments.filter((p: any) => p.kind === "charge").reduce((acc: number, p: any) => acc + Number(p.amount), 0);
+  const totalPaid = (payments || []).filter((p: any) => p.kind === "payment").reduce((acc: number, p: any) => acc + Number(p.amount), 0);
+  const totalDues = (payments || []).filter((p: any) => p.kind === "charge").reduce((acc: number, p: any) => acc + Number(p.amount), 0);
   const estimatedDues = totalDues > 0 ? totalDues : (group?.monthly_fee || 0);
   const balance = estimatedDues - totalPaid;
 
@@ -126,7 +131,7 @@ function Portal() {
           </div>
           <button onClick={() => {localStorage.removeItem("najm_student_code"); setData(null);}} className="p-2 rounded-xl bg-destructive/10 text-destructive hover:bg-destructive hover:text-white transition-all"><LogOut className="h-5 w-5" /></button>
         </div>
-        <nav className="max-w-5xl mx-auto flex gap-1.5 overflow-x-auto mt-4 no-scrollbar">
+        <nav className="max-w-5xl mx-auto flex gap-1.5 overflow-x-auto mt-4 no-scrollbar pb-1">
           <TabBtn id="info" label="بياناتي" icon={UserCircle} active={tab === "info"} onClick={() => setTab("info")} />
           <TabBtn id="schedule" label="المواعيد" icon={Calendar} active={tab === "schedule"} onClick={() => setTab("schedule")} />
           <TabBtn id="homework" label="الواجبات والشهادات" icon={BookOpen} active={tab === "homework"} onClick={() => setTab("homework")} />
@@ -138,7 +143,6 @@ function Portal() {
       </header>
 
       <main className="max-w-5xl mx-auto p-4 md:p-6">
-        {/* التبويب: البيانات الشخصية وتعديلها */}
         {tab === "info" && (
           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
             <section className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100">
@@ -160,7 +164,6 @@ function Portal() {
           </div>
         )}
 
-        {/* التبويب: المواعيد والحصص */}
         {tab === "schedule" && (
           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
             <section className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-100 text-center">
@@ -179,12 +182,11 @@ function Portal() {
           </div>
         )}
 
-        {/* التبويب: الواجبات والشهادات */}
         {tab === "homework" && (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
             <section>
               <h2 className="text-xl font-black mb-4 flex items-center gap-2"><BookOpen className="h-6 w-6 text-primary" /> الواجبات المدرسية</h2>
-              {homework.length === 0 ? <EmptyState icon={BookOpen} text="لا توجد واجبات مسجلة لك حالياً" /> : (
+              {(!homework || homework.length === 0) ? <EmptyState icon={BookOpen} text="لا توجد واجبات مسجلة لك حالياً" /> : (
                 <div className="grid gap-4 sm:grid-cols-2">
                   {homework.map((h: any) => (
                     <div key={h.id} className="bg-white p-5 rounded-2xl border shadow-sm hover:border-primary/30 transition-colors">
@@ -202,7 +204,7 @@ function Portal() {
 
             <section>
               <h2 className="text-xl font-black mb-4 flex items-center gap-2"><Award className="h-6 w-6 text-gold" /> شهادات التقدير</h2>
-              {certificates.length === 0 ? <EmptyState icon={Award} text="لم تحصل على شهادات بعد، ابذل مجهوداً أكبر!" /> : (
+              {(!certificates || certificates.length === 0) ? <EmptyState icon={Award} text="لم تحصل على شهادات بعد، ابذل مجهوداً أكبر!" /> : (
                 <div className="grid gap-4 sm:grid-cols-2">
                   {certificates.map((c: any) => (
                     <div key={c.id} className="bg-white p-6 rounded-2xl border-2 border-gold/20 shadow-sm relative overflow-hidden group hover:shadow-lg transition-all">
@@ -221,10 +223,8 @@ function Portal() {
           </div>
         )}
 
-        {/* التبويب: الاختبارات الذكية */}
         {tab === "exams" && <ExamsTab code={student.code} />}
 
-        {/* التبويب: الموقف المالي */}
         {tab === "finance" && (
           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
             <section className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-100">
@@ -248,7 +248,7 @@ function Portal() {
               <div className="text-center py-4">
                 {balance <= 0 ? (
                   <div className="inline-flex items-center gap-2 rounded-full bg-emerald-500 px-6 py-2 text-sm font-black text-white shadow-lg shadow-emerald-200">
-                    <CheckCircle className="h-5 w-5" /> تم سداد المصاريف بالكامل
+                    <CheckCircle2 className="h-5 w-5" /> تم سداد المصاريف بالكامل
                   </div>
                 ) : (
                   <div className="inline-flex items-center gap-2 rounded-full bg-rose-500 px-6 py-2 text-sm font-black text-white shadow-lg shadow-rose-200">
@@ -263,14 +263,14 @@ function Portal() {
                   <table className="w-full text-right text-sm">
                     <thead className="bg-slate-50"><tr><th className="p-3">التاريخ</th><th className="p-3">النوع</th><th className="p-3">المبلغ</th></tr></thead>
                     <tbody className="divide-y">
-                      {payments.map((p: any) => (
+                      {(payments || []).map((p: any) => (
                         <tr key={p.id}>
                           <td className="p-3 font-mono text-xs">{p.paid_at}</td>
                           <td className="p-3"><span className={`px-2 py-0.5 rounded text-[10px] font-bold ${p.kind === "payment" ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}>{p.kind === "payment" ? "سداد" : "مستحق"}</span></td>
                           <td className="p-3 font-black">{p.amount} ج.م</td>
                         </tr>
                       ))}
-                      {payments.length === 0 && <tr><td colSpan={3} className="p-4 text-center text-muted-foreground">لا توجد حركات مالية مسجلة</td></tr>}
+                      {(!payments || payments.length === 0) && <tr><td colSpan={3} className="p-4 text-center text-muted-foreground">لا توجد حركات مالية مسجلة</td></tr>}
                     </tbody>
                   </table>
                 </div>
@@ -279,7 +279,6 @@ function Portal() {
           </div>
         )}
 
-        {/* التبويب: اسأل معلمك */}
         {tab === "ask" && (
           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
             <section className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100">
@@ -293,7 +292,7 @@ function Portal() {
             <section>
               <h3 className="font-black text-slate-800 mb-4">الأسئلة السابقة والردود</h3>
               <div className="space-y-3">
-                {questions.map((q: any) => (
+                {(questions || []).map((q: any) => (
                   <div key={q.id} className="bg-white p-4 rounded-2xl border shadow-sm">
                     <div className="text-sm font-bold text-slate-700">{q.body}</div>
                     {q.answer ? (
@@ -306,21 +305,22 @@ function Portal() {
                     )}
                   </div>
                 ))}
-                {questions.length === 0 && <p className="text-center py-8 text-muted-foreground">لم تطرح أي أسئلة بعد</p>}
+                {(!questions || questions.length === 0) && <p className="text-center py-8 text-muted-foreground">لم تطرح أي أسئلة بعد</p>}
               </div>
             </section>
           </div>
         )}
 
-        {/* التبويب: ملاحظات الأستاذ لولي الأمر */}
         {tab === "notes" && (
           <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4">
             <h2 className="text-xl font-black mb-4 flex items-center gap-2"><MessageSquare className="h-6 w-6 text-secondary" /> ملاحظات الأستاذ لولي الأمر</h2>
-            {notes.length === 0 ? <EmptyState icon={MessageSquare} text="لا توجد ملاحظات مرسلة لولي الأمر حالياً" /> : (
+            {(!notes || notes.length === 0) ? <EmptyState icon={MessageSquare} text="لا توجد ملاحظات مرسلة لولي الأمر حالياً" /> : (
               <div className="space-y-4">
                 {notes.map((n: any) => (
                   <div key={n.id} className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 flex gap-4">
-                    <div className="h-12 w-12 rounded-2xl bg-secondary/10 flex items-center justify-center text-secondary shrink-0"><MessageSquareQuote className="h-6 w-6" /></div>
+                    <div className="h-12 w-12 rounded-2xl bg-secondary/10 flex items-center justify-center text-secondary shrink-0">
+                      <MessageSquare className="h-6 w-6" />
+                    </div>
                     <div>
                       <div className="font-black text-slate-800">{n.title}</div>
                       <p className="text-sm text-slate-600 mt-1 leading-relaxed">{n.body}</p>
@@ -369,11 +369,5 @@ function EmptyState({ icon: Icon, text }: { icon: any; text: string }) {
       <Icon className="mx-auto h-12 w-12 text-muted/30 mb-3" />
       <p className="text-muted-foreground font-bold">{text}</p>
     </div>
-  );
-}
-
-function CheckCircle(props: any) {
-  return (
-    <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
   );
 }
