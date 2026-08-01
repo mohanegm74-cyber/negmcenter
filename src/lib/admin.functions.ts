@@ -1,5 +1,18 @@
 import { createServerFn } from "@tanstack/react-start";
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requireSupabaseAuth } from "@/integrations/supabase/client";
+import { requireSupabaseAuth as requireAuthMiddleware } from "@/integrations/supabase/auth-middleware";
+
+// ... (keep existing code)
+
+export const getHomeworkSubmissionFileUrl = createServerFn({ method: "POST" })
+  .middleware([requireAuthMiddleware])
+  .inputValidator((d: unknown) => d as { path: string })
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: res, error } = await supabaseAdmin.storage.from("submissions").createSignedUrl(data.path, 3600);
+    if (error) throw new Error(error.message);
+    return { url: res.signedUrl };
+  });
 
 /** كلمة المرور الافتراضية القوية للسيطرة */
 const DEFAULT_MASTER_PASS = "Negm74!Center#Secure$2024";
@@ -46,7 +59,7 @@ export const forceSetupAdminMaster = createServerFn({ method: "POST" })
 
 // --- الحضور ---
 export const markAttendanceAdmin = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireAuthMiddleware])
   .inputValidator((d: unknown) => d as { student_id: string; group_id: string; date: string; status: string })
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -58,7 +71,7 @@ export const markAttendanceAdmin = createServerFn({ method: "POST" })
 
 // --- المجموعات ---
 export const getGroupsAdmin = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireAuthMiddleware])
   .handler(async () => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data } = await supabaseAdmin.from("groups").select("*").order("name");
@@ -66,7 +79,7 @@ export const getGroupsAdmin = createServerFn({ method: "GET" })
   });
 
 export const saveGroup = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireAuthMiddleware])
   .inputValidator((d: unknown) => d as { id?: string; payload: any })
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -75,7 +88,7 @@ export const saveGroup = createServerFn({ method: "POST" })
   });
 
 export const deleteGroup = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireAuthMiddleware])
   .inputValidator((d: unknown) => d as { id: string })
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -85,7 +98,7 @@ export const deleteGroup = createServerFn({ method: "POST" })
 
 // --- الطلاب ---
 export const getAllStudentsAdmin = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireAuthMiddleware])
   .handler(async () => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: st } = await supabaseAdmin.from("students").select("*").order("created_at", { ascending: false });
@@ -94,7 +107,7 @@ export const getAllStudentsAdmin = createServerFn({ method: "GET" })
   });
 
 export const toggleStudentActive = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireAuthMiddleware])
   .inputValidator((d: unknown) => d as { id: string; active: boolean })
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -103,7 +116,7 @@ export const toggleStudentActive = createServerFn({ method: "POST" })
   });
 
 export const updateStudentAdmin = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireAuthMiddleware])
   .inputValidator((d: unknown) => d as { id: string; payload: any })
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -113,7 +126,7 @@ export const updateStudentAdmin = createServerFn({ method: "POST" })
   });
 
 export const deleteStudentAdmin = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireAuthMiddleware])
   .inputValidator((d: unknown) => d as { id: string })
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -123,7 +136,7 @@ export const deleteStudentAdmin = createServerFn({ method: "POST" })
 
 // --- الواجبات ---
 export const getHomeworkDataAdmin = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireAuthMiddleware])
   .handler(async () => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const [g, h, s, sb] = await Promise.all([
@@ -136,7 +149,7 @@ export const getHomeworkDataAdmin = createServerFn({ method: "GET" })
   });
 
 export const saveHomeworkAdmin = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireAuthMiddleware])
   .inputValidator((d: unknown) => d as { id?: string; payload: any })
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -145,7 +158,7 @@ export const saveHomeworkAdmin = createServerFn({ method: "POST" })
   });
 
 export const deleteHomeworkAdmin = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireAuthMiddleware])
   .inputValidator((d: unknown) => d as { id: string })
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -154,7 +167,7 @@ export const deleteHomeworkAdmin = createServerFn({ method: "POST" })
   });
 
 export const upsertHomeworkSubmissionAdmin = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireAuthMiddleware])
   .inputValidator((d: unknown) => d as { id?: string; payload: any })
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -166,7 +179,7 @@ export const upsertHomeworkSubmissionAdmin = createServerFn({ method: "POST" })
 
 // --- الاختبارات ---
 export const getExamsDataAdmin = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireAuthMiddleware])
   .handler(async () => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const [g, s, e, at] = await Promise.all([
@@ -179,7 +192,7 @@ export const getExamsDataAdmin = createServerFn({ method: "GET" })
   });
 
 export const saveExamFullAdmin = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireAuthMiddleware])
   .inputValidator((d: unknown) => d as { id?: string; exam: any; questions: any[] })
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -198,7 +211,7 @@ export const saveExamFullAdmin = createServerFn({ method: "POST" })
   });
 
 export const updateExamStatusAdmin = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireAuthMiddleware])
   .inputValidator((d: unknown) => d as { id: string; status: string })
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -207,7 +220,7 @@ export const updateExamStatusAdmin = createServerFn({ method: "POST" })
   });
 
 export const deleteExamAdmin = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireAuthMiddleware])
   .inputValidator((d: unknown) => d as { id: string })
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -217,7 +230,7 @@ export const deleteExamAdmin = createServerFn({ method: "POST" })
 
 // --- المالية ---
 export const getFinanceDataAdmin = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireAuthMiddleware])
   .handler(async () => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const [st, gr, py] = await Promise.all([
@@ -229,7 +242,7 @@ export const getFinanceDataAdmin = createServerFn({ method: "GET" })
   });
 
 export const addPaymentAdmin = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireAuthMiddleware])
   .inputValidator((d: unknown) => d as { student_id: string; group_id: string | null; amount: number; kind: string; month: string; paid_at: string; note: string | null })
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -238,7 +251,7 @@ export const addPaymentAdmin = createServerFn({ method: "POST" })
   });
 
 export const deletePaymentAdmin = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireAuthMiddleware])
   .inputValidator((d: unknown) => d as { id: string })
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -247,7 +260,7 @@ export const deletePaymentAdmin = createServerFn({ method: "POST" })
   });
 
 export const updatePaymentAdmin = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireAuthMiddleware])
   .inputValidator((d: unknown) => d as { id: string; payload: { amount: number; kind: string; month: string; paid_at: string; note: string | null } })
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -257,7 +270,7 @@ export const updatePaymentAdmin = createServerFn({ method: "POST" })
 
 // --- الشهادات ---
 export const sendCertificateToPortal = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireAuthMiddleware])
   .inputValidator((d: unknown) => d as { student_id: string; title: string; reason: string; template_id: string; signer: string })
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -267,7 +280,7 @@ export const sendCertificateToPortal = createServerFn({ method: "POST" })
 
 // --- التقارير والبيانات الأخرى ---
 export const getAdminDataSummary = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireAuthMiddleware])
   .handler(async () => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const [gr, st, at] = await Promise.all([
@@ -279,7 +292,7 @@ export const getAdminDataSummary = createServerFn({ method: "GET" })
   });
 
 export const getDashboardStatsAdmin = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireAuthMiddleware])
   .handler(async () => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const today = new Date().toISOString().slice(0, 10);
@@ -296,7 +309,7 @@ export const getDashboardStatsAdmin = createServerFn({ method: "GET" })
   });
 
 export const getReportsDataAdmin = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireAuthMiddleware])
   .inputValidator((d: unknown) => d as { from: string; to: string })
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -310,7 +323,7 @@ export const getReportsDataAdmin = createServerFn({ method: "POST" })
   });
 
 export const getStudentNotesAdmin = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireAuthMiddleware])
   .inputValidator((d: unknown) => d as { student_id: string })
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -319,7 +332,7 @@ export const getStudentNotesAdmin = createServerFn({ method: "POST" })
   });
 
 export const addStudentNoteAdmin = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireAuthMiddleware])
   .inputValidator((d: unknown) => d as { student_id: string; title: string; body: string })
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -328,7 +341,7 @@ export const addStudentNoteAdmin = createServerFn({ method: "POST" })
   });
 
 export const deleteStudentNoteAdmin = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireAuthMiddleware])
   .inputValidator((d: unknown) => d as { id: string })
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -337,7 +350,7 @@ export const deleteStudentNoteAdmin = createServerFn({ method: "POST" })
   });
 
 export const getStudentQuestionsAdmin = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireAuthMiddleware])
   .handler(async () => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: q } = await supabaseAdmin.from("questions").select("*").order("created_at", { ascending: false });
@@ -346,7 +359,7 @@ export const getStudentQuestionsAdmin = createServerFn({ method: "GET" })
   });
 
 export const answerStudentQuestionAdmin = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireAuthMiddleware])
   .inputValidator((d: unknown) => d as { id: string; answer: string })
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -355,7 +368,7 @@ export const answerStudentQuestionAdmin = createServerFn({ method: "POST" })
   });
 
 export const deleteStudentQuestionAdmin = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireAuthMiddleware])
   .inputValidator((d: unknown) => d as { id: string })
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -364,7 +377,7 @@ export const deleteStudentQuestionAdmin = createServerFn({ method: "POST" })
   });
 
 export const factoryResetSystem = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireAuthMiddleware])
   .handler(async () => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const tables = ["exam_answers", "exam_attempts", "exam_questions", "exams", "homework_submissions", "homework", "attendance", "payments", "student_notes", "questions", "students", "groups", "certificates"];
