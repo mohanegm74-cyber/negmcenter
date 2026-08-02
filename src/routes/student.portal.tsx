@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { BrandLogo } from "@/components/BrandLogo";
 import { ExamsTab } from "@/components/ExamsTab";
-import { getStudentPortal, updateStudentProfile, askTeacher, deleteStudentQuestionPortal, submitHomeworkText, createHomeworkUploadUrl, finalizeHomeworkUpload, getSubmissionUrl, markNotesAsRead } from "@/lib/student.functions";
+import { getStudentPortal, updateStudentProfile, askTeacher, deleteStudentQuestionPortal, submitHomeworkText, createHomeworkUploadUrl, finalizeHomeworkUpload, getSubmissionUrl, markNotesAsRead, deleteCertificatePortal } from "@/lib/student.functions";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -31,6 +31,7 @@ function Portal() {
   const askFn = useServerFn(askTeacher);
   const deleteQFn = useServerFn(deleteStudentQuestionPortal);
   const markNotesFn = useServerFn(markNotesAsRead);
+  const deleteCertFn = useServerFn(deleteCertificatePortal);
 
   useEffect(() => {
     const c = localStorage.getItem("najm_student_code");
@@ -104,6 +105,15 @@ function Portal() {
     try {
       await deleteQFn({ data: { code: data.student.code, id } });
       toast.success("تم حذف السؤال");
+      await loadData(data.student.code);
+    } catch (err: any) { toast.error(err.message); }
+  }
+
+  async function handleRemoveCert(id: string) {
+    if (!confirm("هل تريد حذف هذه الشهادة من ملفك؟")) return;
+    try {
+      await deleteCertFn({ data: { code: data.student.code, id } });
+      toast.success("تم حذف الشهادة");
       await loadData(data.student.code);
     } catch (err: any) { toast.error(err.message); }
   }
@@ -211,6 +221,7 @@ function Portal() {
                 <div className="grid gap-4 sm:grid-cols-2">
                   {certificates.map((c: any) => (
                     <div key={c.id} className="bg-white p-6 rounded-3xl border-2 border-gold/20 shadow-sm relative overflow-hidden group hover:shadow-lg transition-all">
+                      <button onClick={() => handleRemoveCert(c.id)} className="absolute top-2 left-2 p-2 text-rose-300 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-all"><Trash2 className="h-4 w-4" /></button>
                       <Award className="absolute -right-4 -top-4 h-24 w-24 text-gold/5 rotate-12 group-hover:scale-110 transition-transform" />
                       <div className="text-lg font-black text-gold-foreground">{c.title}</div>
                       <p className="text-sm mt-2 font-bold text-slate-700 leading-relaxed italic">"{c.reason}"</p>

@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
-import { Loader2, Timer, Play, CheckCircle2, Sparkles, FileText, BarChart3, XCircle, ChevronDown, ChevronUp, Check, X, HelpCircle } from "lucide-react";
-import { getStudentExams, startExamAttempt, submitExamAttempt, getAttemptDetails } from "@/lib/student.functions";
+import { Loader2, Timer, Play, CheckCircle2, Sparkles, FileText, BarChart3, XCircle, ChevronDown, ChevronUp, Check, X, HelpCircle, Trash2, History } from "lucide-react";
+import { getStudentExams, startExamAttempt, submitExamAttempt, getAttemptDetails, deleteExamAttemptPortal } from "@/lib/student.functions";
 
 type Exam = {
   id: string; title: string; grade: string | null; term: string | null; group_id: string | null;
@@ -16,6 +16,7 @@ type Q = {
 type Attempt = {
   id: string; exam_id: string; status: string; score: number; max_score: number; percentage: number;
   analysis: string | null; strengths: any; weaknesses: any; remedial_plan: string | null; attempt_no: number;
+  submitted_at: string;
 };
 
 export function ExamsTab({ code }: { code: string }) {
@@ -25,6 +26,7 @@ export function ExamsTab({ code }: { code: string }) {
   const [loading, setLoading] = useState(true);
   const listFn = useServerFn(getStudentExams);
   const startFn = useServerFn(startExamAttempt);
+  const deleteAttemptFn = useServerFn(deleteExamAttemptPortal);
 
   async function load() {
     try {
@@ -43,6 +45,15 @@ export function ExamsTab({ code }: { code: string }) {
     } catch (e: any) { toast.error(e?.message || "تعذر بدء الاختبار"); }
   }
 
+  async function handleDeleteAttempt(attemptId: string) {
+    if (!confirm("هل تريد حذف سجل هذه المحاولة؟ لا يمكن استعادتها.")) return;
+    try {
+      await deleteAttemptFn({ data: { code, attempt_id: attemptId } });
+      toast.success("تم حذف المحاولة بنجاح");
+      load();
+    } catch { toast.error("فشل حذف المحاولة"); }
+  }
+
   if (loading) return <div className="p-12 text-center text-muted-foreground"><Loader2 className="mx-auto h-8 w-8 animate-spin mb-2" /> جاري تحميل الاختبارات...</div>;
 
   if (active) {
@@ -53,13 +64,13 @@ export function ExamsTab({ code }: { code: string }) {
     <div className="space-y-4">
       <div className="bg-primary/5 border border-primary/10 p-4 rounded-2xl mb-6">
         <h3 className="font-black text-primary flex items-center gap-2 mb-1"><Sparkles className="h-5 w-5" /> مركز الاختبارات الذكية</h3>
-        <p className="text-xs text-muted-foreground font-bold">هنا تظهر اختباراتك المتاحة. لكل اختبار محاولة واحدة فقط لضمان دقة التقييم.</p>
+        <p className="text-xs text-muted-foreground font-bold">هنا تظهر اختباراتك ونتائجك السابقة. يمكنك مراجعة مستواك في أي وقت.</p>
       </div>
 
       {exams.length === 0 && <div className="rounded-3xl border border-dashed bg-white p-12 text-center text-muted-foreground font-bold">لا توجد اختبارات منشورة حالياً</div>}
       
       {exams.map((e) => {
-        const myAttempt = attempts.find((a) => a.exam_id === e.id && a.status === "submitted");
+        const myAttempts = attempts.filter((a) => a.exam_id === e.id && a.status === "submitted");
         
         return (
           <div key={e.id} className="rounded-[2rem] border bg-white p-6 shadow-sm hover:shadow-md transition-shadow">
@@ -73,18 +84,24 @@ export function ExamsTab({ code }: { code: string }) {
                 </div>
               </div>
               
-              {!myAttempt ? (
-                <button onClick={() => start(e)} className="inline-flex items-center gap-2 rounded-2xl bg-primary px-8 py-3 text-sm font-black text-white shadow-lg shadow-primary/20 hover:scale-105 active:scale-95 transition-all">
-                  <Play className="h-4 w-4" /> ابدأ الاختبار الآن
-                </button>
-              ) : (
-                <div className="flex items-center gap-2 bg-emerald-50 text-emerald-700 px-4 py-2 rounded-xl border border-emerald-100 font-black text-xs">
-                  <CheckCircle2 className="h-4 w-4" /> تم أداء الاختبار
-                </div>
-              )}
+              <button onClick={() => start(e)} className="inline-flex items-center gap-2 rounded-2xl bg-primary px-8 py-3 text-sm font-black text-white shadow-lg shadow-primary/20 hover:scale-105 active:scale-95 transition-all">
+                <Play className="h-4 w-4" /> {myAttempts.length > 0 ? "محاولة جديدة" : "ابدأ الاختبار الآن"}
+              </button>
             </div>
             
-            {myAttempt && <Result attempt={myAttempt} code={code} />}
+            {myAttempts.length > 0 && (
+              <div className="mt-8 pt-6 border-t border-dashed">
+                <div className="flex items-center gap-2 mb-4 text-sm font-black text-slate-500"><History className="h-4 w-4" /> سجل نتائجك في هذا الاختبار:</div>
+                <div className="space-y-6">
+                  {myAttempts.map(att => (
+                    <div key={att.id} className="relative group">
+                      <button onClick={() => handleDeleteAttempt(att.id)} className="absolute -top-3 -left-3 h-8 w-8 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center border border-rose-100 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"><Trash2 className="h-4 w-4" /></button>
+                      <Result attempt={att} code={code} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         );
       })}
@@ -113,109 +130,56 @@ function Result({ attempt, code }: { attempt: Attempt; code: string }) {
   const levelColor = Number(attempt.percentage) >= 90 ? "text-emerald-600 bg-emerald-50" : Number(attempt.percentage) >= 50 ? "text-primary bg-primary/5" : "text-destructive bg-destructive/5";
 
   return (
-    <div className="mt-6 space-y-4 animate-in slide-in-from-top-4">
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+    <div className="space-y-4 animate-in slide-in-from-top-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="bg-slate-50 p-4 rounded-2xl border text-center">
-          <div className="text-[10px] font-black text-muted-foreground uppercase mb-1">الدرجة النهائية</div>
-          <div className="text-xl font-black text-slate-800">{attempt.score} من {attempt.max_score}</div>
+          <div className="text-[9px] font-black text-muted-foreground uppercase mb-1">الدرجة</div>
+          <div className="text-lg font-black text-slate-800">{attempt.score} / {attempt.max_score}</div>
         </div>
         <div className="bg-slate-50 p-4 rounded-2xl border text-center">
-          <div className="text-[10px] font-black text-muted-foreground uppercase mb-1">النسبة المئوية</div>
-          <div className="text-xl font-black text-primary">{attempt.percentage}%</div>
+          <div className="text-[9px] font-black text-muted-foreground uppercase mb-1">النسبة</div>
+          <div className="text-lg font-black text-primary">{attempt.percentage}%</div>
         </div>
         <div className={`${levelColor} p-4 rounded-2xl border border-current/10 text-center`}>
-          <div className="text-[10px] font-black opacity-60 uppercase mb-1">المستوى التعليمي</div>
-          <div className="text-xl font-black">{level}</div>
+          <div className="text-[9px] font-black opacity-60 uppercase mb-1">المستوى</div>
+          <div className="text-lg font-black">{level}</div>
+        </div>
+        <div className="bg-slate-50 p-4 rounded-2xl border text-center">
+          <div className="text-[9px] font-black text-muted-foreground uppercase mb-1">التاريخ</div>
+          <div className="text-xs font-black text-slate-500 mt-2">{new Date(attempt.submitted_at).toLocaleDateString("ar-EG")}</div>
         </div>
       </div>
 
       <div className="bg-white rounded-2xl border-2 border-primary/10 overflow-hidden">
-        <div className="bg-primary/5 px-4 py-2 border-b flex items-center gap-2">
-          <BarChart3 className="h-4 w-4 text-primary" />
-          <span className="text-xs font-black text-primary">التقرير التحليلي لمستوى الطالب (AI)</span>
+        <div className="bg-primary/5 px-4 py-2 border-b flex items-center justify-between">
+          <div className="flex items-center gap-2"><BarChart3 className="h-4 w-4 text-primary" /><span className="text-[10px] font-black text-primary">التقرير التحليلي (AI)</span></div>
+          <button onClick={loadReview} className="text-[10px] font-black text-primary underline">مراجعة الإجابات</button>
         </div>
         <div className="p-4 space-y-4">
-          {attempt.analysis && (
-            <div>
-              <div className="text-[11px] font-black text-slate-400 mb-1">التحليل العام:</div>
-              <p className="text-sm font-medium text-slate-700 leading-relaxed italic">"{attempt.analysis}"</p>
-            </div>
-          )}
-          
+          {attempt.analysis && <p className="text-xs font-bold text-slate-700 leading-relaxed italic">"{attempt.analysis}"</p>}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {Array.isArray(attempt.strengths) && (attempt.strengths as string[]).length > 0 && (
-              <div className="space-y-1">
-                <div className="text-[11px] font-black text-emerald-600 uppercase flex items-center gap-1">✅ نقاط القوة:</div>
-                <ul className="text-xs font-bold text-slate-600 list-disc list-inside space-y-1">
-                  {(attempt.strengths as string[]).map((s, i) => <li key={i}>{s}</li>)}
-                </ul>
-              </div>
+              <div className="space-y-1"><div className="text-[10px] font-black text-emerald-600">✅ نقاط القوة:</div><ul className="text-[11px] font-bold text-slate-600 list-disc list-inside">{(attempt.strengths as string[]).map((s, i) => <li key={i}>{s}</li>)}</ul></div>
             )}
             {Array.isArray(attempt.weaknesses) && (attempt.weaknesses as string[]).length > 0 && (
-              <div className="space-y-1">
-                <div className="text-[11px] font-black text-rose-600 uppercase flex items-center gap-1">⚠️ نقاط تحتاج تطوير:</div>
-                <ul className="text-xs font-bold text-slate-600 list-disc list-inside space-y-1">
-                  {(attempt.weaknesses as string[]).map((w, i) => <li key={i}>{w}</li>)}
-                </ul>
-              </div>
+              <div className="space-y-1"><div className="text-[10px] font-black text-rose-600">⚠️ نقاط تحتاج تطوير:</div><ul className="text-[11px] font-bold text-slate-600 list-disc list-inside">{(attempt.weaknesses as string[]).map((w, i) => <li key={i}>{w}</li>)}</ul></div>
             )}
           </div>
-
-          {attempt.remedial_plan && (
-            <div className="bg-gold/5 p-4 rounded-xl border border-gold/20">
-              <div className="text-xs font-black text-gold-foreground flex items-center gap-1 mb-1"><Sparkles className="h-4 w-4" /> الخطة العلاجية المقترحة:</div>
-              <p className="text-xs font-medium text-slate-700 leading-relaxed">{attempt.remedial_plan}</p>
-            </div>
-          )}
         </div>
       </div>
-
-      <button 
-        onClick={loadReview}
-        className="w-full py-3 rounded-xl border-2 border-dashed border-slate-200 text-xs font-black text-slate-500 hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
-      >
-        {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : showReview ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-        {showReview ? "إخفاء مراجعة الأسئلة" : "عرض مراجعة إجاباتك والتعلم من الأخطاء"}
-      </button>
 
       {showReview && details && (
         <div className="space-y-4 pt-2 animate-in fade-in duration-500">
           {details.questions.map((q) => {
             const studentAns = details.answers.find(a => a.question_id === q.id);
             const isCorrect = !!studentAns?.is_correct;
-            
             return (
-              <div key={q.id} className={`p-5 rounded-2xl border-2 transition-all ${isCorrect ? "border-emerald-100 bg-emerald-50/30" : "border-rose-100 bg-rose-50/30"}`}>
-                <div className="flex items-start justify-between gap-4 mb-3">
-                  <div className="font-bold text-slate-800 leading-relaxed text-sm">{q.position}. {q.prompt}</div>
-                  <div className={`shrink-0 h-8 w-8 rounded-full flex items-center justify-center ${isCorrect ? "bg-emerald-500 text-white" : "bg-rose-500 text-white shadow-lg shadow-rose-100"}`}>
-                    {isCorrect ? <Check className="h-5 w-5" /> : <X className="h-5 w-5" />}
-                  </div>
+              <div key={q.id} className={`p-4 rounded-2xl border-2 ${isCorrect ? "border-emerald-100 bg-emerald-50/20" : "border-rose-100 bg-rose-50/20"}`}>
+                <div className="font-bold text-slate-800 text-xs mb-3">{q.position}. {q.prompt}</div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="bg-white p-2 rounded-lg border text-[11px]"><b>إجابتك:</b> <span className={isCorrect ? "text-emerald-600" : "text-rose-600"}>{studentAns?.answer || "(لم تجب)"}</span></div>
+                  {!isCorrect && <div className="bg-white p-2 rounded-lg border text-[11px] border-emerald-200"><b>الصحيحة:</b> <span className="text-emerald-700">{String(q.correct_answer || "")}</span></div>}
                 </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                  <div className="space-y-1">
-                    <div className="text-[10px] font-black text-slate-400 uppercase">إجابتك:</div>
-                    <div className={`text-xs font-bold p-3 rounded-xl border ${isCorrect ? "bg-emerald-100/50 border-emerald-200 text-emerald-700" : "bg-rose-100/50 border-rose-200 text-rose-700"}`}>
-                      {studentAns?.answer || "(لم تجب)"}
-                    </div>
-                  </div>
-                  {!isCorrect && (
-                    <div className="space-y-1">
-                      <div className="text-[10px] font-black text-emerald-600 uppercase">الإجابة الصحيحة:</div>
-                      <div className="text-xs font-bold p-3 rounded-xl bg-white border border-emerald-200 text-emerald-800 shadow-sm">
-                        {String(q.correct_answer || "غير متوفرة")}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {q.rationale && (
-                  <div className="mt-4 p-4 rounded-xl bg-white/60 border border-slate-100 text-xs text-slate-600 leading-relaxed">
-                    <div className="flex items-center gap-1 font-black text-primary mb-1 uppercase text-[9px] tracking-wider"><HelpCircle className="h-3 w-3" /> التفسير العلمي:</div>
-                    {q.rationale}
-                  </div>
-                )}
               </div>
             );
           })}
@@ -321,11 +285,5 @@ function Runner({ exam, questions, attempt, code, onDone }:
         </button>
       </div>
     </div>
-  );
-}
-
-function Trophy(props: any) {
-  return (
-    <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
   );
 }

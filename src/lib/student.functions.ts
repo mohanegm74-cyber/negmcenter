@@ -65,6 +65,26 @@ export const markNotesAsRead = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const deleteCertificatePortal = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) => d as { code: string; id: string })
+  .handler(async ({ data }) => {
+    const { requireStudent } = await import("./student.server");
+    const { db, student } = await requireStudent(data.code);
+    await db.from("certificates").delete().eq("id", data.id).eq("student_id", student.id);
+    return { ok: true };
+  });
+
+export const deleteExamAttemptPortal = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) => d as { code: string; attempt_id: string })
+  .handler(async ({ data }) => {
+    const { requireStudent } = await import("./student.server");
+    const { db, student } = await requireStudent(data.code);
+    // حذف الإجابات المرتبطة أولاً (بسبب المفاتيح الخارجية)
+    await db.from("exam_answers").delete().eq("attempt_id", data.attempt_id);
+    await db.from("exam_attempts").delete().eq("id", data.attempt_id).eq("student_id", student.id);
+    return { ok: true };
+  });
+
 export const getAttemptDetails = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => d as { code: string; attempt_id: string })
   .handler(async ({ data }) => {
@@ -178,7 +198,7 @@ export const getStudentExams = createServerFn({ method: "POST" })
     const { requireStudent } = await import("./student.server");
     const { db, student } = await requireStudent(data.code);
     const { data: exams } = await db.from("exams").select("*").eq("status", "published").or(`group_id.eq.${student.group_id},grade.eq.${student.grade}`).order("created_at", { ascending: false });
-    const { data: attempts } = await db.from("exam_attempts").select("*").eq("student_id", student.id);
+    const { data: attempts } = await db.from("exam_attempts").select("*").eq("student_id", student.id).order("submitted_at", { ascending: false });
     return { exams: exams || [], attempts: attempts || [] };
   });
 
