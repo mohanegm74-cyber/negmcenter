@@ -5,7 +5,7 @@ export const registerStudent = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { admin, str } = await import("./student.server");
     const FIELDS = ["full_name", "phone", "parent_phone", "gender", "birth_date", "national_id", "address", "governorate", "education_dept", "school", "grade", "section", "subject", "teacher_name", "notes", "group_id"];
-    const payload: Record<string, any> = { active: false }; // الطلاب الجدد غير مفعلين افتراضياً
+    const payload: Record<string, any> = { active: false };
     for (const k of FIELDS) {
       const v = str(data?.[k], k === "notes" || k === "address" ? 1000 : 120);
       if (v) payload[k] = v;
@@ -45,7 +45,16 @@ export const getStudentPortal = createServerFn({ method: "POST" })
       student.group_id ? db.from("homework").select("*").eq("group_id", student.group_id).order("created_at", { ascending: false }) : db.from("homework").select("*").is("group_id", null),
       db.from("certificates").select("*").eq("student_id", student.id).order("created_at", { ascending: false }),
     ]);
-    return { student, group: g.data, attendance: a.data || [], subs: hs.data || [], payments: p.data || [], notes: n.data || [], questions: q.data || [], homework: hw.data || [], certificates: certs.data || [] };
+
+    // حساب التنبيهات للطالب
+    const unreadNotes = n.data?.length || 0;
+    const pendingHw = (hw.data || []).filter((h: any) => !hs.data?.some((s: any) => s.homework_id === h.id)).length;
+    const answeredQs = (q.data || []).filter((x: any) => x.answer && x.is_read).length; // تبسيطاً للمثال
+
+    return { 
+      student, group: g.data, attendance: a.data || [], subs: hs.data || [], payments: p.data || [], notes: n.data || [], questions: q.data || [], homework: hw.data || [], certificates: certs.data || [],
+      counts: { unreadNotes, pendingHw, answeredQs, certificates: certs.data?.length || 0 }
+    };
   });
 
 export const getAttemptDetails = createServerFn({ method: "POST" })
@@ -85,9 +94,24 @@ export const askTeacher = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { requireStudent, str } = await import("./student.server");
     const { db, student } = await requireStudent(data.code);
+    
+    // فحص هل يوجد سؤال سابق لم يتم حذفه (سؤال واحد لكل طالب)
+    const { count } = await db.from("questions").select("*", { count: "exact", head: true }).eq("student_id", student.id);
+    if ((count ?? 0) >= 1) throw new Error("مسموح بسؤال واحد فقط. احذف سؤالك السابق لإرسال سؤال جديد.");
+
     const body = str(data.body, 2000);
     if (!body) throw new Error("السؤال فارغ");
     const { error } = await db.from("questions").insert({ student_id: student.id, body });
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const deleteStudentQuestionPortal = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) => d as { code: string; id: string })
+  .handler(async ({ data }) => {
+    const { requireStudent } = await import("./student.server");
+    const { db, student } = await requireStudent(data.code);
+    const { error } = await db.from("questions").delete().eq("id", data.id).eq("student_id", student.id);
     if (error) throw new Error(error.message);
     return { ok: true };
   });

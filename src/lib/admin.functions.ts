@@ -1,8 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { requireSupabaseAuth } from "@/integrations/supabase/client";
 import { requireSupabaseAuth as requireAuthMiddleware } from "@/integrations/supabase/auth-middleware";
-
-// ... (keep existing code)
 
 export const getHomeworkSubmissionFileUrl = createServerFn({ method: "POST" })
   .middleware([requireAuthMiddleware])
@@ -13,9 +10,6 @@ export const getHomeworkSubmissionFileUrl = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { url: res.signedUrl };
   });
-
-/** كلمة المرور الافتراضية القوية للسيطرة */
-const DEFAULT_MASTER_PASS = "Negm74!Center#Secure$2024";
 
 export const checkAdminSetup = createServerFn({ method: "GET" }).handler(async () => {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -39,25 +33,6 @@ export const assignFirstAdminRole = createServerFn({ method: "POST" })
     return { success: true };
   });
 
-export const forceSetupAdminMaster = createServerFn({ method: "POST" })
-  .inputValidator((d: unknown) => d as { email: string; secret: string })
-  .handler(async ({ data }) => {
-    if (data.secret !== "N@031274") throw new Error("المفتاح الرئيسي غير صحيح");
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: { users } } = await supabaseAdmin.auth.admin.listUsers();
-    let targetUser = users.find(u => u.email?.toLowerCase() === data.email.toLowerCase());
-    if (!targetUser) {
-      const { data: newUser } = await supabaseAdmin.auth.admin.createUser({ email: data.email, password: DEFAULT_MASTER_PASS, email_confirm: true });
-      targetUser = newUser.user ?? undefined;
-    } else {
-      await supabaseAdmin.auth.admin.updateUserById(targetUser.id, { password: DEFAULT_MASTER_PASS });
-    }
-    await supabaseAdmin.from("user_roles").delete().neq("user_id", "00000000");
-    await supabaseAdmin.from("user_roles").insert({ user_id: targetUser!.id, role: "teacher" });
-    return { success: true, message: "تمت السيطرة بكلمة مرور: " + DEFAULT_MASTER_PASS };
-  });
-
-// --- الحضور ---
 export const markAttendanceAdmin = createServerFn({ method: "POST" })
   .middleware([requireAuthMiddleware])
   .inputValidator((d: unknown) => d as { student_id: string; group_id: string; date: string; status: string })
@@ -69,7 +44,6 @@ export const markAttendanceAdmin = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-// --- المجموعات ---
 export const getGroupsAdmin = createServerFn({ method: "GET" })
   .middleware([requireAuthMiddleware])
   .handler(async () => {
@@ -96,7 +70,6 @@ export const deleteGroup = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-// --- الطلاب ---
 export const getAllStudentsAdmin = createServerFn({ method: "GET" })
   .middleware([requireAuthMiddleware])
   .handler(async () => {
@@ -134,7 +107,6 @@ export const deleteStudentAdmin = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-// --- الواجبات ---
 export const getHomeworkDataAdmin = createServerFn({ method: "GET" })
   .middleware([requireAuthMiddleware])
   .handler(async () => {
@@ -177,7 +149,6 @@ export const upsertHomeworkSubmissionAdmin = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-// --- الاختبارات ---
 export const getExamsDataAdmin = createServerFn({ method: "GET" })
   .middleware([requireAuthMiddleware])
   .handler(async () => {
@@ -228,7 +199,6 @@ export const deleteExamAdmin = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-// --- المالية ---
 export const getFinanceDataAdmin = createServerFn({ method: "GET" })
   .middleware([requireAuthMiddleware])
   .handler(async () => {
@@ -268,7 +238,6 @@ export const updatePaymentAdmin = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-// --- الشهادات ---
 export const sendCertificateToPortal = createServerFn({ method: "POST" })
   .middleware([requireAuthMiddleware])
   .inputValidator((d: unknown) => d as { student_id: string; title: string; reason: string; template_id: string; signer: string })
@@ -278,7 +247,6 @@ export const sendCertificateToPortal = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-// --- التقارير والبيانات الأخرى ---
 export const getAdminDataSummary = createServerFn({ method: "GET" })
   .middleware([requireAuthMiddleware])
   .handler(async () => {
@@ -296,16 +264,26 @@ export const getDashboardStatsAdmin = createServerFn({ method: "GET" })
   .handler(async () => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const today = new Date().toISOString().slice(0, 10);
-    const [st, gr, ap, aa, pay] = await Promise.all([
+    const [st, gr, ap, aa, pay, nq] = await Promise.all([
       supabaseAdmin.from("students").select("id", { count: "exact" }).eq("active", true),
       supabaseAdmin.from("groups").select("id", { count: "exact" }),
       supabaseAdmin.from("attendance").select("id", { count: "exact", head: true }).eq("date", today).eq("status", "present"),
       supabaseAdmin.from("attendance").select("id", { count: "exact", head: true }).eq("date", today).eq("status", "absent"),
       supabaseAdmin.from("payments").select("amount,kind"),
+      supabaseAdmin.from("questions").select("id", { count: "exact", head: true }).eq("is_read", false),
     ]);
     const inc = (pay.data || []).filter((p: any) => p.kind === "payment").reduce((a, b) => a + Number(b.amount || 0), 0);
     const dues = (pay.data || []).filter((p: any) => p.kind === "charge").reduce((a, b) => a + Number(b.amount || 0), 0);
-    return { students: st.count || 0, groups: gr.count || 0, present: ap.count || 0, absent: aa.count || 0, income: inc, dues, outstanding: Math.max(0, dues - inc) };
+    return { 
+      students: st.count || 0, 
+      groups: gr.count || 0, 
+      present: ap.count || 0, 
+      absent: aa.count || 0, 
+      income: inc, 
+      dues, 
+      outstanding: Math.max(0, dues - inc),
+      newQuestions: nq.count || 0
+    };
   });
 
 export const getReportsDataAdmin = createServerFn({ method: "POST" })
@@ -373,6 +351,15 @@ export const deleteStudentQuestionAdmin = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     await supabaseAdmin.from("questions").delete().eq("id", data.id);
+    return { ok: true };
+  });
+
+export const deleteAllStudentQuestionsAdmin = createServerFn({ method: "POST" })
+  .middleware([requireAuthMiddleware])
+  .handler(async () => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await supabaseAdmin.from("questions").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+    if (error) throw new Error(error.message);
     return { ok: true };
   });
 

@@ -1,9 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { MessageCircleQuestion, Check, Trash2, Send, Loader2 } from "lucide-react";
+import { MessageCircleQuestion, Check, Trash2, Send, Loader2, Eraser } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
-import { getStudentQuestionsAdmin, answerStudentQuestionAdmin, deleteStudentQuestionAdmin } from "@/lib/admin.functions";
+import { getStudentQuestionsAdmin, answerStudentQuestionAdmin, deleteStudentQuestionAdmin, deleteAllStudentQuestionsAdmin } from "@/lib/admin.functions";
 
 export const Route = createFileRoute("/_authenticated/questions")({
   head: () => ({ meta: [{ title: "أسئلة الطلاب — الأستاذ" }, { name: "description", content: "استقبال أسئلة الطلاب والرد عليها." }] }),
@@ -19,10 +19,12 @@ function QuestionsPage() {
   const [answering, setAnswering] = useState<string | null>(null);
   const [answerText, setAnswerText] = useState("");
   const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
 
   const listFn = useServerFn(getStudentQuestionsAdmin);
   const answerFn = useServerFn(answerStudentQuestionAdmin);
   const deleteFn = useServerFn(deleteStudentQuestionAdmin);
+  const deleteAllFn = useServerFn(deleteAllStudentQuestionsAdmin);
 
   async function load() {
     setLoading(true);
@@ -54,6 +56,17 @@ function QuestionsPage() {
     } catch (e: any) { toast.error(e.message); }
   }
 
+  async function handleClearAll() {
+    if (!confirm("تحذير: سيتم حذف كافة الأسئلة (المجابة وغير المجابة) نهائياً. هل أنت متأكد؟")) return;
+    setBusy(true);
+    try {
+      await deleteAllFn({});
+      toast.success("تم مسح كافة الأسئلة");
+      load();
+    } catch (e: any) { toast.error(e.message); }
+    finally { setBusy(false); }
+  }
+
   async function sendAnswer(id: string) {
     if (!answerText.trim()) return;
     try {
@@ -67,8 +80,13 @@ function QuestionsPage() {
 
   return (
     <div>
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-black flex items-center gap-2"><MessageCircleQuestion className="h-6 w-6 text-primary" /> أسئلة الطلاب <span className="text-sm font-normal text-muted-foreground">({rows.length})</span></h1>
+        {rows.length > 0 && (
+          <button onClick={handleClearAll} disabled={busy} className="inline-flex items-center gap-1.5 rounded-xl bg-destructive/10 px-4 py-2 text-xs font-black text-destructive hover:bg-destructive hover:text-white transition-all">
+            {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Eraser className="h-3.5 w-3.5" />} مسح كافة الأسئلة
+          </button>
+        )}
       </div>
 
       {rows.length === 0 ? (
@@ -94,7 +112,7 @@ function QuestionsPage() {
                 {answering === q.id ? (
                   <div className="mt-3 flex gap-2">
                     <textarea value={answerText} onChange={e => setAnswerText(e.target.value)} rows={2} className="flex-1 rounded-lg border border-input px-3 py-2 text-sm" placeholder="اكتب ردّك..." />
-                    <button onClick={() => sendAnswer(q.id)} className="inline-flex items-center gap-1 rounded-lg bg-primary px-3 py-2 text-sm font-bold text-primary-foreground self-start"><Send className="h-4 w-4" /> إرسال</button>
+                    <button onClick={() => sendAnswer(id)} className="inline-flex items-center gap-1 rounded-lg bg-primary px-3 py-2 text-sm font-bold text-primary-foreground self-start"><Send className="h-4 w-4" /> إرسال</button>
                   </div>
                 ) : (
                   <button onClick={() => { setAnswering(q.id); setAnswerText(q.answer || ""); }} className="mt-2 text-xs font-bold text-primary hover:underline">{q.answer ? "تعديل الرد" : "الرد"}</button>

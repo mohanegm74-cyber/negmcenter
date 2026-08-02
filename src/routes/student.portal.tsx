@@ -5,11 +5,11 @@ import {
   User, BookOpen, Wallet, MessageCircleQuestion, Sparkles, 
   Save, Loader2, Award, Calendar, Home, ClipboardList, 
   MessageSquare, UserCircle, CreditCard, ChevronLeft,
-  LogOut, XCircle, CheckCircle2, Send, ImageIcon, FileText, UploadCloud
+  LogOut, XCircle, CheckCircle2, Send, ImageIcon, FileText, UploadCloud, Trash2
 } from "lucide-react";
 import { BrandLogo } from "@/components/BrandLogo";
 import { ExamsTab } from "@/components/ExamsTab";
-import { getStudentPortal, updateStudentProfile, askTeacher, submitHomeworkText, createHomeworkUploadUrl, finalizeHomeworkUpload, getSubmissionUrl } from "@/lib/student.functions";
+import { getStudentPortal, updateStudentProfile, askTeacher, deleteStudentQuestionPortal, submitHomeworkText, createHomeworkUploadUrl, finalizeHomeworkUpload, getSubmissionUrl } from "@/lib/student.functions";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -29,6 +29,7 @@ function Portal() {
   const loadPortal = useServerFn(getStudentPortal);
   const updateProfile = useServerFn(updateStudentProfile);
   const askFn = useServerFn(askTeacher);
+  const deleteQFn = useServerFn(deleteStudentQuestionPortal);
 
   useEffect(() => {
     const c = localStorage.getItem("najm_student_code");
@@ -86,6 +87,15 @@ function Portal() {
     } catch (err: any) { toast.error(err.message); }
   }
 
+  async function handleRemoveQuestion(id: string) {
+    if (!confirm("هل تريد حذف سؤالك؟")) return;
+    try {
+      await deleteQFn({ data: { code: data.student.code, id } });
+      toast.success("تم حذف السؤال");
+      await loadData(data.student.code);
+    } catch (err: any) { toast.error(err.message); }
+  }
+
   if (loading) return <div className="flex h-screen items-center justify-center font-bold text-primary"><Loader2 className="h-10 w-10 animate-spin" /></div>;
 
   if (!data?.student) {
@@ -108,7 +118,7 @@ function Portal() {
     );
   }
 
-  const { student, group, payments, notes, homework, certificates, questions, subs } = data;
+  const { student, group, payments, notes, homework, certificates, questions, subs, counts } = data;
 
   const totalPaid = (payments || []).filter((p: any) => p.kind === "payment").reduce((acc: number, p: any) => acc + Number(p.amount), 0);
   const totalDues = (payments || []).filter((p: any) => p.kind === "charge").reduce((acc: number, p: any) => acc + Number(p.amount), 0);
@@ -131,11 +141,11 @@ function Portal() {
         <nav className="max-w-5xl mx-auto flex gap-1.5 overflow-x-auto mt-4 no-scrollbar pb-1">
           <TabBtn label="بياناتي" icon={UserCircle} active={tab === "info"} onClick={() => setTab("info")} />
           <TabBtn label="المواعيد" icon={Calendar} active={tab === "schedule"} onClick={() => setTab("schedule")} />
-          <TabBtn label="الواجبات والشهادات" icon={BookOpen} active={tab === "homework"} onClick={() => setTab("homework")} />
+          <TabBtn label="الواجبات والشهادات" icon={BookOpen} active={tab === "homework"} badge={counts?.pendingHw > 0 || counts?.certificates > 0 ? "!" : null} onClick={() => setTab("homework")} />
           <TabBtn label="الاختبارات" icon={Sparkles} active={tab === "exams"} onClick={() => setTab("exams")} />
           <TabBtn label="الموقف المالي" icon={CreditCard} active={tab === "finance"} onClick={() => setTab("finance")} />
           <TabBtn label="اسأل معلمك" icon={MessageCircleQuestion} active={tab === "ask"} onClick={() => setTab("ask")} />
-          <TabBtn label="ملاحظات الأستاذ" icon={MessageSquare} active={tab === "notes"} onClick={() => setTab("notes")} />
+          <TabBtn label="ملاحظات الأستاذ" icon={MessageSquare} active={tab === "notes"} badge={counts?.unreadNotes > 0 ? counts.unreadNotes : null} onClick={() => setTab("notes")} />
         </nav>
       </header>
 
@@ -223,9 +233,40 @@ function Portal() {
           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
             <section className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100">
               <h2 className="text-xl font-black mb-6 flex items-center gap-2"><MessageCircleQuestion className="h-6 w-6 text-primary" /> اسأل معلمك</h2>
-              <form onSubmit={handleAsk} className="space-y-4"><textarea name="body" placeholder="اكتب سؤالك هنا وسيقوم الأستاذ بالرد عليك..." required rows={5} className="w-full rounded-2xl border-2 border-slate-100 p-4 text-sm font-bold focus:border-primary outline-none" /><button type="submit" className="rounded-xl bg-primary px-8 py-3 text-sm font-black text-white shadow-lg">إرسال السؤال للأستاذ</button></form>
+              {questions.length >= 1 ? (
+                <div className="p-6 bg-amber-50 rounded-2xl border-2 border-amber-200 text-center">
+                  <p className="text-sm font-black text-amber-800">مسموح بإرسال سؤال واحد فقط في كل مرة.</p>
+                  <p className="text-xs font-bold text-amber-600 mt-1">يجب حذف سؤالك الحالي لإرسال سؤال جديد.</p>
+                </div>
+              ) : (
+                <form onSubmit={handleAsk} className="space-y-4">
+                  <textarea name="body" placeholder="اكتب سؤالك هنا وسيقوم الأستاذ بالرد عليك..." required rows={5} className="w-full rounded-2xl border-2 border-slate-100 p-4 text-sm font-bold focus:border-primary outline-none" />
+                  <button type="submit" className="rounded-xl bg-primary px-8 py-3 text-sm font-black text-white shadow-lg">إرسال السؤال للأستاذ</button>
+                </form>
+              )}
             </section>
-            <section><h3 className="font-black text-slate-800 mb-4">الأسئلة السابقة والردود</h3><div className="space-y-3">{questions.map((q: any) => (<div key={q.id} className="bg-white p-4 rounded-2xl border shadow-sm"><div className="text-sm font-bold text-slate-700">{q.body}</div>{q.answer ? (<div className="mt-3 bg-primary/5 p-3 rounded-xl border border-primary/10 text-sm"><div className="text-[10px] font-black text-primary mb-1">رد المعلم:</div><div className="font-bold text-slate-800">{q.answer}</div></div>) : (<div className="mt-2 text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-1 rounded inline-block">بانتظار الرد...</div>)}</div>))}{questions.length === 0 && <p className="text-center py-8 text-muted-foreground font-bold">لم تطرح أي أسئلة بعد</p>}</div></section>
+            <section>
+              <h3 className="font-black text-slate-800 mb-4">سؤالك الحالي</h3>
+              <div className="space-y-3">
+                {questions.map((q: any) => (
+                  <div key={q.id} className="bg-white p-4 rounded-2xl border shadow-sm group">
+                    <div className="flex justify-between items-start">
+                      <div className="text-sm font-bold text-slate-700">{q.body}</div>
+                      <button onClick={() => handleRemoveQuestion(q.id)} className="p-2 text-rose-400 hover:bg-rose-50 rounded-lg transition-all"><Trash2 className="h-4 w-4" /></button>
+                    </div>
+                    {q.answer ? (
+                      <div className="mt-3 bg-primary/5 p-3 rounded-xl border border-primary/10 text-sm">
+                        <div className="text-[10px] font-black text-primary mb-1">رد المعلم:</div>
+                        <div className="font-bold text-slate-800">{q.answer}</div>
+                      </div>
+                    ) : (
+                      <div className="mt-2 text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-1 rounded inline-block">بانتظار الرد من الأستاذ...</div>
+                    )}
+                  </div>
+                ))}
+                {questions.length === 0 && <p className="text-center py-8 text-muted-foreground font-bold">لم تطرح أي أسئلة بعد</p>}
+              </div>
+            </section>
           </div>
         )}
 
@@ -306,14 +347,12 @@ function HomeworkItem({ h, studentCode, submission, onRefresh }: any) {
       </div>
 
       <div className="p-6 grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* منطقة الحل النصي */}
         <div className="space-y-4">
           <div className="flex items-center gap-2 text-xs font-black text-primary uppercase"><FileText className="h-4 w-4" /> كتابة الحل النصي:</div>
           <textarea value={text} onChange={e => setText(e.target.value)} placeholder="اكتب إجابتك هنا..." rows={6} className="w-full rounded-2xl border-2 border-slate-100 p-4 text-sm font-bold focus:border-primary outline-none transition-all" />
           <button onClick={handleTextSubmit} disabled={busy} className="inline-flex items-center gap-2 rounded-xl bg-primary px-6 py-2.5 text-xs font-black text-white shadow-lg shadow-primary/10 hover:opacity-90 disabled:opacity-50 transition-all"><Send className="h-3.5 w-3.5" /> حفظ الحل النصي</button>
         </div>
 
-        {/* منطقة رفع الصور */}
         <div className="space-y-4">
           <div className="flex items-center gap-2 text-xs font-black text-secondary uppercase"><ImageIcon className="h-4 w-4" /> رفع صورة الواجب (تصوير الكشكول):</div>
           <div className="relative group">
@@ -345,8 +384,14 @@ function HomeworkItem({ h, studentCode, submission, onRefresh }: any) {
   );
 }
 
-function TabBtn({ label, icon: Icon, active, onClick }: any) {
-  return (<button onClick={onClick} className={`shrink-0 flex items-center gap-1.5 px-5 py-2.5 rounded-2xl text-[13px] font-black transition-all ${active ? "bg-primary text-white shadow-lg shadow-primary/20 scale-105" : "bg-white text-slate-500 hover:bg-slate-50 border border-slate-100"}`}><Icon className="h-4 w-4" /> {label}</button>);
+function TabBtn({ label, icon: Icon, active, badge, onClick }: any) {
+  return (
+    <button onClick={onClick} className={`relative shrink-0 flex items-center gap-1.5 px-5 py-2.5 rounded-2xl text-[13px] font-black transition-all ${active ? "bg-primary text-white shadow-lg shadow-primary/20 scale-105" : "bg-white text-slate-500 hover:bg-slate-50 border border-slate-100"}`}>
+      <Icon className="h-4 w-4" /> 
+      {label}
+      {badge && <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-600 px-1 text-[8px] font-black text-white shadow-sm animate-pulse">{badge}</span>}
+    </button>
+  );
 }
 function Field({ name, label, defaultValue, required = false }: any) {
   return (<div className="space-y-1.5"><label className="text-xs font-black text-slate-500 ms-1 uppercase">{label}</label><input name={name} defaultValue={defaultValue} required={required} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-bold focus:bg-white focus:border-primary outline-none transition-all" /></div>);
