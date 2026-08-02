@@ -5,7 +5,7 @@ import {
   User, BookOpen, Wallet, MessageCircleQuestion, Sparkles, 
   Save, Loader2, Award, Calendar, Home, ClipboardList, 
   MessageSquare, UserCircle, CreditCard, ChevronLeft,
-  LogOut, XCircle, CheckCircle2, Send, ImageIcon, FileText, UploadCloud, Trash2
+  LogOut, XCircle, CheckCircle2, Send, ImageIcon, FileText, UploadCloud, Trash2, ExternalLink, Code
 } from "lucide-react";
 import { BrandLogo } from "@/components/BrandLogo";
 import { ExamsTab } from "@/components/ExamsTab";
@@ -120,11 +120,37 @@ function Portal() {
 
   if (loading) return <div className="flex h-screen items-center justify-center font-bold text-primary"><Loader2 className="h-10 w-10 animate-spin" /></div>;
 
+  // المكون العلوي الثابت لكل من صفحة الدخول والبوابة
+  const BrandHeader = (
+    <div className="w-full text-center py-8 px-4 bg-white/50 backdrop-blur-sm border-b">
+      <BrandLogo size={80} className="mx-auto mb-4" />
+      <h1 className="text-2xl md:text-3xl font-black text-primary leading-tight">
+        منصة الاستاذ محمد نجم - كبير معلمين - اللغة العربية
+      </h1>
+      <p className="mt-2 text-sm md:text-base font-bold text-slate-500 flex items-center justify-center gap-1.5">
+        <Code className="h-4 w-4 text-secondary" />
+        هذه المنصة من تصميم وبرمجة الاستاذ / محمد نجم
+      </p>
+      
+      <div className="mt-6 flex justify-center">
+        <a 
+          href="https://negmaie3rab.lovable.app" 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 rounded-2xl bg-secondary px-6 py-3 text-sm font-black text-white shadow-xl shadow-secondary/20 hover:scale-105 active:scale-95 transition-all"
+        >
+          <ExternalLink className="h-4 w-4" />
+          تعلم الاعراب والنحو وعلوم اللغة العربية
+        </a>
+      </div>
+    </div>
+  );
+
   if (!data?.student) {
     return (
-      <div className="min-h-screen bg-muted/30 flex items-center justify-center p-6">
-        <div className="w-full max-w-md bg-white p-10 rounded-[2.5rem] shadow-2xl text-center border border-white/50">
-          <BrandLogo size={100} className="mb-6 mx-auto" />
+      <div className="min-h-screen bg-muted/30 flex flex-col items-center">
+        {BrandHeader}
+        <div className="w-full max-w-md bg-white p-10 rounded-[2.5rem] shadow-2xl text-center border border-white/50 my-12">
           <h2 className="text-2xl font-black mb-2 text-slate-800">دخول الطالب</h2>
           <p className="text-sm text-muted-foreground mb-6">أدخل كود الطالب الخاص بك للمتابعة</p>
           <form onSubmit={login} className="space-y-4">
@@ -149,6 +175,7 @@ function Portal() {
 
   return (
     <div className="min-h-screen bg-[#f8fafc]">
+      {BrandHeader}
       <header className="bg-white/80 backdrop-blur-md border-b p-4 sticky top-0 z-30 shadow-sm">
         <div className="max-w-5xl mx-auto flex justify-between items-center">
           <div className="flex items-center gap-3">
