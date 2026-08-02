@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { BrandLogo } from "@/components/BrandLogo";
 import { ExamsTab } from "@/components/ExamsTab";
-import { getStudentPortal, updateStudentProfile, askTeacher, deleteStudentQuestionPortal, submitHomeworkText, createHomeworkUploadUrl, finalizeHomeworkUpload, getSubmissionUrl } from "@/lib/student.functions";
+import { getStudentPortal, updateStudentProfile, askTeacher, deleteStudentQuestionPortal, submitHomeworkText, createHomeworkUploadUrl, finalizeHomeworkUpload, getSubmissionUrl, markNotesAsRead } from "@/lib/student.functions";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -30,12 +30,22 @@ function Portal() {
   const updateProfile = useServerFn(updateStudentProfile);
   const askFn = useServerFn(askTeacher);
   const deleteQFn = useServerFn(deleteStudentQuestionPortal);
+  const markNotesFn = useServerFn(markNotesAsRead);
 
   useEffect(() => {
     const c = localStorage.getItem("najm_student_code");
     if (c) loadData(c).finally(() => setLoading(false));
     else setLoading(false);
   }, []);
+
+  // اختفاء إشعار الملاحظات فور الدخول للتبويب
+  useEffect(() => {
+    if (tab === "notes" && data?.student?.code) {
+      markNotesFn({ data: { code: data.student.code } }).then(() => {
+        setData((prev: any) => prev ? { ...prev, counts: { ...prev.counts, unreadNotes: 0 } } : prev);
+      });
+    }
+  }, [tab]);
 
   async function loadData(c: string) {
     try {
@@ -79,12 +89,14 @@ function Portal() {
     const fd = new FormData(e.currentTarget);
     const body = String(fd.get("body")).trim();
     if (!body) return;
+    setIsSaving(true);
     try {
       await askFn({ data: { code: data.student.code, body } });
-      toast.success("تم إرسال سؤالك للأستاذ");
+      toast.success("تم إرسال سؤالك بنجاح للأستاذ");
       e.currentTarget.reset();
       await loadData(data.student.code);
     } catch (err: any) { toast.error(err.message); }
+    finally { setIsSaving(false); }
   }
 
   async function handleRemoveQuestion(id: string) {
@@ -235,13 +247,13 @@ function Portal() {
               <h2 className="text-xl font-black mb-6 flex items-center gap-2"><MessageCircleQuestion className="h-6 w-6 text-primary" /> اسأل معلمك</h2>
               {questions.length >= 1 ? (
                 <div className="p-6 bg-amber-50 rounded-2xl border-2 border-amber-200 text-center">
-                  <p className="text-sm font-black text-amber-800">مسموح بإرسال سؤال واحد فقط في كل مرة.</p>
-                  <p className="text-xs font-bold text-amber-600 mt-1">يجب حذف سؤالك الحالي لإرسال سؤال جديد.</p>
+                  <p className="text-sm font-black text-amber-800 flex items-center justify-center gap-2"><CheckCircle2 className="h-5 w-5 text-emerald-600" /> تم إرسال سؤالك بنجاح</p>
+                  <p className="text-xs font-bold text-amber-600 mt-1">يجب حذف سؤالك الحالي إذا أردت إرسال سؤال جديد بدلاً منه.</p>
                 </div>
               ) : (
                 <form onSubmit={handleAsk} className="space-y-4">
                   <textarea name="body" placeholder="اكتب سؤالك هنا وسيقوم الأستاذ بالرد عليك..." required rows={5} className="w-full rounded-2xl border-2 border-slate-100 p-4 text-sm font-bold focus:border-primary outline-none" />
-                  <button type="submit" className="rounded-xl bg-primary px-8 py-3 text-sm font-black text-white shadow-lg">إرسال السؤال للأستاذ</button>
+                  <button type="submit" disabled={isSaving} className="rounded-xl bg-primary px-8 py-3 text-sm font-black text-white shadow-lg flex items-center gap-2 disabled:opacity-50">{isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} إرسال السؤال للأستاذ</button>
                 </form>
               )}
             </section>
@@ -249,18 +261,18 @@ function Portal() {
               <h3 className="font-black text-slate-800 mb-4">سؤالك الحالي</h3>
               <div className="space-y-3">
                 {questions.map((q: any) => (
-                  <div key={q.id} className="bg-white p-4 rounded-2xl border shadow-sm group">
+                  <div key={q.id} className="bg-white p-4 rounded-2xl border shadow-sm group border-r-4 border-r-emerald-500">
                     <div className="flex justify-between items-start">
                       <div className="text-sm font-bold text-slate-700">{q.body}</div>
                       <button onClick={() => handleRemoveQuestion(q.id)} className="p-2 text-rose-400 hover:bg-rose-50 rounded-lg transition-all"><Trash2 className="h-4 w-4" /></button>
                     </div>
                     {q.answer ? (
                       <div className="mt-3 bg-primary/5 p-3 rounded-xl border border-primary/10 text-sm">
-                        <div className="text-[10px] font-black text-primary mb-1">رد المعلم:</div>
+                        <div className="text-[10px] font-black text-primary mb-1 uppercase">✓ تم الرد من المعلم:</div>
                         <div className="font-bold text-slate-800">{q.answer}</div>
                       </div>
                     ) : (
-                      <div className="mt-2 text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-1 rounded inline-block">بانتظار الرد من الأستاذ...</div>
+                      <div className="mt-2 text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-1 rounded inline-flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> بانتظار الرد من الأستاذ...</div>
                     )}
                   </div>
                 ))}

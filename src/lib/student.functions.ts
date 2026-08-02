@@ -46,15 +46,23 @@ export const getStudentPortal = createServerFn({ method: "POST" })
       db.from("certificates").select("*").eq("student_id", student.id).order("created_at", { ascending: false }),
     ]);
 
-    // حساب التنبيهات للطالب
-    const unreadNotes = n.data?.length || 0;
+    // حساب التنبيهات للطالب (الملاحظات غير المقروءة والواجبات المعلقة)
+    const unreadNotes = (n.data || []).filter((x: any) => x.is_read === false).length;
     const pendingHw = (hw.data || []).filter((h: any) => !hs.data?.some((s: any) => s.homework_id === h.id)).length;
-    const answeredQs = (q.data || []).filter((x: any) => x.answer && x.is_read).length; // تبسيطاً للمثال
-
+    
     return { 
       student, group: g.data, attendance: a.data || [], subs: hs.data || [], payments: p.data || [], notes: n.data || [], questions: q.data || [], homework: hw.data || [], certificates: certs.data || [],
-      counts: { unreadNotes, pendingHw, answeredQs, certificates: certs.data?.length || 0 }
+      counts: { unreadNotes, pendingHw, certificates: certs.data?.length || 0 }
     };
+  });
+
+export const markNotesAsRead = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) => d as { code: string })
+  .handler(async ({ data }) => {
+    const { requireStudent } = await import("./student.server");
+    const { db, student } = await requireStudent(data.code);
+    await db.from("student_notes").update({ is_read: true }).eq("student_id", student.id).eq("is_read", false);
+    return { ok: true };
   });
 
 export const getAttemptDetails = createServerFn({ method: "POST" })
@@ -95,13 +103,12 @@ export const askTeacher = createServerFn({ method: "POST" })
     const { requireStudent, str } = await import("./student.server");
     const { db, student } = await requireStudent(data.code);
     
-    // فحص هل يوجد سؤال سابق لم يتم حذفه (سؤال واحد لكل طالب)
     const { count } = await db.from("questions").select("*", { count: "exact", head: true }).eq("student_id", student.id);
     if ((count ?? 0) >= 1) throw new Error("مسموح بسؤال واحد فقط. احذف سؤالك السابق لإرسال سؤال جديد.");
 
     const body = str(data.body, 2000);
     if (!body) throw new Error("السؤال فارغ");
-    const { error } = await db.from("questions").insert({ student_id: student.id, body });
+    const { error } = await db.from("questions").insert({ student_id: student.id, body, is_read: false });
     if (error) throw new Error(error.message);
     return { ok: true };
   });

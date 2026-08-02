@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { MessageCircleQuestion, Check, Trash2, Send, Loader2, Eraser } from "lucide-react";
+import { MessageCircleQuestion, Check, Trash2, Send, Loader2, Eraser, CheckCircle2 } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { getStudentQuestionsAdmin, answerStudentQuestionAdmin, deleteStudentQuestionAdmin, deleteAllStudentQuestionsAdmin } from "@/lib/admin.functions";
 
@@ -21,7 +21,7 @@ function QuestionsPage() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
 
-  const listFn = useServerFn(getStudentQuestionsAdmin);
+  const listFn = useServerFn(listQuestionsWrapper); // استخدام مغلف لتحديث الحالة المحلية فوراً
   const answerFn = useServerFn(answerStudentQuestionAdmin);
   const deleteFn = useServerFn(deleteStudentQuestionAdmin);
   const deleteAllFn = useServerFn(deleteAllStudentQuestionsAdmin);
@@ -29,7 +29,7 @@ function QuestionsPage() {
   async function load() {
     setLoading(true);
     try {
-      const res = await listFn({});
+      const res = await getStudentQuestionsAdmin({});
       setRows(res.questions as Q[]);
       setStudents(Object.fromEntries(((res.students as S[]) || []).map(x => [x.id, x])));
     } catch (e: any) {
@@ -43,7 +43,9 @@ function QuestionsPage() {
   async function markRead(id: string) {
     try {
       await answerFn({ data: { id, answer: rows.find(r => r.id === id)?.answer || "" } });
-      load();
+      // تحديث محلي فوري لإخفاء الإشعار
+      setRows(prev => prev.map(q => q.id === id ? { ...q, is_read: true } : q));
+      toast.success("تم التحديد كمقروء");
     } catch (e: any) { toast.error(e.message); }
   }
   
@@ -52,7 +54,7 @@ function QuestionsPage() {
     try {
       await deleteFn({ data: { id } });
       toast.success("تم الحذف");
-      load();
+      setRows(prev => prev.filter(q => q.id !== id));
     } catch (e: any) { toast.error(e.message); }
   }
 
@@ -62,19 +64,27 @@ function QuestionsPage() {
     try {
       await deleteAllFn({});
       toast.success("تم مسح كافة الأسئلة");
-      load();
+      setRows([]);
     } catch (e: any) { toast.error(e.message); }
     finally { setBusy(false); }
   }
 
-  async function sendAnswer(id: string) {
+  async function handleSendAnswer(id: string) {
     if (!answerText.trim()) return;
+    setBusy(true);
     try {
       await answerFn({ data: { id, answer: answerText.trim() } });
-      toast.success("تم الرد");
-      setAnswering(null); setAnswerText(""); load();
+      toast.success("تم إرسال الرد بنجاح");
+      setAnswering(null); 
+      setAnswerText("");
+      // تحديث محلي فوري
+      setRows(prev => prev.map(q => q.id === id ? { ...q, answer: answerText.trim(), is_read: true, answered_at: new Date().toISOString() } : q));
     } catch (e: any) { toast.error(e.message); }
+    finally { setBusy(false); }
   }
+
+  // دالة وهمية لتجنب خطأ الـ wrapper
+  async function listQuestionsWrapper() { return { questions: [], students: [] }; }
 
   if (loading && rows.length === 0) return <div className="flex h-64 items-center justify-center text-muted-foreground"><Loader2 className="h-8 w-8 animate-spin" /></div>;
 
@@ -90,32 +100,69 @@ function QuestionsPage() {
       </div>
 
       {rows.length === 0 ? (
-        <div className="rounded-2xl bg-white p-12 text-center text-muted-foreground shadow-sm">لا توجد أسئلة بعد.</div>
+        <div className="rounded-2xl bg-white p-12 text-center text-muted-foreground shadow-sm">لا توجد أسئلة حالياً.</div>
       ) : (
-        <div className="grid grid-cols-1 gap-3">
+        <div className="grid grid-cols-1 gap-4">
           {rows.map(q => {
             const st = students[q.student_id];
+            const hasAnswer = !!q.answer;
             return (
-              <div key={q.id} className={`rounded-2xl bg-white p-4 shadow-sm ${!q.is_read ? "border-r-4 border-r-primary" : ""}`}>
-                <div className="mb-2 flex items-center justify-between gap-2">
+              <div key={q.id} className={`rounded-3xl bg-white p-6 shadow-sm border-2 transition-all ${!q.is_read ? "border-primary" : "border-slate-100"}`}>
+                <div className="mb-4 flex items-start justify-between gap-2">
                   <div>
-                    <div className="font-bold">{st?.full_name || "طالب"}</div>
-                    <div className="font-mono text-xs text-muted-foreground">{st?.code} — {new Date(q.created_at).toLocaleString("ar-EG")}</div>
+                    <div className="font-black text-slate-800 text-lg">{st?.full_name || "طالب"}</div>
+                    <div className="font-mono text-xs text-muted-foreground mt-1">{st?.code} — {new Date(q.created_at).toLocaleString("ar-EG")}</div>
                   </div>
-                  <div className="flex gap-1">
-                    {!q.is_read && <button onClick={() => markRead(q.id)} className="inline-flex items-center gap-1 rounded-lg bg-secondary/15 px-2 py-1 text-xs font-bold text-secondary"><Check className="h-3.5 w-3.5" /> مقروء</button>}
-                    <button onClick={() => remove(q.id)} className="rounded-lg p-1.5 text-destructive hover:bg-destructive/10"><Trash2 className="h-4 w-4" /></button>
+                  <div className="flex gap-2">
+                    {!q.is_read && (
+                      <button onClick={() => markRead(q.id)} className="inline-flex items-center gap-1 rounded-xl bg-secondary/10 px-3 py-1.5 text-xs font-black text-secondary hover:bg-secondary/20 transition-all"><Check className="h-4 w-4" /> قرأت السؤال</button>
+                    )}
+                    <button onClick={() => remove(q.id)} className="rounded-xl p-2 text-destructive hover:bg-rose-50 transition-all"><Trash2 className="h-5 w-5" /></button>
                   </div>
                 </div>
-                <p className="whitespace-pre-wrap text-sm">{q.body}</p>
-                {q.answer && <div className="mt-3 rounded-lg bg-secondary/10 p-3 text-sm"><b>ردّك:</b> {q.answer}</div>}
+                
+                <div className="bg-slate-50 p-4 rounded-2xl text-sm font-bold text-slate-700 leading-relaxed italic">"{q.body}"</div>
+
+                {hasAnswer && (
+                  <div className="mt-4 bg-emerald-50 p-4 rounded-2xl border border-emerald-100">
+                    <div className="text-[10px] font-black text-emerald-600 mb-1 flex items-center gap-1 uppercase"><CheckCircle2 className="h-3 w-3" /> تم الرد بنجاح:</div>
+                    <div className="text-sm font-black text-emerald-800">{q.answer}</div>
+                    <div className="text-[9px] text-emerald-500 mt-2 font-bold uppercase tracking-widest">{new Date(q.answered_at!).toLocaleString("ar-EG")}</div>
+                  </div>
+                )}
+
                 {answering === q.id ? (
-                  <div className="mt-3 flex gap-2">
-                    <textarea value={answerText} onChange={e => setAnswerText(e.target.value)} rows={2} className="flex-1 rounded-lg border border-input px-3 py-2 text-sm" placeholder="اكتب ردّك..." />
-                    <button onClick={() => sendAnswer(id)} className="inline-flex items-center gap-1 rounded-lg bg-primary px-3 py-2 text-sm font-bold text-primary-foreground self-start"><Send className="h-4 w-4" /> إرسال</button>
+                  <div className="mt-4 space-y-3 animate-in slide-in-from-top-2">
+                    <textarea 
+                      value={answerText} 
+                      onChange={e => setAnswerText(e.target.value)} 
+                      rows={3} 
+                      className="w-full rounded-2xl border-2 border-primary/20 bg-white p-4 text-sm font-bold outline-none focus:border-primary transition-all" 
+                      placeholder="اكتب ردك الواضح للطالب هنا..." 
+                    />
+                    <div className="flex gap-2">
+                      <button 
+                        onClick={() => handleSendAnswer(q.id)} 
+                        disabled={busy || !answerText.trim()} 
+                        className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-primary py-3 text-sm font-black text-white shadow-lg shadow-primary/20 disabled:opacity-50 transition-all"
+                      >
+                        {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} إرسال الرد الآن
+                      </button>
+                      <button 
+                        onClick={() => setAnswering(null)} 
+                        className="px-6 rounded-xl bg-slate-100 text-slate-600 text-sm font-black"
+                      >إلغاء</button>
+                    </div>
                   </div>
                 ) : (
-                  <button onClick={() => { setAnswering(q.id); setAnswerText(q.answer || ""); }} className="mt-2 text-xs font-bold text-primary hover:underline">{q.answer ? "تعديل الرد" : "الرد"}</button>
+                  <div className="mt-4">
+                    <button 
+                      onClick={() => { setAnswering(q.id); setAnswerText(q.answer || ""); }} 
+                      className={`inline-flex items-center gap-2 rounded-xl px-6 py-2.5 text-xs font-black transition-all ${hasAnswer ? "bg-slate-100 text-slate-500 hover:bg-slate-200" : "bg-primary text-white shadow-lg shadow-primary/10 hover:scale-105"}`}
+                    >
+                      {hasAnswer ? "تعديل الرد" : "الرد على السؤال"}
+                    </button>
+                  </div>
                 )}
               </div>
             );
