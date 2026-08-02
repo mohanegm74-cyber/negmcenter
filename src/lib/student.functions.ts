@@ -31,7 +31,6 @@ export const getStudentPortal = createServerFn({ method: "POST" })
     const { requireStudent } = await import("./student.server");
     const { db, student } = await requireStudent(data?.code);
     
-    // إذا كان الطالب غير مفعل، نمنعه من الدخول ونخبره بالانتظار
     if (!student.active) {
       throw new Error("حسابك قيد المراجعة من قبل الأستاذ. يرجى المحاولة لاحقاً.");
     }
@@ -49,7 +48,22 @@ export const getStudentPortal = createServerFn({ method: "POST" })
     return { student, group: g.data, attendance: a.data || [], subs: hs.data || [], payments: p.data || [], notes: n.data || [], questions: q.data || [], homework: hw.data || [], certificates: certs.data || [] };
   });
 
-// ... (keep rest of the file same)
+export const getAttemptDetails = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) => d as { code: string; attempt_id: string })
+  .handler(async ({ data }) => {
+    const { requireStudent } = await import("./student.server");
+    const { db } = await requireStudent(data.code);
+    const { data: attempt } = await db.from("exam_attempts").select("*").eq("id", data.attempt_id).single();
+    if (!attempt) throw new Error("المحاولة غير موجودة");
+    
+    const [qs, ans] = await Promise.all([
+      db.from("exam_questions").select("*").eq("exam_id", attempt.exam_id).order("position"),
+      db.from("exam_answers").select("*").eq("attempt_id", data.attempt_id),
+    ]);
+    
+    return { questions: qs || [], answers: ans || [] };
+  });
+
 export const updateStudentProfile = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => d as { code: string; fields: Record<string, string> })
   .handler(async ({ data }) => {
