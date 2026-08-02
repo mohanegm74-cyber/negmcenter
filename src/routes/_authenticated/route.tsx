@@ -1,7 +1,7 @@
 import { createFileRoute, Outlet, Link, redirect, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { LayoutDashboard, Users, Boxes, ClipboardCheck, ScanLine, LogOut, Home, Wallet, BookOpen, FileBarChart, IdCard, Award, MessageCircleQuestion, FileQuestion, DatabaseBackup, ListChecks, Settings } from "lucide-react";
+import { LayoutDashboard, Users, Boxes, ClipboardCheck, LogOut, Home, Wallet, BookOpen, FileBarChart, IdCard, Award, MessageCircleQuestion, FileQuestion, DatabaseBackup, ListChecks, Settings } from "lucide-react";
 import { Toaster } from "sonner";
 import { BrandLogo } from "@/components/BrandLogo";
 
@@ -13,7 +13,6 @@ export const Route = createFileRoute("/_authenticated")({
       throw redirect({ to: "/auth" });
     }
     
-    // فحص الرتبة مباشرة من الجدول لضمان أعلى مستويات الدقة وتجنب مشاكل الـ RPC
     const { data: roleData } = await supabase
       .from("user_roles")
       .select("role")
@@ -21,7 +20,6 @@ export const Route = createFileRoute("/_authenticated")({
       .maybeSingle();
 
     if (!roleData || (roleData.role !== "teacher" && roleData.role !== "admin")) {
-      // إذا لم يكن معلماً، نقوم بتسجيل خروجه فوراً
       await supabase.auth.signOut();
       throw redirect({ to: "/auth" });
     }
@@ -35,7 +33,6 @@ const NAV = [
   { to: "/groups", label: "المجموعات", icon: Boxes },
   { to: "/group-lists", label: "قوائم المجموعات", icon: ListChecks },
   { to: "/attendance", label: "الحضور", icon: ClipboardCheck },
-  { to: "/scan", label: "مسح QR", icon: ScanLine },
   { to: "/finance", label: "الماليات", icon: Wallet },
   { to: "/homework", label: "الواجبات", icon: BookOpen },
   { to: "/exams", label: "الاختبارات الذكية", icon: FileQuestion },

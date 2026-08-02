@@ -5,6 +5,7 @@ import { Plus, Trash2, Pencil, X, Printer, BookOpen, Loader2, FileText, ImageIco
 import { openPrint, esc } from "@/lib/print";
 import { useServerFn } from "@tanstack/react-start";
 import { getHomeworkDataAdmin, saveHomeworkAdmin, upsertHomeworkSubmissionAdmin, deleteHomeworkAdmin, getHomeworkSubmissionFileUrl } from "@/lib/admin.functions";
+import { GRADES } from "@/lib/exam-constants";
 
 export const Route = createFileRoute("/_authenticated/homework")({
   head: () => ({ meta: [{ title: "الواجبات والتقييم — الأستاذ" }] }),
@@ -12,7 +13,7 @@ export const Route = createFileRoute("/_authenticated/homework")({
 });
 
 type Group = { id: string; name: string; grade: string | null };
-type HW = { id: string; group_id: string | null; title: string; description: string | null; due_date: string | null; max_score: number };
+type HW = { id: string; group_id: string | null; title: string; description: string | null; due_date: string | null; max_score: number; grade: string | null };
 type Student = { id: string; full_name: string; code: string; group_id: string | null };
 type Sub = { id: string; homework_id: string; student_id: string; score: number | null; status: string; note: string | null; answer_text: string | null; file_url: string | null };
 
@@ -51,6 +52,7 @@ function HomeworkPage() {
     const fd = new FormData(e.currentTarget);
     const payload: any = {
       group_id: String(fd.get("group_id") || "") || null,
+      grade: String(fd.get("grade") || "") || null,
       title: String(fd.get("title")).trim(),
       description: String(fd.get("description") || "").trim() || null,
       due_date: String(fd.get("due_date") || "") || null,
@@ -89,6 +91,13 @@ function HomeworkPage() {
           </div>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <div>
+              <label className="mb-1.5 block text-sm font-semibold">الصف الدراسي</label>
+              <select name="grade" defaultValue={editing?.grade || ""} className="w-full rounded-lg border border-input bg-white px-3 py-2 text-sm">
+                <option value="">— اختر الصف —</option>
+                {GRADES.map(g => <option key={g} value={g}>{g}</option>)}
+              </select>
+            </div>
+            <div>
               <label className="mb-1.5 block text-sm font-semibold">المجموعة</label>
               <select name="group_id" defaultValue={editing?.group_id || ""} className="w-full rounded-lg border border-input bg-white px-3 py-2 text-sm">
                 <option value="">— كل المجموعات —</option>
@@ -115,7 +124,7 @@ function HomeworkPage() {
             <div className="flex items-start justify-between gap-2">
               <div>
                 <h3 className="text-lg font-black text-slate-800">{h.title}</h3>
-                <p className="text-[10px] font-bold text-muted-foreground uppercase">{groupMap[h.group_id || ""]?.name || "كل المجموعات"}{h.due_date ? ` · موعد: ${h.due_date}` : ""}</p>
+                <p className="text-[10px] font-bold text-muted-foreground uppercase">{h.grade || "—"} · {groupMap[h.group_id || ""]?.name || "كل المجموعات"}{h.due_date ? ` · موعد: ${h.due_date}` : ""}</p>
               </div>
               <div className="flex gap-1">
                 <button onClick={() => { setEditing(h); setOpen(true); }} className="p-1.5 text-primary hover:bg-primary/5 rounded-lg"><Pencil className="h-4 w-4" /></button>
@@ -131,7 +140,7 @@ function HomeworkPage() {
                   const sub = subs.find(x => x.homework_id === h.id && x.student_id === s.id);
                   return `<tr><td>${i + 1}</td><td>${esc(s.full_name)}</td><td>${esc(s.code)}</td><td>${esc(sub?.status || "—")}</td><td>${sub?.score ?? "—"} / ${h.max_score}</td></tr>`;
                 }).join("");
-                openPrint(`واجب: ${h.title}`, `<h2>${esc(h.title)} — ${esc(groupMap[h.group_id || ""]?.name || "كل المجموعات")}</h2><table><thead><tr><th>#</th><th>الطالب</th><th>الكود</th><th>الحالة</th><th>الدرجة</th></tr></thead><tbody>${rowsHtml}</tbody></table>`);
+                openPrint(`واجب: ${h.title}`, `<h2>${esc(h.title)} — ${esc(h.grade || "")} — ${esc(groupMap[h.group_id || ""]?.name || "كل المجموعات")}</h2><table><thead><tr><th>#</th><th>الطالب</th><th>الكود</th><th>الحالة</th><th>الدرجة</th></tr></thead><tbody>${rowsHtml}</tbody></table>`);
               }} className="inline-flex items-center gap-1 rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold text-slate-600"><Printer className="h-3.5 w-3.5" /> طباعة</button>
             </div>
           </div>
