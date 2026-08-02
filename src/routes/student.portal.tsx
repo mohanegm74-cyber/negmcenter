@@ -5,13 +5,14 @@ import {
   User, BookOpen, Wallet, MessageCircleQuestion, Sparkles, 
   Save, Loader2, Award, Calendar, Home, ClipboardList, 
   MessageSquare, UserCircle, CreditCard, ChevronLeft,
-  LogOut, XCircle, CheckCircle2, Send, ImageIcon, FileText, UploadCloud, Trash2, ExternalLink, Code
+  LogOut, XCircle, CheckCircle2, Send, ImageIcon, FileText, UploadCloud, Trash2, ExternalLink, Code, Phone
 } from "lucide-react";
 import { BrandLogo } from "@/components/BrandLogo";
 import { ExamsTab } from "@/components/ExamsTab";
 import { getStudentPortal, updateStudentProfile, askTeacher, deleteStudentQuestionPortal, submitHomeworkText, createHomeworkUploadUrl, finalizeHomeworkUpload, getSubmissionUrl, markNotesAsRead, deleteCertificatePortal } from "@/lib/student.functions";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
+import { TEACHER_WHATSAPP_DISPLAY } from "@/lib/contact";
 
 export const Route = createFileRoute("/student/portal")({
   head: () => ({ meta: [{ title: "بوابة الطالب — سنتر الأستاذ محمد نجم" }] }),
@@ -129,19 +130,26 @@ function Portal() {
       </h1>
       <p className="mt-2 text-sm md:text-base font-bold text-slate-500 flex items-center justify-center gap-1.5">
         <Code className="h-4 w-4 text-secondary" />
-        هذه المنصة من تصميم وبرمجة الاستاذ / محمد نجم
+        المنصة من تصميم وبرمجة الاستاذ / محمد نجم كبير معلمين اللغة العربية
       </p>
       
-      <div className="mt-6 flex justify-center">
-        <a 
-          href="https://negmaie3rab.lovable.app" 
-          target="_blank" 
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-2 rounded-2xl bg-secondary px-6 py-3 text-sm font-black text-white shadow-xl shadow-secondary/20 hover:scale-105 active:scale-95 transition-all"
-        >
-          <ExternalLink className="h-4 w-4" />
-          تعلم الاعراب والنحو وعلوم اللغة العربية
-        </a>
+      <div className="mt-4 flex flex-col items-center gap-3">
+        <div className="flex items-center gap-2 text-primary font-black text-sm bg-primary/5 px-4 py-1.5 rounded-full border border-primary/10">
+          <Phone className="h-4 w-4" />
+          للتواصل والدعم: {TEACHER_WHATSAPP_DISPLAY}
+        </div>
+        
+        <div className="mt-2">
+          <a 
+            href="https://negmaie3rab.lovable.app" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 rounded-2xl bg-secondary px-6 py-3 text-sm font-black text-white shadow-xl shadow-secondary/20 hover:scale-105 active:scale-95 transition-all"
+          >
+            <ExternalLink className="h-4 w-4" />
+            تعلم الاعراب والنحو وعلوم اللغة العربية ( اضغط هنا )
+          </a>
+        </div>
       </div>
     </div>
   );
