@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { Loader2, Timer, Play, CheckCircle2, Sparkles, FileText, BarChart3, XCircle, ChevronDown, ChevronUp, Check, X, HelpCircle, Trash2, History } from "lucide-react";
-import { getStudentExams, startExamAttempt, submitExamAttempt, getAttemptDetails, deleteExamAttemptPortal } from "@/lib/student.functions";
+import { getStudentExams, startExamAttempt, submitExamAttempt, getAttemptDetails, deleteExamAttemptPortal, getExamAnswerKey } from "@/lib/student.functions";
 
 type Exam = {
   id: string; title: string; grade: string | null; term: string | null; group_id: string | null;
