@@ -30,8 +30,8 @@ export function ExamsTab({ code }: { code: string }) {
 
   async function load() {
     try {
-      // إرسال الكود مباشرة كما يتوقع الـ Validator
-      const d = await listFn({ code });
+      // إرسال الكود بتغليف data كما يتوقع السيرفر
+      const { data: d } = await listFn({ data: { code } });
       setExams((d.exams as Exam[]) || []);
       setAttempts((d.attempts as Attempt[]) || []);
     } catch (e: any) { 
@@ -43,7 +43,7 @@ export function ExamsTab({ code }: { code: string }) {
 
   async function start(exam: Exam) {
     try {
-      const d = await startFn({ code, exam_id: exam.id });
+      const { data: d } = await startFn({ data: { code, exam_id: exam.id } });
       setActive({ exam: d.exam as Exam, questions: (d.questions as Q[]) || [], attempt: d.attempt as Attempt });
     } catch (e: any) { 
       toast.error(e?.message || "تعذر بدء الاختبار"); 
@@ -106,7 +106,7 @@ function Result({ attempt, code }: { attempt: Attempt; code: string }) {
     setLoading(true);
     try {
       // تصحيح: إرسال البيانات بشكل مسطح كما يتوقع الخادم
-      const res = await getDetailsFn({ code, attempt_id: attempt.id });
+      const { data: res } = await getDetailsFn({ data: { code, attempt_id: attempt.id } });
       setDetails(res as any);
       setShowReview(true);
     } catch (e: any) { 
@@ -207,8 +207,8 @@ function Runner({ exam, questions, attempt, code, onDone }: { exam: Exam; questi
     const t = toast.loading("جاري تصحيح الاختبار وتحليل الإجابات...");
     try {
       const spent = Math.round((Date.now() - startedAt.current) / 1000);
-      // تصحيح: إرسال البيانات بشكل مسطح
-      await submitFn({ code, attempt_id: attempt.id, answers, time_spent_seconds: spent });
+      // تصحيح: إرسال البيانات بتغليف data
+      await submitFn({ data: { code, attempt_id: attempt.id, answers, time_spent_seconds: spent } });
       toast.success("تم تسليم الاختبار بنجاح، شاهد نتيجتك الآن", { id: t });
       onDone();
     } catch (err: any) { 

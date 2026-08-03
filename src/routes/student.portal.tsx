@@ -51,7 +51,7 @@ function Portal() {
 
   useEffect(() => {
     if (tab === "notes" && data?.student?.code && !data.pending) {
-      markNotesFn({ code: data.student.code }).then(() => {
+      markNotesFn({ data: { code: data.student.code } }).then(() => {
         setData((prev: any) => prev ? { ...prev, counts: { ...prev.counts, unreadNotes: 0 } } : prev);
       });
     }
@@ -59,8 +59,8 @@ function Portal() {
 
   async function loadData(c: string) {
     try {
-      // إرسال الكود بشكل مسطح كما يتوقع الخادم
-      const res = await loadPortal({ code: c });
+      // تصحيح: تغليف البيانات في مفتاح data
+      const res = await loadPortal({ data: { code: c } });
       setData(res);
       setLoading(false);
       return res;
@@ -89,7 +89,7 @@ function Portal() {
     const fields: any = {};
     fd.forEach((v, k) => { fields[k] = String(v).trim(); });
     try {
-      await updateProfile({ code: data.student.code, fields });
+      await updateProfile({ data: { code: data.student.code, fields } });
       toast.success("تم تحديث بياناتك بنجاح");
       await loadData(data.student.code);
     } catch (err: any) { toast.error(err.message); }
@@ -103,7 +103,7 @@ function Portal() {
     if (!body) return;
     setIsSaving(true);
     try {
-      await askFn({ code: data.student.code, body });
+      await askFn({ data: { code: data.student.code, body } });
       toast.success("تم إرسال سؤالك بنجاح للأستاذ");
       e.currentTarget.reset();
       await loadData(data.student.code);
@@ -114,7 +114,7 @@ function Portal() {
   async function handleRemoveQuestion(id: string) {
     if (!confirm("هل تريد حذف سؤالك؟")) return;
     try {
-      await deleteQFn({ code: data.student.code, id });
+      await deleteQFn({ data: { code: data.student.code, id } });
       toast.success("تم حذف السؤال");
       await loadData(data.student.code);
     } catch (err: any) { toast.error(err.message); }
@@ -123,7 +123,7 @@ function Portal() {
   async function handleRemoveCert(id: string) {
     if (!confirm("هل تريد حذف هذه الشهادة من ملفك؟")) return;
     try {
-      await deleteCertFn({ code: data.student.code, id });
+      await deleteCertFn({ data: { code: data.student.code, id } });
       toast.success("تم حذف الشهادة");
       await loadData(data.student.code);
     } catch (err: any) { toast.error(err.message); }
@@ -218,6 +218,20 @@ function Portal() {
       </header>
 
       <main className="max-w-5xl mx-auto p-4 md:p-6 pb-24">
+        {/* رابط تعلم الإعراب المميز */}
+        <div className="mb-6 animate-bounce">
+          <a 
+            href="https://negmaie3rab.lovable.app" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="w-full flex items-center justify-center gap-3 bg-gradient-to-l from-gold to-yellow-500 text-gold-foreground p-5 rounded-3xl shadow-xl shadow-gold/20 font-black text-lg hover:scale-[1.02] transition-transform"
+          >
+            <Sparkles className="h-6 w-6" />
+            تعلم الإعراب والنحو ( اضغط هنا )
+            <ExternalLink className="h-5 w-5" />
+          </a>
+        </div>
+
         {tab === "info" && (
           <div className="animate-in fade-in slide-in-from-bottom-4">
             <section className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100">
@@ -322,7 +336,7 @@ function HomeworkItem({ h, studentCode, submission, onRefresh }: any) {
 
   useEffect(() => {
     if (submission?.file_url) {
-      getSubUrl({ code: studentCode, path: submission.file_url }).then(res => setImageUrl(res.url));
+      getSubUrl({ data: { code: studentCode, path: submission.file_url } }).then(res => setImageUrl(res.url));
     }
   }, [submission, studentCode]);
 
@@ -330,7 +344,7 @@ function HomeworkItem({ h, studentCode, submission, onRefresh }: any) {
     if (!text.trim()) return;
     setBusy(true);
     try {
-      await submitText({ code: studentCode, homework_id: h.id, answer_text: text });
+      await submitText({ data: { code: studentCode, homework_id: h.id, answer_text: text } });
       toast.success("تم الحفظ");
       onRefresh();
     } catch (e: any) { toast.error(e.message); }
@@ -343,10 +357,10 @@ function HomeworkItem({ h, studentCode, submission, onRefresh }: any) {
     setBusy(true);
     const t = toast.loading("جاري الرفع...");
     try {
-      const { path, token } = await getUploadUrl({ code: studentCode, homework_id: h.id, filename: file.name });
+      const { data: { path, token } } = await getUploadUrl({ data: { code: studentCode, homework_id: h.id, filename: file.name } });
       const { error } = await supabase.storage.from("submissions").uploadToSignedUrl(path, token, file);
       if (error) throw error;
-      await finalizeUpload({ code: studentCode, homework_id: h.id, path });
+      await finalizeUpload({ data: { code: studentCode, homework_id: h.id, path } });
       toast.success("تم الرفع", { id: t });
       onRefresh();
     } catch (err: any) { toast.error(err.message, { id: t }); }
