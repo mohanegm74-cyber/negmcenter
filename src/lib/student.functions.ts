@@ -85,7 +85,7 @@ export const markNotesAsRead = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { requireStudent } = await import("./student.server");
     const { db, student } = await requireStudent(data.code);
-    await db.from("student_notes").update({ is_read: true }).eq("student_id", student.id).eq("is_read", false);
+    await (db.from("student_notes") as any).update({ is_read: true }).eq("student_id", student.id).eq("is_read", false);
     return { ok: true };
   });
 
