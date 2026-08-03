@@ -3,33 +3,34 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
 export const admin = supabaseAdmin;
 
-/** تنظيف الكود وجعله مرناً (يقبل الكود ببادئة أو بدونها، ويحول الأرقام العربية) */
+/** تنظيف الكود وجعله مرناً جداً (يقبل الكود ببادئة أو بدونها، ويحول الأرقام العربية، وينظف المسافات) */
 export function cleanCode(code: unknown) {
-  let c = String(code ?? "").trim().toUpperCase();
+  let c = String(code ?? "").trim().replace(/\s/g, "").toUpperCase();
   
-  // تحويل الأرقام العربية/الفارسية إلى إنجليزية
+  // تحويل الأرقام العربية/الفارسية إلى إنجليزية لضمان المطابقة
   const map: Record<string, string> = { '٠':'0','١':'1','٢':'2','٣':'3','٤':'4','٥':'5','٦':'6','٧':'7','٨':'8','٩':'9' };
   c = c.replace(/[٠-٩]/g, (d) => map[d] || d);
 
   if (!c) throw new Error("يرجى إدخال كود الطالب");
 
-  // إذا أدخل الطالب الجزء العشوائي فقط (8 رموز)، نضيف البادئة تلقائياً
+  // إذا أدخل الطالب الجزء العشوائي فقط (8 رموز)، نضيف البادئة تلقائياً للمطابقة مع القاعدة
   if (!c.startsWith("STU-")) {
-    if (c.length === 8 || !c.includes("-")) {
+    // الأكواد في القاعدة دائماً تبدأ بـ STU- تليها 8 رموز
+    if (c.length === 8) {
       c = "STU-" + c;
     }
   }
 
-  if (c.length < 8) throw new Error("الكود الذي أدخلته غير مكتمل");
   return c;
 }
 
 export async function requireStudent(code: unknown) {
   const cleaned = cleanCode(code);
+  // البحث الدقيق في قاعدة البيانات
   const { data, error } = await admin.from("students").select("*").eq("code", cleaned).maybeSingle();
   
-  if (error) throw new Error("حدث خطأ أثناء التحقق من الكود");
-  if (!data) throw new Error(`عذراً، الكود (${cleaned}) غير مسجل لدينا. تأكد من الكود أو سجل كطالب جديد.`);
+  if (error) throw new Error("حدث خطأ تقني أثناء التحقق من الكود");
+  if (!data) throw new Error(`عذراً، الكود (${cleaned}) غير مسجل. تأكد من كتابته بشكل صحيح أو تواصل مع السنتر.`);
   
   return { db: admin, student: data as any };
 }
