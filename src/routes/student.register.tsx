@@ -20,11 +20,11 @@ function RegisterStudent() {
   const [groups, setGroups] = useState<any[]>([]);
   const [registeredCode, setRegisteredCode] = useState<string | null>(null);
   
-  const register = useServerFn(registerStudent);
-  const loadGroups = useServerFn(getAvailableGroups);
+  const registerFn = useServerFn(registerStudent);
+  const loadGroupsFn = useServerFn(getAvailableGroups);
 
   useEffect(() => {
-    loadGroups({}).then(res => setGroups(res.groups)).catch(() => toast.error("تعذر تحميل المجموعات"));
+    loadGroupsFn({}).then(res => setGroups(res.groups)).catch(() => toast.error("تعذر تحميل المجموعات"));
   }, []);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -35,8 +35,8 @@ function RegisterStudent() {
     fd.forEach((v, k) => { const s = String(v).trim(); if (s) payload[k] = s; });
     
     try {
-      // تصحيح: تمرير البيانات مباشرة
-      const res = await register(payload);
+      // تصحيح: تمرير البيانات داخل كائن يحتوي على مفتاح data
+      const res = await registerFn({ data: payload });
       setRegisteredCode(res.code);
       localStorage.setItem("najm_student_code", res.code);
       toast.success("تم إرسال طلب التسجيل بنجاح");
