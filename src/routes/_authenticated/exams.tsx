@@ -358,6 +358,9 @@ function ExamsPage() {
                     ) : (
                       <button onClick={() => setStatus(ex, "draft")} className="rounded-lg bg-slate-100 px-3 py-1.5 text-[11px] font-black text-slate-500 hover:bg-slate-200 transition-all flex items-center gap-1"><Ban className="h-3.5 w-3.5" /> إغلاق</button>
                     )}
+                    {ex.status === "published" && (
+                      <button onClick={() => toggleAnswers(ex)} className={`rounded-lg px-3 py-1.5 text-[11px] font-black transition-all flex items-center gap-1 ${ex.answers_released ? "bg-amber-100 text-amber-700 hover:bg-amber-200" : "bg-indigo-50 text-indigo-600 hover:bg-indigo-100"}`} title="الإجابة النموذجية"><CheckCircle2 className="h-3.5 w-3.5" /> {ex.answers_released ? "إخفاء الإجابة" : "إرسال الإجابة"}</button>
+                    )}
                     <button onClick={() => handleEdit(ex)} className="rounded-lg bg-primary/10 p-2 text-primary hover:bg-primary/20 transition-all" title="تعديل الاختبار"><Pencil className="h-4 w-4" /></button>
                     <button onClick={() => { setAnalysisExamId(ex.id); window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" }); }} className="rounded-lg bg-secondary/10 p-2 text-secondary hover:bg-secondary/20 transition-all" title="نتائج الطلاب والتحليل"><BarChart3 className="h-4 w-4" /></button>
                     <button onClick={() => remove(ex.id)} className="rounded-lg bg-rose-50 p-2 text-rose-500 hover:bg-rose-100 transition-all" title="حذف نهائي"><Trash2 className="h-4 w-4" /></button>
