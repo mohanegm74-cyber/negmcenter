@@ -63,19 +63,16 @@ export const getStudentExams = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => d as { code: string })
   .handler(async ({ data }) => {
     const { requireStudent } = await import("./student.server");
+    const { gradeMatches } = await import("./exam-constants");
     const { db, student } = await requireStudent(data.code);
     
-    // جلب كافة الاختبارات المنشورة
     const { data: allExams } = await db.from("exams").select("*").eq("status", "published").order("created_at", { ascending: false });
     const { data: attempts } = await db.from("exam_attempts").select("*").eq("student_id", student.id).order("submitted_at", { ascending: false });
 
-    // فلترة الاختبارات في الذاكرة لضمان الدقة وتجنب تعقيدات SQL OR مع القيم الفارغة
+    // فلترة مرنة تضمن ظهور الاختبارات حسب المجموعة أو الصف
     const filteredExams = (allExams || []).filter(e => {
-      // إذا كان الاختبار مخصصاً لمجموعة معينة والطالب فيها
       if (e.group_id && e.group_id === student.group_id) return true;
-      // إذا كان الاختبار مخصصاً لصف معين والطالب في هذا الصف (بدون مجموعة محددة للاختبار)
-      if (!e.group_id && e.grade === student.grade) return true;
-      // إذا كان الاختبار عاماً (بدون صف وبدون مجموعة)
+      if (!e.group_id && e.grade && student.grade && gradeMatches(e.grade, student.grade)) return true;
       if (!e.group_id && !e.grade) return true;
       return false;
     });

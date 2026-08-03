@@ -30,10 +30,9 @@ export function ExamsTab({ code }: { code: string }) {
 
   async function load() {
     try {
-      // توحيد الاستدعاء ليكون داخل data
-      const { data: d } = await listFn({ data: { code } });
-      setExams((d.exams as Exam[]) || []);
-      setAttempts((d.attempts as Attempt[]) || []);
+      const res = await listFn({ data: { code } });
+      setExams((res.exams as Exam[]) || []);
+      setAttempts((res.attempts as Attempt[]) || []);
     } catch (e: any) { 
       toast.error(e?.message || "تعذر تحميل الاختبارات"); 
     }
@@ -43,8 +42,8 @@ export function ExamsTab({ code }: { code: string }) {
 
   async function start(exam: Exam) {
     try {
-      const { data: d } = await startFn({ data: { code, exam_id: exam.id } });
-      setActive({ exam: d.exam as Exam, questions: (d.questions as Q[]) || [], attempt: d.attempt as Attempt });
+      const res = await startFn({ data: { code, exam_id: exam.id } });
+      setActive({ exam: res.exam as Exam, questions: (res.questions as Q[]) || [], attempt: res.attempt as Attempt });
     } catch (e: any) { 
       toast.error(e?.message || "تعذر بدء الاختبار"); 
     }
@@ -105,7 +104,7 @@ function Result({ attempt, code }: { attempt: Attempt; code: string }) {
     }
     setLoading(true);
     try {
-      const { data: res } = await getDetailsFn({ data: { code, attempt_id: attempt.id } });
+      const res = await getDetailsFn({ data: { code, attempt_id: attempt.id } });
       setDetails(res as any);
       setShowReview(true);
     } catch (e: any) { 
@@ -170,9 +169,9 @@ function Result({ attempt, code }: { attempt: Attempt; code: string }) {
                     </div>
                   )}
                 </div>
-                {q.rationale && isCorrect && (
-                  <div className="mt-3 pt-2 border-t border-emerald-100/50 text-[10px] text-emerald-700/70 font-medium">
-                    💡 {q.rationale}
+                {q.rationale && (
+                  <div className="mt-3 pt-2 border-t border-slate-100 text-[10px] text-slate-500 font-medium italic">
+                    💡 توضيح: {q.rationale}
                   </div>
                 )}
               </div>
