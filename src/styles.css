@@ -90,3 +90,10 @@
     font-feature-settings: "kern";
   }
 }
+
+/* محاولة إخفاء علامة Lovable */
+[id^="lovable-"], .lovable-badge, a[href*="lovable.dev"] {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}

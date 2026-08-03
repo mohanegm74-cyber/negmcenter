@@ -30,7 +30,7 @@ export function ExamsTab({ code }: { code: string }) {
 
   async function load() {
     try {
-      const d = await listFn({ data: { code } });
+      const d = await listFn({ code });
       setExams((d.exams as Exam[]) || []);
       setAttempts((d.attempts as Attempt[]) || []);
     } catch (e: any) { toast.error(e?.message || "تعذر تحميل الاختبارات"); }
@@ -40,7 +40,7 @@ export function ExamsTab({ code }: { code: string }) {
 
   async function start(exam: Exam) {
     try {
-      const d = await startFn({ data: { code, exam_id: exam.id } });
+      const d = await startFn({ code, exam_id: exam.id });
       setActive({ exam: d.exam as Exam, questions: (d.questions as Q[]) || [], attempt: d.attempt as Attempt });
     } catch (e: any) { toast.error(e?.message || "تعذر بدء الاختبار"); }
   }
@@ -48,7 +48,7 @@ export function ExamsTab({ code }: { code: string }) {
   async function handleDeleteAttempt(attemptId: string) {
     if (!confirm("هل تريد حذف سجل هذه المحاولة؟ لا يمكن استعادتها.")) return;
     try {
-      await deleteAttemptFn({ data: { code, attempt_id: attemptId } });
+      await deleteAttemptFn({ code, attempt_id: attemptId });
       toast.success("تم حذف المحاولة بنجاح");
       load();
     } catch { toast.error("فشل حذف المحاولة"); }
@@ -64,13 +64,14 @@ export function ExamsTab({ code }: { code: string }) {
     <div className="space-y-4">
       <div className="bg-primary/5 border border-primary/10 p-4 rounded-2xl mb-6">
         <h3 className="font-black text-primary flex items-center gap-2 mb-1"><Sparkles className="h-5 w-5" /> مركز الاختبارات الذكية</h3>
-        <p className="text-xs text-muted-foreground font-bold">هنا تظهر اختباراتك ونتائجك السابقة. يمكنك مراجعة مستواك في أي وقت.</p>
+        <p className="text-xs text-muted-foreground font-bold">هنا تظهر اختباراتك ونتائجك. يرجى العلم أنه غير مسموح بإعادة الاختبار بعد تسليمه.</p>
       </div>
 
       {exams.length === 0 && <div className="rounded-3xl border border-dashed bg-white p-12 text-center text-muted-foreground font-bold">لا توجد اختبارات منشورة حالياً</div>}
       
       {exams.map((e) => {
         const myAttempts = attempts.filter((a) => a.exam_id === e.id && a.status === "submitted");
+        const hasSubmitted = myAttempts.length > 0;
         
         return (
           <div key={e.id} className="rounded-[2rem] border bg-white p-6 shadow-sm hover:shadow-md transition-shadow">
@@ -84,18 +85,24 @@ export function ExamsTab({ code }: { code: string }) {
                 </div>
               </div>
               
-              <button onClick={() => start(e)} className="inline-flex items-center gap-2 rounded-2xl bg-primary px-8 py-3 text-sm font-black text-white shadow-lg shadow-primary/20 hover:scale-105 active:scale-95 transition-all">
-                <Play className="h-4 w-4" /> {myAttempts.length > 0 ? "محاولة جديدة" : "ابدأ الاختبار الآن"}
-              </button>
+              {!hasSubmitted ? (
+                <button onClick={() => start(e)} className="inline-flex items-center gap-2 rounded-2xl bg-primary px-8 py-3 text-sm font-black text-white shadow-lg shadow-primary/20 hover:scale-105 active:scale-95 transition-all">
+                  <Play className="h-4 w-4" /> ابدأ الاختبار الآن
+                </button>
+              ) : (
+                <div className="inline-flex items-center gap-2 rounded-2xl bg-emerald-50 text-emerald-600 px-6 py-3 text-sm font-black border border-emerald-100">
+                  <CheckCircle2 className="h-5 w-5" /> تم تسليم الإجابة
+                </div>
+              )}
             </div>
             
-            {myAttempts.length > 0 && (
+            {hasSubmitted && (
               <div className="mt-8 pt-6 border-t border-dashed">
-                <div className="flex items-center gap-2 mb-4 text-sm font-black text-slate-500"><History className="h-4 w-4" /> سجل نتائجك في هذا الاختبار:</div>
+                <div className="flex items-center gap-2 mb-4 text-sm font-black text-slate-500"><History className="h-4 w-4" /> نتيجتك النهائية:</div>
                 <div className="space-y-6">
                   {myAttempts.map(att => (
                     <div key={att.id} className="relative group">
-                      <button onClick={() => handleDeleteAttempt(att.id)} className="absolute -top-3 -left-3 h-8 w-8 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center border border-rose-100 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"><Trash2 className="h-4 w-4" /></button>
+                      {/* زر الحذف تم إخفاؤه لضمان عدم إعادة المحاولة */}
                       <Result attempt={att} code={code} />
                     </div>
                   ))}
@@ -119,7 +126,8 @@ function Result({ attempt, code }: { attempt: Attempt; code: string }) {
     if (details) { setShowReview(!showReview); return; }
     setLoading(true);
     try {
-      const res = await getDetailsFn({ data: { code, attempt_id: attempt.id } });
+      // تصحيح: تمرير البيانات مباشرة دون تغليف إضافي
+      const res = await getDetailsFn({ code, attempt_id: attempt.id });
       setDetails(res as any);
       setShowReview(true);
     } catch { toast.error("فشل تحميل مراجعة الأسئلة"); }
@@ -153,7 +161,10 @@ function Result({ attempt, code }: { attempt: Attempt; code: string }) {
       <div className="bg-white rounded-2xl border-2 border-primary/10 overflow-hidden">
         <div className="bg-primary/5 px-4 py-2 border-b flex items-center justify-between">
           <div className="flex items-center gap-2"><BarChart3 className="h-4 w-4 text-primary" /><span className="text-[10px] font-black text-primary">التقرير التحليلي (AI)</span></div>
-          <button onClick={loadReview} className="text-[10px] font-black text-primary underline">مراجعة الإجابات</button>
+          <button onClick={loadReview} className="text-[10px] font-black text-primary underline flex items-center gap-1">
+            {loading && <Loader2 className="h-3 w-3 animate-spin" />}
+            {showReview ? "إخفاء الإجابات" : "مراجعة إجاباتك"}
+          </button>
         </div>
         <div className="p-4 space-y-4">
           {attempt.analysis && <p className="text-xs font-bold text-slate-700 leading-relaxed italic">"{attempt.analysis}"</p>}
@@ -226,7 +237,8 @@ function Runner({ exam, questions, attempt, code, onDone }:
     const t = toast.loading("جاري تصحيح الاختبار وتحليل النتائج ذكياً...");
     try {
       const spent = Math.round((Date.now() - startedAt.current) / 1000);
-      const res = await submitFn({ data: { code, attempt_id: attempt.id, answers, time_spent_seconds: spent } });
+      // تصحيح: تمرير البيانات مباشرة
+      const res = await submitFn({ code, attempt_id: attempt.id, answers, time_spent_seconds: spent });
       localStorage.removeItem(storeKey);
       toast.success(`تم التصحيح والتحليل بنجاح بنسبة ${res.percentage}%`, { id: t });
       onDone();
