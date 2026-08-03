@@ -329,6 +329,9 @@ function ExamsPage() {
               ) : (
                 <button onClick={() => setStatus(ex, "draft")} className="flex-1 py-2 bg-slate-100 text-slate-600 rounded-xl text-[11px] font-black flex items-center justify-center gap-1"><Ban className="h-3.5 w-3.5" /> إغلاق</button>
               )}
+              {ex.status === "published" && (
+                <button onClick={() => toggleAnswers(ex)} className={`p-2 rounded-xl ${ex.answers_released ? "bg-amber-100 text-amber-700" : "bg-indigo-50 text-indigo-600"}`} title={ex.answers_released ? "إخفاء الإجابة الصحيحة" : "إرسال الإجابة الصحيحة للطلاب"}><CheckCircle2 className="h-4 w-4" /></button>
+              )}
               <button onClick={() => handleEdit(ex)} className="p-2 bg-primary/10 text-primary rounded-xl" title="تعديل"><Pencil className="h-4 w-4" /></button>
               <button onClick={() => { setAnalysisExamId(ex.id); window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" }); }} className="p-2 bg-secondary/10 text-secondary rounded-xl" title="النتائج"><BarChart3 className="h-4 w-4" /></button>
               <button onClick={() => remove(ex.id)} className="p-2 bg-rose-50 text-rose-500 rounded-xl" title="حذف"><Trash2 className="h-4 w-4" /></button>
