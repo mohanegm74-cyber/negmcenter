@@ -124,6 +124,26 @@ export const getAttemptDetails = createServerFn({ method: "POST" })
     return { questions: qs.data || [], answers: ans.data || [] };
   });
 
+/** نموذج الإجابة الصحيحة — يظهر للطالب فقط بعد أن يرسله الأستاذ */
+export const getExamAnswerKey = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) => d as { code: string; exam_id: string })
+  .handler(async ({ data }) => {
+    const { requireStudent } = await import("./student.server");
+    const { db } = await requireStudent(data.code);
+    const { data: exam } = await db.from("exams").select("id, title, answers_released, status").eq("id", data.exam_id).maybeSingle();
+    if (!exam || exam.status !== "published" || !exam.answers_released) {
+      throw new Error("لم يقم الأستاذ بإرسال الإجابة النموذجية لهذا الاختبار بعد");
+    }
+    const { data: qs } = await db
+      .from("exam_questions")
+      .select("id, position, kind, prompt, options, correct_answer, rationale")
+      .eq("exam_id", data.exam_id)
+      .order("position");
+    return { questions: qs || [] };
+  });
+
+
+
 export const updateStudentProfile = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => d as { code: string; fields: Record<string, string> })
   .handler(async ({ data }) => {
