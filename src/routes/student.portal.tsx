@@ -14,6 +14,7 @@ import { ExamsTab } from "@/components/ExamsTab";
 import { getStudentPortal, updateStudentProfile, askTeacher, deleteStudentQuestionPortal, submitHomeworkText, createHomeworkUploadUrl, finalizeHomeworkUpload, getSubmissionUrl, markNotesAsRead, deleteCertificatePortal } from "@/lib/student.functions";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
+import { GRADES } from "@/lib/exam-constants";
 import { TEACHER_WHATSAPP_DISPLAY } from "@/lib/contact";
 
 export const Route = createFileRoute("/student/portal")({
