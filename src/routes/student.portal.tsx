@@ -256,6 +256,14 @@ function Portal() {
                 <Field name="address" label="العنوان" defaultValue={student.address || ""} />
                 <Field name="school" label="المدرسة" defaultValue={student.school || ""} />
                 <Field name="section" label="الشعبة" defaultValue={student.section || ""} />
+                <div>
+                  <label className="mb-1.5 block text-xs font-black text-muted-foreground">الصف الدراسي</label>
+                  <select name="grade" defaultValue={student.grade || ""} className="w-full rounded-xl border bg-white px-4 py-2.5 text-sm font-bold outline-none focus:border-primary">
+                    <option value="">— غير محدد —</option>
+                    {GRADES.map((g: string) => <option key={g} value={g}>{g}</option>)}
+                  </select>
+                </div>
+
                 <div className="md:col-span-2 mt-4"><button type="submit" disabled={isSaving} className="w-full md:w-auto rounded-xl bg-primary px-10 py-3.5 text-sm font-black text-white shadow-lg flex items-center justify-center gap-2">{isSaving ? <Loader2 className="h-5 w-5 animate-spin" /> : <Save className="h-5 w-5" />} حفظ التعديلات</button></div>
               </form>
             </section>
