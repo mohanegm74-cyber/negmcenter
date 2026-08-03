@@ -7,7 +7,7 @@ import { getStudentExams, startExamAttempt, submitExamAttempt, getAttemptDetails
 type Exam = {
   id: string; title: string; grade: string | null; term: string | null; group_id: string | null;
   subject: string | null; unit: string | null; lesson: string | null; duration_minutes: number;
-  total_score: number; adaptive: boolean; status: string;
+  total_score: number; adaptive: boolean; status: string; answers_released?: boolean | null;
 };
 type Q = {
   id: string; position: number; kind: string; prompt: string; passage: string | null; options: any;
