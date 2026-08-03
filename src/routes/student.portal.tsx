@@ -51,7 +51,7 @@ function Portal() {
 
   useEffect(() => {
     if (tab === "notes" && data?.student?.code && !data.pending) {
-      markNotesFn({ data: { code: data.student.code } }).then(() => {
+      markNotesFn({ code: data.student.code }).then(() => {
         setData((prev: any) => prev ? { ...prev, counts: { ...prev.counts, unreadNotes: 0 } } : prev);
       });
     }
@@ -59,8 +59,7 @@ function Portal() {
 
   async function loadData(c: string) {
     try {
-      // تصحيح: تغليف البيانات في مفتاح data
-      const res = await loadPortal({ data: { code: c } });
+      const res = await loadPortal({ code: c });
       setData(res);
       setLoading(false);
       return res;
@@ -89,7 +88,7 @@ function Portal() {
     const fields: any = {};
     fd.forEach((v, k) => { fields[k] = String(v).trim(); });
     try {
-      await updateProfile({ data: { code: data.student.code, fields } });
+      await updateProfile({ code: data.student.code, fields });
       toast.success("تم تحديث بياناتك بنجاح");
       await loadData(data.student.code);
     } catch (err: any) { toast.error(err.message); }
@@ -103,7 +102,7 @@ function Portal() {
     if (!body) return;
     setIsSaving(true);
     try {
-      await askFn({ data: { code: data.student.code, body } });
+      await askFn({ code: data.student.code, body });
       toast.success("تم إرسال سؤالك بنجاح للأستاذ");
       e.currentTarget.reset();
       await loadData(data.student.code);
@@ -114,7 +113,7 @@ function Portal() {
   async function handleRemoveQuestion(id: string) {
     if (!confirm("هل تريد حذف سؤالك؟")) return;
     try {
-      await deleteQFn({ data: { code: data.student.code, id } });
+      await deleteQFn({ code: data.student.code, id });
       toast.success("تم حذف السؤال");
       await loadData(data.student.code);
     } catch (err: any) { toast.error(err.message); }
@@ -123,7 +122,7 @@ function Portal() {
   async function handleRemoveCert(id: string) {
     if (!confirm("هل تريد حذف هذه الشهادة من ملفك؟")) return;
     try {
-      await deleteCertFn({ data: { code: data.student.code, id } });
+      await deleteCertFn({ code: data.student.code, id });
       toast.success("تم حذف الشهادة");
       await loadData(data.student.code);
     } catch (err: any) { toast.error(err.message); }
@@ -197,6 +196,18 @@ function Portal() {
 
   return (
     <div className="min-h-screen bg-[#f8fafc]">
+      {/* رابط تعلم الإعراب - أيقونة ثابتة جهة اليسار */}
+      <a 
+        href="https://negmaie3rab.lovable.app" 
+        target="_blank" 
+        rel="noopener noreferrer"
+        className="fixed bottom-6 left-6 z-[100] flex items-center justify-center w-14 h-14 bg-gradient-to-tr from-gold to-yellow-500 text-gold-foreground rounded-full shadow-2xl hover:scale-110 active:scale-95 transition-all animate-bounce border-2 border-white group"
+        title="تعلم الإعراب والنحو"
+      >
+        <Sparkles className="w-7 h-7" />
+        <span className="absolute right-full mr-3 bg-white text-primary text-[10px] font-black py-1.5 px-3 rounded-xl shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap border">تعلم الإعراب (اضغط هنا)</span>
+      </a>
+
       {BrandHeader}
       <header className="bg-white/80 backdrop-blur-md border-b p-4 sticky top-0 z-30 shadow-sm">
         <div className="max-w-5xl mx-auto flex justify-between items-center">
@@ -218,20 +229,6 @@ function Portal() {
       </header>
 
       <main className="max-w-5xl mx-auto p-4 md:p-6 pb-24">
-        {/* رابط تعلم الإعراب المميز */}
-        <div className="mb-6 animate-bounce">
-          <a 
-            href="https://negmaie3rab.lovable.app" 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="w-full flex items-center justify-center gap-3 bg-gradient-to-l from-gold to-yellow-500 text-gold-foreground p-5 rounded-3xl shadow-xl shadow-gold/20 font-black text-lg hover:scale-[1.02] transition-transform"
-          >
-            <Sparkles className="h-6 w-6" />
-            تعلم الإعراب والنحو ( اضغط هنا )
-            <ExternalLink className="h-5 w-5" />
-          </a>
-        </div>
-
         {tab === "info" && (
           <div className="animate-in fade-in slide-in-from-bottom-4">
             <section className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100">

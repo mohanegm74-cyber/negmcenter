@@ -31,7 +31,6 @@ export const getStudentPortal = createServerFn({ method: "POST" })
     const { requireStudent } = await import("./student.server");
     const { db, student } = await requireStudent(data?.code);
     
-    // إذا كان الطالب غير مفعل، نرجع بياناته الأساسية فقط مع علامة "pending"
     if (!student.active) {
       return { 
         student, 
@@ -58,6 +57,30 @@ export const getStudentPortal = createServerFn({ method: "POST" })
       student, group: g.data, attendance: a.data || [], subs: hs.data || [], payments: p.data || [], notes: n.data || [], questions: q.data || [], homework: hw.data || [], certificates: certs.data || [],
       counts: { unreadNotes, pendingHw, certificates: certs.data?.length || 0 }
     };
+  });
+
+export const getStudentExams = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) => d as { code: string })
+  .handler(async ({ data }) => {
+    const { requireStudent } = await import("./student.server");
+    const { db, student } = await requireStudent(data.code);
+    
+    // جلب كافة الاختبارات المنشورة
+    const { data: allExams } = await db.from("exams").select("*").eq("status", "published").order("created_at", { ascending: false });
+    const { data: attempts } = await db.from("exam_attempts").select("*").eq("student_id", student.id).order("submitted_at", { ascending: false });
+
+    // فلترة الاختبارات في الذاكرة لضمان الدقة وتجنب تعقيدات SQL OR مع القيم الفارغة
+    const filteredExams = (allExams || []).filter(e => {
+      // إذا كان الاختبار مخصصاً لمجموعة معينة والطالب فيها
+      if (e.group_id && e.group_id === student.group_id) return true;
+      // إذا كان الاختبار مخصصاً لصف معين والطالب في هذا الصف (بدون مجموعة محددة للاختبار)
+      if (!e.group_id && e.grade === student.grade) return true;
+      // إذا كان الاختبار عاماً (بدون صف وبدون مجموعة)
+      if (!e.group_id && !e.grade) return true;
+      return false;
+    });
+
+    return { exams: filteredExams, attempts: attempts || [] };
   });
 
 export const markNotesAsRead = createServerFn({ method: "POST" })
@@ -193,16 +216,6 @@ export const getSubmissionUrl = createServerFn({ method: "POST" })
     const { data: res, error } = await db.storage.from("submissions").createSignedUrl(data.path, 3600);
     if (error) throw new Error(error.message);
     return { url: res.signedUrl };
-  });
-
-export const getStudentExams = createServerFn({ method: "POST" })
-  .inputValidator((d: unknown) => d as { code: string })
-  .handler(async ({ data }) => {
-    const { requireStudent } = await import("./student.server");
-    const { db, student } = await requireStudent(data.code);
-    const { data: exams } = await db.from("exams").select("*").eq("status", "published").or(`group_id.eq.${student.group_id},grade.eq.${student.grade}`).order("created_at", { ascending: false });
-    const { data: attempts } = await db.from("exam_attempts").select("*").eq("student_id", student.id).order("submitted_at", { ascending: false });
-    return { exams: exams || [], attempts: attempts || [] };
   });
 
 export const startExamAttempt = createServerFn({ method: "POST" })
