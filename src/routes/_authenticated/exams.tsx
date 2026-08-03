@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
-import { Trash2, X, Loader2, FileQuestion, Plus, BrainCircuit, Timer, BarChart3, Trophy, Eye, Pencil, Send, Ban } from "lucide-react";
+import { Trash2, X, Loader2, FileQuestion, Plus, BrainCircuit, Timer, BarChart3, Trophy, Eye, Pencil, Send, Ban, CheckCircle2 } from "lucide-react";
 import { generateExam } from "@/lib/exams.functions";
 import { updateExamStatusAdmin, getExamsDataAdmin, saveExamFullAdmin, deleteExamAdmin, setExamAnswersReleasedAdmin } from "@/lib/admin.functions";
 import { QUESTION_KINDS, TERMS, GRADES, DIFFICULTIES } from "@/lib/exam-constants";
