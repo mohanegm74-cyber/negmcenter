@@ -38,6 +38,7 @@ function ExamsPage() {
 
   const gen = useServerFn(generateExam);
   const updateStatusFn = useServerFn(updateExamStatusAdmin);
+  const releaseAnswersFn = useServerFn(setExamAnswersReleasedAdmin);
   const loadFn = useServerFn(getExamsDataAdmin);
   const saveFullExamFn = useServerFn(saveExamFullAdmin);
   const deleteExamFn = useServerFn(deleteExamAdmin);
