@@ -249,7 +249,7 @@ function StudentSubmissionRow({ student, hw, sub, onUpdate }: { student: Student
         <div className="flex items-center gap-2">
           <span className="text-[10px] font-black text-slate-500 uppercase">الدرجة:</span>
           <div className="flex items-center gap-1.5">
-            <input type="number" defaultValue={sub?.score ?? ""} max={hw.max_score} min={0}
+            <input type="number" defaultValue={sub?.score ?? ""} max={hw.max_score ?? undefined} min={0}
               onBlur={e => {
                 const val = e.target.value;
                 update({ score: val === "" ? null : Number(val), status: val === "" ? (sub?.status || "submitted") : "graded" });
