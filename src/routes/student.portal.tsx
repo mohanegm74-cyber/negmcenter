@@ -51,7 +51,7 @@ function Portal() {
 
   useEffect(() => {
     if (tab === "notes" && data?.student?.code && !data.pending) {
-      markNotesFn({ data: { code: data.student.code } }).then(() => {
+      markNotesFn({ code: data.student.code }).then(() => {
         setData((prev: any) => prev ? { ...prev, counts: { ...prev.counts, unreadNotes: 0 } } : prev);
       });
     }
@@ -59,8 +59,8 @@ function Portal() {
 
   async function loadData(c: string) {
     try {
-      // تصحيح: تغليف البيانات في مفتاح data
-      const res = await loadPortal({ data: { code: c } });
+      // إرسال الكود بشكل مسطح كما يتوقع الخادم
+      const res = await loadPortal({ code: c });
       setData(res);
       setLoading(false);
       return res;
@@ -89,7 +89,7 @@ function Portal() {
     const fields: any = {};
     fd.forEach((v, k) => { fields[k] = String(v).trim(); });
     try {
-      await updateProfile({ data: { code: data.student.code, fields } });
+      await updateProfile({ code: data.student.code, fields });
       toast.success("تم تحديث بياناتك بنجاح");
       await loadData(data.student.code);
     } catch (err: any) { toast.error(err.message); }
@@ -103,7 +103,7 @@ function Portal() {
     if (!body) return;
     setIsSaving(true);
     try {
-      await askFn({ data: { code: data.student.code, body } });
+      await askFn({ code: data.student.code, body });
       toast.success("تم إرسال سؤالك بنجاح للأستاذ");
       e.currentTarget.reset();
       await loadData(data.student.code);
@@ -114,7 +114,7 @@ function Portal() {
   async function handleRemoveQuestion(id: string) {
     if (!confirm("هل تريد حذف سؤالك؟")) return;
     try {
-      await deleteQFn({ data: { code: data.student.code, id } });
+      await deleteQFn({ code: data.student.code, id });
       toast.success("تم حذف السؤال");
       await loadData(data.student.code);
     } catch (err: any) { toast.error(err.message); }
@@ -123,7 +123,7 @@ function Portal() {
   async function handleRemoveCert(id: string) {
     if (!confirm("هل تريد حذف هذه الشهادة من ملفك؟")) return;
     try {
-      await deleteCertFn({ data: { code: data.student.code, id } });
+      await deleteCertFn({ code: data.student.code, id });
       toast.success("تم حذف الشهادة");
       await loadData(data.student.code);
     } catch (err: any) { toast.error(err.message); }
@@ -314,15 +314,23 @@ function Portal() {
 function HomeworkItem({ h, studentCode, submission, onRefresh }: any) {
   const [text, setText] = useState(submission?.answer_text || "");
   const [busy, setBusy] = useState(false);
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
   const submitText = useServerFn(submitHomeworkText);
   const getUploadUrl = useServerFn(createHomeworkUploadUrl);
   const finalizeUpload = useServerFn(finalizeHomeworkUpload);
+  const getSubUrl = useServerFn(getSubmissionUrl);
+
+  useEffect(() => {
+    if (submission?.file_url) {
+      getSubUrl({ code: studentCode, path: submission.file_url }).then(res => setImageUrl(res.url));
+    }
+  }, [submission, studentCode]);
 
   async function handleTextSubmit() {
     if (!text.trim()) return;
     setBusy(true);
     try {
-      await submitText({ data: { code: studentCode, homework_id: h.id, answer_text: text } });
+      await submitText({ code: studentCode, homework_id: h.id, answer_text: text });
       toast.success("تم الحفظ");
       onRefresh();
     } catch (e: any) { toast.error(e.message); }
@@ -335,10 +343,10 @@ function HomeworkItem({ h, studentCode, submission, onRefresh }: any) {
     setBusy(true);
     const t = toast.loading("جاري الرفع...");
     try {
-      const { path, token } = await getUploadUrl({ data: { code: studentCode, homework_id: h.id, filename: file.name } });
+      const { path, token } = await getUploadUrl({ code: studentCode, homework_id: h.id, filename: file.name });
       const { error } = await supabase.storage.from("submissions").uploadToSignedUrl(path, token, file);
       if (error) throw error;
-      await finalizeUpload({ data: { code: studentCode, homework_id: h.id, path } });
+      await finalizeUpload({ code: studentCode, homework_id: h.id, path });
       toast.success("تم الرفع", { id: t });
       onRefresh();
     } catch (err: any) { toast.error(err.message, { id: t }); }
@@ -359,11 +367,21 @@ function HomeworkItem({ h, studentCode, submission, onRefresh }: any) {
         </div>
         <div className="space-y-4">
           <div className="text-xs font-black text-secondary">رفع صورة الواجب:</div>
-          <label className="flex flex-col items-center justify-center gap-3 border-2 border-dashed rounded-2xl aspect-video bg-slate-50 cursor-pointer">
-            <UploadCloud className="h-10 w-10 text-slate-300" />
-            <span className="text-xs font-black text-slate-400">اضغط للرفع</span>
-            <input type="file" accept="image/*" className="hidden" onChange={handleFileUpload} />
-          </label>
+          {imageUrl ? (
+            <div className="relative rounded-2xl overflow-hidden border aspect-video bg-slate-50 flex items-center justify-center">
+              <img src={imageUrl} className="max-h-full object-contain" alt="submission" />
+              <label className="absolute inset-0 bg-black/20 opacity-0 hover:opacity-100 flex items-center justify-center cursor-pointer transition-all">
+                <span className="bg-white text-primary px-4 py-2 rounded-xl text-xs font-black">تغيير الصورة</span>
+                <input type="file" accept="image/*" className="hidden" onChange={handleFileUpload} />
+              </label>
+            </div>
+          ) : (
+            <label className="flex flex-col items-center justify-center gap-3 border-2 border-dashed rounded-2xl aspect-video bg-slate-50 cursor-pointer">
+              <UploadCloud className="h-10 w-10 text-slate-300" />
+              <span className="text-xs font-black text-slate-400">اضغط للرفع</span>
+              <input type="file" accept="image/*" className="hidden" onChange={handleFileUpload} />
+            </label>
+          )}
         </div>
       </div>
     </div>
