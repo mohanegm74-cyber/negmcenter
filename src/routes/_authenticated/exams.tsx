@@ -172,6 +172,15 @@ function ExamsPage() {
     } catch { toast.error("فشل تحديث الحالة"); }
   }
 
+  async function toggleAnswers(ex: any) {
+    try {
+      await releaseAnswersFn({ data: { id: ex.id, released: !ex.answers_released } });
+      toast.success(!ex.answers_released ? "تم إرسال الإجابة الصحيحة للطلاب" : "تم إخفاء الإجابة الصحيحة عن الطلاب");
+      load();
+    } catch { toast.error("فشل إرسال الإجابة الصحيحة"); }
+  }
+
+
   async function remove(id: string) {
     if (!confirm("حذف الاختبار نهائياً؟ سيتم حذف جميع إجابات الطلاب المتعلقة به.")) return;
     try { await deleteExamFn({ data: { id } }); toast.success("تم الحذف"); load(); } catch { toast.error("فشل الحذف"); }
