@@ -13,7 +13,7 @@ export const Route = createFileRoute("/_authenticated/homework")({
 });
 
 type Group = { id: string; name: string; grade: string | null };
-type HW = { id: string; group_id: string | null; title: string; description: string | null; due_date: string | null; max_score: number; grade: string | null };
+type HW = { id: string; group_id: string | null; title: string; description: string | null; due_date: string | null; max_score: number | null; grade?: string | null };
 type Student = { id: string; full_name: string; code: string; group_id: string | null };
 type Sub = { id: string; homework_id: string; student_id: string; score: number | null; status: string; note: string | null; answer_text: string | null; file_url: string | null };
 
@@ -249,7 +249,7 @@ function StudentSubmissionRow({ student, hw, sub, onUpdate }: { student: Student
         <div className="flex items-center gap-2">
           <span className="text-[10px] font-black text-slate-500 uppercase">الدرجة:</span>
           <div className="flex items-center gap-1.5">
-            <input type="number" defaultValue={sub?.score ?? ""} max={hw.max_score} min={0}
+            <input type="number" defaultValue={sub?.score ?? ""} max={hw.max_score ?? undefined} min={0}
               onBlur={e => {
                 const val = e.target.value;
                 update({ score: val === "" ? null : Number(val), status: val === "" ? (sub?.status || "submitted") : "graded" });
