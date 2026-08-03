@@ -91,9 +91,16 @@
   }
 }
 
-/* محاولة إخفاء علامة Lovable */
-[id^="lovable-"], .lovable-badge, a[href*="lovable.dev"] {
+/* محاولة إخفاء علامة Lovable وأي شارات بيئة خارجية */
+[id^="lovable-"], 
+.lovable-badge, 
+a[href*="lovable.dev"], 
+iframe[src*="lovable"],
+#lovable-status-badge {
   display: none !important;
   visibility: hidden !important;
+  opacity: 0 !important;
   pointer-events: none !important;
+  height: 0 !important;
+  width: 0 !important;
 }

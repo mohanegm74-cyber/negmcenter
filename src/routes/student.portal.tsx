@@ -1,3 +1,5 @@
+"use client";
+
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -36,8 +38,16 @@ function Portal() {
 
   useEffect(() => {
     const c = localStorage.getItem("najm_student_code");
-    if (c) loadData(c).catch(() => {}).finally(() => setLoading(false));
-    else setLoading(false);
+    if (c) {
+      loadData(c)
+        .catch(() => {
+          // إذا فشل الكود المحفوظ (مثلاً تم حذفه)، نمسحه من الذاكرة
+          localStorage.removeItem("najm_student_code");
+        })
+        .finally(() => setLoading(false));
+    } else {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -52,6 +62,7 @@ function Portal() {
     try {
       const res = await loadPortal({ code: c });
       setData(res);
+      return res;
     } catch (err: any) {
       toast.error(err.message || "فشل الدخول");
       throw err;
@@ -64,9 +75,12 @@ function Portal() {
     if (!c) return;
     setLoading(true);
     try {
-      await loadData(c);
-      localStorage.setItem("najm_student_code", c);
-    } catch (err: any) {} 
+      const res = await loadData(c);
+      // نخزن الكود "النظيف" الذي قد يعيده السيرفر أو الكود المدخل إذا نجح
+      localStorage.setItem("najm_student_code", res.student.code);
+    } catch (err: any) {
+      // تم عرض التوست في loadData
+    } 
     finally { setLoading(false); }
   }
 
