@@ -59,6 +59,7 @@ function Portal() {
 
   async function loadData(c: string) {
     try {
+      // إرسال الكود ككائن مباشر { code } كما يتوقع الـ Validator
       const res = await loadPortal({ code: c });
       setData(res);
       setLoading(false);
@@ -78,6 +79,7 @@ function Portal() {
     try {
       const res = await loadData(c);
       localStorage.setItem("najm_student_code", res.student.code);
+      toast.success(`أهلاً بك يا ${res.student.full_name.split(' ')[0]}`);
     } catch (err: any) {} 
   }
 
@@ -333,7 +335,7 @@ function HomeworkItem({ h, studentCode, submission, onRefresh }: any) {
 
   useEffect(() => {
     if (submission?.file_url) {
-      getSubUrl({ data: { code: studentCode, path: submission.file_url } }).then(res => setImageUrl(res.url));
+      getSubUrl({ code: studentCode, path: submission.file_url }).then(res => setImageUrl(res.url));
     }
   }, [submission, studentCode]);
 
@@ -341,7 +343,7 @@ function HomeworkItem({ h, studentCode, submission, onRefresh }: any) {
     if (!text.trim()) return;
     setBusy(true);
     try {
-      await submitText({ data: { code: studentCode, homework_id: h.id, answer_text: text } });
+      await submitText({ code: studentCode, homework_id: h.id, answer_text: text });
       toast.success("تم الحفظ");
       onRefresh();
     } catch (e: any) { toast.error(e.message); }
@@ -354,10 +356,10 @@ function HomeworkItem({ h, studentCode, submission, onRefresh }: any) {
     setBusy(true);
     const t = toast.loading("جاري الرفع...");
     try {
-      const { data: { path, token } } = await getUploadUrl({ data: { code: studentCode, homework_id: h.id, filename: file.name } });
+      const { path, token } = await getUploadUrl({ code: studentCode, homework_id: h.id, filename: file.name });
       const { error } = await supabase.storage.from("submissions").uploadToSignedUrl(path, token, file);
       if (error) throw error;
-      await finalizeUpload({ data: { code: studentCode, homework_id: h.id, path } });
+      await finalizeUpload({ code: studentCode, homework_id: h.id, path });
       toast.success("تم الرفع", { id: t });
       onRefresh();
     } catch (err: any) { toast.error(err.message, { id: t }); }

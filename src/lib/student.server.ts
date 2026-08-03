@@ -13,12 +13,9 @@ export function cleanCode(code: unknown) {
 
   if (!c) throw new Error("يرجى إدخال كود الطالب");
 
-  // إذا أدخل الطالب الجزء العشوائي فقط (8 رموز)، نضيف البادئة تلقائياً للمطابقة مع القاعدة
-  if (!c.startsWith("STU-")) {
-    // الأكواد في القاعدة دائماً تبدأ بـ STU- تليها 8 رموز
-    if (c.length === 8) {
-      c = "STU-" + c;
-    }
+  // إذا أدخل الطالب 8 رموز فقط، نعتبر أنه نسي البادئة STU-
+  if (c.length === 8 && !c.startsWith("STU-")) {
+    c = "STU-" + c;
   }
 
   return c;
@@ -26,7 +23,7 @@ export function cleanCode(code: unknown) {
 
 export async function requireStudent(code: unknown) {
   const cleaned = cleanCode(code);
-  // البحث الدقيق في قاعدة البيانات
+  // البحث الدقيق في قاعدة البيانات عن الكود المنظف
   const { data, error } = await admin.from("students").select("*").eq("code", cleaned).maybeSingle();
   
   if (error) throw new Error("حدث خطأ تقني أثناء التحقق من الكود");
