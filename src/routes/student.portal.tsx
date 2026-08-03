@@ -5,7 +5,7 @@ import {
   User, BookOpen, Wallet, MessageCircleQuestion, Sparkles, 
   Save, Loader2, Award, Calendar, Home, ClipboardList, 
   MessageSquare, UserCircle, CreditCard, ChevronLeft,
-  LogOut, XCircle, CheckCircle2, Send, ImageIcon, FileText, UploadCloud, Trash2, ExternalLink, Code, Phone
+  LogOut, XCircle, CheckCircle2, Send, ImageIcon, FileText, UploadCloud, Trash2, ExternalLink, Code, Phone, ShieldAlert, Info
 } from "lucide-react";
 import { BrandLogo } from "@/components/BrandLogo";
 import { ExamsTab } from "@/components/ExamsTab";
@@ -36,12 +36,12 @@ function Portal() {
 
   useEffect(() => {
     const c = localStorage.getItem("najm_student_code");
-    if (c) loadData(c).finally(() => setLoading(false));
+    if (c) loadData(c).catch(() => {}).finally(() => setLoading(false));
     else setLoading(false);
   }, []);
 
   useEffect(() => {
-    if (tab === "notes" && data?.student?.code) {
+    if (tab === "notes" && data?.student?.code && !data.pending) {
       markNotesFn({ code: data.student.code }).then(() => {
         setData((prev: any) => prev ? { ...prev, counts: { ...prev.counts, unreadNotes: 0 } } : prev);
       });
@@ -54,7 +54,6 @@ function Portal() {
       setData(res);
     } catch (err: any) {
       toast.error(err.message || "فشل الدخول");
-      if (err.message.includes("مراجعة")) localStorage.removeItem("najm_student_code");
       throw err;
     }
   }
@@ -168,6 +167,47 @@ function Portal() {
             <Link to="/" className="text-sm font-bold text-muted-foreground hover:text-primary transition-colors flex items-center justify-center gap-1"><Home className="h-4 w-4" /> العودة للرئيسية</Link>
           </div>
         </div>
+      </div>
+    );
+  }
+
+  // في حال كان الطالب مسجلاً ولكن غير مفعل
+  if (data.pending) {
+    return (
+      <div className="min-h-screen bg-[#f8fafc] flex flex-col">
+        {BrandHeader}
+        <main className="flex-1 flex items-center justify-center p-6">
+          <div className="max-w-md w-full bg-white rounded-[2.5rem] shadow-2xl p-10 text-center border-t-8 border-amber-400">
+            <div className="w-20 h-20 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mx-auto mb-6">
+              <ShieldAlert className="h-10 w-10" />
+            </div>
+            <h2 className="text-2xl font-black text-slate-800 mb-2">انتظر لحين اعتماد الأستاذ</h2>
+            <p className="text-slate-500 font-bold mb-6">أهلاً بك يا {data.student.full_name}</p>
+            
+            <div className="bg-primary/5 border border-primary/10 rounded-2xl p-6 mb-8">
+              <p className="text-sm font-black text-primary leading-relaxed">
+                حسابك قيد المراجعة والاعتماد حالياً. بمجرد تفعيله من قبل الأستاذ محمد نجم، ستتمكن من تصفح كافة خدمات البوابة.
+              </p>
+            </div>
+
+            <div className="bg-amber-50 border border-amber-100 rounded-2xl p-5 mb-8">
+              <div className="text-xs font-black text-amber-800 uppercase mb-2">تذكير هام جداً:</div>
+              <div className="text-xl font-mono font-black text-amber-700 tracking-widest bg-white py-2 rounded-lg border border-amber-200">
+                {data.student.code}
+              </div>
+              <p className="text-[10px] font-bold text-rose-500 mt-3 flex items-center justify-center gap-1">
+                <Info className="h-3 w-3" /> احتفظ بهذا الكود جيداً، هو مفتاح دخولك الوحيد.
+              </p>
+            </div>
+
+            <button 
+              onClick={() => { localStorage.removeItem("najm_student_code"); setData(null); }}
+              className="w-full rounded-2xl bg-slate-100 py-4 font-black text-slate-600 hover:bg-slate-200 transition-all flex items-center justify-center gap-2"
+            >
+              <LogOut className="h-5 w-5" /> تسجيل الخروج
+            </button>
+          </div>
+        </main>
       </div>
     );
   }

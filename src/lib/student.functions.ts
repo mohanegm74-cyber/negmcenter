@@ -31,8 +31,13 @@ export const getStudentPortal = createServerFn({ method: "POST" })
     const { requireStudent } = await import("./student.server");
     const { db, student } = await requireStudent(data?.code);
     
+    // إذا كان الطالب غير مفعل، نرجع بياناته الأساسية فقط مع علامة "pending"
     if (!student.active) {
-      throw new Error("حسابك قيد المراجعة من قبل الأستاذ. يرجى المحاولة لاحقاً.");
+      return { 
+        student, 
+        pending: true,
+        message: "حسابك قيد المراجعة من قبل الأستاذ. يرجى المحاولة لاحقاً."
+      };
     }
 
     const [a, hs, p, n, q, g, hw, certs] = await Promise.all([
@@ -46,7 +51,6 @@ export const getStudentPortal = createServerFn({ method: "POST" })
       db.from("certificates").select("*").eq("student_id", student.id).order("created_at", { ascending: false }),
     ]);
 
-    // حساب التنبيهات للطالب (الملاحظات غير المقروءة والواجبات المعلقة)
     const unreadNotes = (n.data || []).filter((x: any) => x.is_read === false).length;
     const pendingHw = (hw.data || []).filter((h: any) => !hs.data?.some((s: any) => s.homework_id === h.id)).length;
     
@@ -79,7 +83,6 @@ export const deleteExamAttemptPortal = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { requireStudent } = await import("./student.server");
     const { db, student } = await requireStudent(data.code);
-    // حذف الإجابات المرتبطة أولاً (بسبب المفاتيح الخارجية)
     await db.from("exam_answers").delete().eq("attempt_id", data.attempt_id);
     await db.from("exam_attempts").delete().eq("id", data.attempt_id).eq("student_id", student.id);
     return { ok: true };
