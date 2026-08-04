@@ -243,3 +243,19 @@ export const submitExamAttempt = createServerFn({ method: "POST" })
     await db.from("exam_answers").insert(answersToInsert);
     return { total: result.total, max: result.max, percentage: result.percentage };
   });
+export const getExamAnswerKey = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) => d as { code: string; exam_id: string })
+  .handler(async ({ data }) => {
+    const { requireStudent } = await import("./student.server");
+    const { db } = await requireStudent(data.code);
+    const { data: exam } = await db.from("exams").select("id,title,answers_released,status").eq("id", data.exam_id).single();
+    if (!exam || exam.status !== "published" || !exam.answers_released) {
+      throw new Error("لم يتم إرسال نموذج الإجابة لهذا الاختبار بعد");
+    }
+    const { data: qs } = await db
+      .from("exam_questions")
+      .select("id, position, prompt, options, correct_answer, rationale, score")
+      .eq("exam_id", data.exam_id)
+      .order("position");
+    return { questions: qs || [] };
+  });

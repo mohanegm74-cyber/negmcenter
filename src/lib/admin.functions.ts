@@ -373,3 +373,11 @@ export const factoryResetSystem = createServerFn({ method: "POST" })
     }
     return { ok: true };
   });
+export const toggleExamAnswersAdmin = createServerFn({ method: "POST" })
+  .middleware([requireAuthMiddleware])
+  .inputValidator((d: unknown) => d as { id: string; released: boolean })
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    await supabaseAdmin.from("exams").update({ answers_released: data.released }).eq("id", data.id);
+    return { ok: true };
+  });
