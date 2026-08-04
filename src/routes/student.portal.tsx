@@ -371,7 +371,7 @@ function HomeworkItem({ h, studentCode, submission, onRefresh }: any) {
     const t = toast.loading("جاري الرفع...");
     try {
       // تصحيح: الوصول لبيانات الـ Path و Token بشكل صحيح من السيرفر
-      const { data: { path, token } } = await getUploadUrl({ data: { code: studentCode, homework_id: h.id, filename: file.name } });
+      const { path, token } = await getUploadUrl({ data: { code: studentCode, homework_id: h.id, filename: file.name } });
       const { error } = await supabase.storage.from("submissions").uploadToSignedUrl(path, token, file);
       if (error) throw error;
       await finalizeUpload({ data: { code: studentCode, homework_id: h.id, path } });

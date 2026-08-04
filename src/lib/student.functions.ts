@@ -121,7 +121,7 @@ export const getAttemptDetails = createServerFn({ method: "POST" })
       db.from("exam_answers").select("*").eq("attempt_id", data.attempt_id),
     ]);
     
-    return { questions: qs || [], answers: ans || [] };
+    return { questions: qs.data || [], answers: ans.data || [] };
   });
 
 export const updateStudentProfile = createServerFn({ method: "POST" })
