@@ -2,12 +2,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { Loader2, Timer, Play, CheckCircle2, Sparkles, FileText, BarChart3, XCircle, ChevronDown, ChevronUp, Check, X, HelpCircle, Trash2, History } from "lucide-react";
-import { getStudentExams, startExamAttempt, submitExamAttempt, getAttemptDetails, deleteExamAttemptPortal } from "@/lib/student.functions";
+import { getStudentExams, startExamAttempt, submitExamAttempt, getAttemptDetails, deleteExamAttemptPortal, getExamAnswerKey } from "@/lib/student.functions";
 
 type Exam = {
   id: string; title: string; grade: string | null; term: string | null; group_id: string | null;
   subject: string | null; unit: string | null; lesson: string | null; duration_minutes: number;
-  total_score: number; adaptive: boolean; status: string;
+  total_score: number; adaptive: boolean; status: string; answers_released?: boolean;
 };
 type Q = {
   id: string; position: number; kind: string; prompt: string; passage: string | null; options: any;
@@ -77,6 +77,7 @@ export function ExamsTab({ code }: { code: string }) {
                 </div>
               )}
             </div>
+            {e.answers_released && <AnswerKey exam={e} code={code} />}
             {hasSubmitted && (
               <div className="mt-8 pt-6 border-t border-dashed space-y-6">
                 {myAttempts.map(att => (
@@ -87,6 +88,44 @@ export function ExamsTab({ code }: { code: string }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function AnswerKey({ exam, code }: { exam: Exam; code: string }) {
+  const [open, setOpen] = useState(false);
+  const [rows, setRows] = useState<any[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const keyFn = useServerFn(getExamAnswerKey);
+
+  async function toggle() {
+    if (rows) { setOpen(!open); return; }
+    setLoading(true);
+    try {
+      const res = await keyFn({ data: { code, exam_id: exam.id } });
+      setRows((res.questions as any[]) || []);
+      setOpen(true);
+    } catch (e: any) { toast.error(e?.message || "تعذر عرض نموذج الإجابة"); }
+    finally { setLoading(false); }
+  }
+
+  return (
+    <div className="mt-5 border-t border-dashed pt-5">
+      <button onClick={toggle} disabled={loading} className="inline-flex items-center gap-2 rounded-2xl bg-gold/15 px-5 py-2.5 text-xs font-black text-gold-foreground border border-gold/30">
+        {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <HelpCircle className="h-4 w-4" />}
+        {open ? "إخفاء مراجعة الإجابة" : "مراجعة الإجابة الصحيحة"}
+      </button>
+      {open && rows && (
+        <div className="mt-4 space-y-3 animate-in slide-in-from-top-2">
+          {rows.map((q: any) => (
+            <div key={q.id} className="rounded-2xl border-2 border-slate-100 bg-slate-50/40 p-4">
+              <div className="text-xs font-black text-slate-800 leading-relaxed">{q.position}. {q.prompt}</div>
+              <div className="mt-2 text-[11px] font-black text-emerald-700">الإجابة الصحيحة: {String(q.correct_answer ?? "—")}</div>
+              {q.rationale && <div className="mt-2 text-[10px] font-medium italic text-slate-500">💡 {q.rationale}</div>}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
