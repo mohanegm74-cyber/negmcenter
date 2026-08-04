@@ -253,7 +253,7 @@ export const getAdminDataSummary = createServerFn({ method: "GET" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const [gr, st, at] = await Promise.all([
       supabaseAdmin.from("groups").select("id,name").order("name"),
-      supabaseAdmin.from("students").select("id,full_name,code,group_id,active").order("full_name"),
+      supabaseAdmin.from("students").select("id,full_name,code,group_id,active,grade,phone").order("full_name"),
       supabaseAdmin.from("attendance").select("*"),
     ]);
     return { groups: gr.data || [], students: st.data || [], attendance: at.data || [] };
