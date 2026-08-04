@@ -85,7 +85,7 @@ export const markNotesAsRead = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { requireStudent } = await import("./student.server");
     const { db, student } = await requireStudent(data.code);
-    await (db.from("student_notes") as any).update({ is_read: true }).eq("student_id", student.id).eq("is_read", false);
+    await db.from("student_notes").update({ is_read: true }).eq("student_id", student.id).eq("is_read", false);
     return { ok: true };
   });
 
@@ -121,28 +121,8 @@ export const getAttemptDetails = createServerFn({ method: "POST" })
       db.from("exam_answers").select("*").eq("attempt_id", data.attempt_id),
     ]);
     
-    return { questions: qs.data || [], answers: ans.data || [] };
+    return { questions: qs || [], answers: ans || [] };
   });
-
-/** نموذج الإجابة الصحيحة — يظهر للطالب فقط بعد أن يرسله الأستاذ */
-export const getExamAnswerKey = createServerFn({ method: "POST" })
-  .inputValidator((d: unknown) => d as { code: string; exam_id: string })
-  .handler(async ({ data }) => {
-    const { requireStudent } = await import("./student.server");
-    const { db } = await requireStudent(data.code);
-    const { data: exam } = await db.from("exams").select("id, title, answers_released, status").eq("id", data.exam_id).maybeSingle();
-    if (!exam || exam.status !== "published" || !exam.answers_released) {
-      throw new Error("لم يقم الأستاذ بإرسال الإجابة النموذجية لهذا الاختبار بعد");
-    }
-    const { data: qs } = await db
-      .from("exam_questions")
-      .select("id, position, kind, prompt, options, correct_answer, rationale")
-      .eq("exam_id", data.exam_id)
-      .order("position");
-    return { questions: qs || [] };
-  });
-
-
 
 export const updateStudentProfile = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => d as { code: string; fields: Record<string, string> })
@@ -151,7 +131,7 @@ export const updateStudentProfile = createServerFn({ method: "POST" })
     const { db, student } = await requireStudent(data.code);
     const upd: any = {};
     for (const [k, v] of Object.entries(data.fields)) {
-      if (["full_name", "phone", "parent_phone", "address", "school", "section", "grade", "group_id"].includes(k)) {
+      if (["full_name", "phone", "parent_phone", "address", "school", "section", "group_id"].includes(k)) {
         upd[k] = v === "" ? null : str(v);
       }
     }

@@ -131,20 +131,12 @@ function StudentsPage() {
             <F name="phone" label="هاتف الطالب" defaultValue={editing.phone || ""} />
             <F name="parent_phone" label="هاتف ولي الأمر" defaultValue={editing.parent_phone || ""} />
             <div>
-              <label className="mb-1.5 block text-xs font-bold text-muted-foreground uppercase">الصف الدراسي</label>
-              <select name="grade" defaultValue={editing.grade || ""} className="w-full rounded-lg border bg-white px-3 py-2 text-sm">
-                <option value="">— غير محدد —</option>
-                {GRADES.map(g => <option key={g} value={g}>{g}</option>)}
-              </select>
-            </div>
-            <div>
               <label className="mb-1.5 block text-xs font-bold text-muted-foreground uppercase">المجموعة</label>
               <select name="group_id" defaultValue={editing.group_id || ""} className="w-full rounded-lg border bg-white px-3 py-2 text-sm">
                 <option value="">— غير محدد —</option>
                 {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
               </select>
             </div>
-
             <F name="school" label="المدرسة" defaultValue={editing.school || ""} />
             <F name="notes" label="ملاحظات إدارية" defaultValue={editing.notes || ""} />
           </div>
