@@ -588,6 +588,7 @@ export type Database = {
           body: string
           created_at: string
           id: string
+          is_read: boolean
           student_id: string
           title: string | null
         }
@@ -595,6 +596,7 @@ export type Database = {
           body: string
           created_at?: string
           id?: string
+          is_read?: boolean
           student_id: string
           title?: string | null
         }
@@ -602,6 +604,7 @@ export type Database = {
           body?: string
           created_at?: string
           id?: string
+          is_read?: boolean
           student_id?: string
           title?: string | null
         }
