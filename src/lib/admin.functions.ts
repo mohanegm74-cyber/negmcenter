@@ -190,6 +190,18 @@ export const updateExamStatusAdmin = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const setExamAnswersReleasedAdmin = createServerFn({ method: "POST" })
+  .middleware([requireAuthMiddleware])
+  .inputValidator((d: unknown) => d as { id: string; released: boolean })
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await supabaseAdmin.from("exams").update({ answers_released: data.released }).eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+
+
 export const deleteExamAdmin = createServerFn({ method: "POST" })
   .middleware([requireAuthMiddleware])
   .inputValidator((d: unknown) => d as { id: string })

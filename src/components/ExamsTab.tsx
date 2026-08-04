@@ -2,12 +2,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { Loader2, Timer, Play, CheckCircle2, Sparkles, FileText, BarChart3, XCircle, ChevronDown, ChevronUp, Check, X, HelpCircle, Trash2, History } from "lucide-react";
-import { getStudentExams, startExamAttempt, submitExamAttempt, getAttemptDetails, deleteExamAttemptPortal } from "@/lib/student.functions";
+import { getStudentExams, startExamAttempt, submitExamAttempt, getAttemptDetails, deleteExamAttemptPortal, getExamAnswerKey } from "@/lib/student.functions";
 
 type Exam = {
   id: string; title: string; grade: string | null; term: string | null; group_id: string | null;
   subject: string | null; unit: string | null; lesson: string | null; duration_minutes: number;
-  total_score: number; adaptive: boolean; status: string;
+  total_score: number; adaptive: boolean; status: string; answers_released?: boolean | null;
 };
 type Q = {
   id: string; position: number; kind: string; prompt: string; passage: string | null; options: any;
@@ -77,6 +77,7 @@ export function ExamsTab({ code }: { code: string }) {
                 </div>
               )}
             </div>
+            {e.answers_released && <AnswerKey examId={e.id} code={code} />}
             {hasSubmitted && (
               <div className="mt-8 pt-6 border-t border-dashed space-y-6">
                 {myAttempts.map(att => (
@@ -90,6 +91,48 @@ export function ExamsTab({ code }: { code: string }) {
     </div>
   );
 }
+
+function AnswerKey({ examId, code }: { examId: string; code: string }) {
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [questions, setQuestions] = useState<any[] | null>(null);
+  const getKeyFn = useServerFn(getExamAnswerKey);
+
+  async function toggle() {
+    if (questions) { setOpen(!open); return; }
+    setLoading(true);
+    try {
+      const res: any = await getKeyFn({ data: { code, exam_id: examId } });
+      setQuestions(res.questions || []);
+      setOpen(true);
+    } catch (err: any) { toast.error(err?.message || "تعذر عرض الإجابة النموذجية"); }
+    finally { setLoading(false); }
+  }
+
+  return (
+    <div className="mt-5 pt-5 border-t border-dashed">
+      <button onClick={toggle} className="rounded-2xl bg-indigo-50 text-indigo-700 px-6 py-2.5 text-xs font-black flex items-center gap-2 hover:bg-indigo-100 transition-all">
+        {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />} مراجعة الإجابة النموذجية
+        {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+      </button>
+      {open && questions && (
+        <div className="mt-4 space-y-3">
+          {questions.length === 0 && <div className="text-xs font-bold text-muted-foreground">لا توجد أسئلة.</div>}
+          {questions.map((q: any, i: number) => (
+            <div key={q.id} className="rounded-2xl border bg-slate-50/60 p-4">
+              <div className="text-sm font-black text-slate-800">{i + 1}. {q.prompt}</div>
+              <div className="mt-2 text-xs font-black text-emerald-700 flex items-start gap-1.5">
+                <Check className="h-4 w-4 shrink-0" /> الإجابة الصحيحة: {String(q.correct_answer ?? "—")}
+              </div>
+              {q.rationale && <div className="mt-1.5 text-[11px] font-bold text-muted-foreground leading-relaxed">💡 {q.rationale}</div>}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 function Result({ attempt, code }: { attempt: Attempt; code: string }) {
   const [details, setDetails] = useState<{ questions: Q[]; answers: any[] } | null>(null);
