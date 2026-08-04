@@ -59,7 +59,6 @@ function Portal() {
 
   async function loadData(c: string) {
     try {
-      // تصحيح: تغليف البيانات في مفتاح data ليتوافق مع السيرفر
       const res = await loadPortal({ data: { code: c } });
       setData(res);
       setLoading(false);
@@ -198,26 +197,27 @@ function Portal() {
 
   return (
     <div className="min-h-screen bg-[#f8fafc]">
-      {/* رابط تعلم الإعراب - أيقونة ثابتة جهة اليسار */}
-      <a 
-        href="https://negmaie3rab.lovable.app" 
-        target="_blank" 
-        rel="noopener noreferrer"
-        className="fixed bottom-6 left-6 z-[100] flex items-center justify-center w-14 h-14 bg-gradient-to-tr from-gold to-yellow-500 text-gold-foreground rounded-full shadow-2xl hover:scale-110 active:scale-95 transition-all animate-bounce border-2 border-white group"
-        title="تعلم الإعراب والنحو"
-      >
-        <Sparkles className="w-7 h-7" />
-        <span className="absolute right-full mr-3 bg-white text-primary text-[10px] font-black py-1.5 px-3 rounded-xl shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap border">تعلم الإعراب (اضغط هنا)</span>
-      </a>
-
       {BrandHeader}
       <header className="bg-white/80 backdrop-blur-md border-b p-4 sticky top-0 z-30 shadow-sm">
-        <div className="max-w-5xl mx-auto flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-black uppercase">{student.full_name[0]}</div>
-            <div><div className="font-black text-slate-800 leading-tight">{student.full_name}</div><div className="text-[10px] font-bold text-muted-foreground font-mono">{student.code}</div></div>
+        <div className="max-w-5xl mx-auto flex justify-between items-center gap-4">
+          <div className="flex items-center gap-3 overflow-hidden">
+            <div className="h-10 w-10 rounded-full bg-primary/10 flex-shrink-0 flex items-center justify-center text-primary font-black uppercase">{student.full_name[0]}</div>
+            <div className="min-w-0">
+              <div className="font-black text-slate-800 leading-tight truncate">{student.full_name}</div>
+              <div className="text-[10px] font-bold text-muted-foreground font-mono">{student.code}</div>
+            </div>
+            {/* أيقونة تعلم الإعراب بجانب الاسم مباشرة */}
+            <a 
+              href="https://negmaie3rab.lovable.app" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gold/15 text-gold-foreground text-[10px] font-black border border-gold/20 hover:bg-gold/20 active:opacity-60 transition-all shrink-0 ms-1"
+            >
+              <Sparkles className="h-3 w-3" />
+              تعلم الإعراب
+            </a>
           </div>
-          <button onClick={() => {localStorage.removeItem("najm_student_code"); setData(null);}} className="p-2 rounded-xl bg-destructive/10 text-destructive hover:bg-destructive transition-all"><LogOut className="h-5 w-5" /></button>
+          <button onClick={() => {localStorage.removeItem("najm_student_code"); setData(null);}} className="p-2 rounded-xl bg-destructive/10 text-destructive hover:bg-destructive transition-all flex-shrink-0"><LogOut className="h-5 w-5" /></button>
         </div>
         <nav className="max-w-5xl mx-auto flex gap-1.5 overflow-x-auto mt-4 no-scrollbar pb-1">
           <TabBtn label="بياناتي" icon={UserCircle} active={tab === "info"} onClick={() => setTab("info")} />
@@ -231,20 +231,6 @@ function Portal() {
       </header>
 
       <main className="max-w-5xl mx-auto p-4 md:p-6 pb-24">
-        {/* زر تعلم الإعراب المميز في أعلى المحتوى */}
-        <div className="mb-6 animate-bounce">
-          <a 
-            href="https://negmaie3rab.lovable.app" 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="w-full flex items-center justify-center gap-3 bg-gradient-to-l from-gold to-yellow-500 text-gold-foreground p-5 rounded-3xl shadow-xl shadow-gold/20 font-black text-lg hover:scale-[1.02] transition-transform"
-          >
-            <Sparkles className="h-6 w-6" />
-            تعلم الإعراب والنحو ( اضغط هنا )
-            <ExternalLink className="h-5 w-5" />
-          </a>
-        </div>
-
         {tab === "info" && (
           <div className="animate-in fade-in slide-in-from-bottom-4">
             <section className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100">
@@ -370,7 +356,6 @@ function HomeworkItem({ h, studentCode, submission, onRefresh }: any) {
     setBusy(true);
     const t = toast.loading("جاري الرفع...");
     try {
-      // تصحيح: الوصول لبيانات الـ Path و Token بشكل صحيح من السيرفر
       const { data: { path, token } } = await getUploadUrl({ data: { code: studentCode, homework_id: h.id, filename: file.name } });
       const { error } = await supabase.storage.from("submissions").uploadToSignedUrl(path, token, file);
       if (error) throw error;
