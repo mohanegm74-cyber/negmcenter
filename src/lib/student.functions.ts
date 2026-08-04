@@ -121,7 +121,7 @@ export const getAttemptDetails = createServerFn({ method: "POST" })
       db.from("exam_answers").select("*").eq("attempt_id", data.attempt_id),
     ]);
     
-    return { questions: qs || [], answers: ans || [] };
+    return { questions: qs.data || [], answers: ans.data || [] };
   });
 
 export const updateStudentProfile = createServerFn({ method: "POST" })
@@ -131,7 +131,7 @@ export const updateStudentProfile = createServerFn({ method: "POST" })
     const { db, student } = await requireStudent(data.code);
     const upd: any = {};
     for (const [k, v] of Object.entries(data.fields)) {
-      if (["full_name", "phone", "parent_phone", "address", "school", "section", "group_id"].includes(k)) {
+      if (["full_name", "phone", "parent_phone", "address", "school", "section", "grade", "group_id"].includes(k)) {
         upd[k] = v === "" ? null : str(v);
       }
     }
@@ -242,4 +242,20 @@ export const submitExamAttempt = createServerFn({ method: "POST" })
     const answersToInsert = items.map(i => { const res = result.results.find(r => r.id === i.id); return { attempt_id: data.attempt_id, question_id: i.id, answer: data.answers[i.id] || "", score: res?.score || 0, is_correct: res?.is_correct || false, feedback: res?.feedback || "", time_spent_seconds: 0 }; });
     await db.from("exam_answers").insert(answersToInsert);
     return { total: result.total, max: result.max, percentage: result.percentage };
+  });
+export const getExamAnswerKey = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) => d as { code: string; exam_id: string })
+  .handler(async ({ data }) => {
+    const { requireStudent } = await import("./student.server");
+    const { db } = await requireStudent(data.code);
+    const { data: exam } = await db.from("exams").select("id,title,answers_released,status").eq("id", data.exam_id).single();
+    if (!exam || exam.status !== "published" || !exam.answers_released) {
+      throw new Error("لم يتم إرسال نموذج الإجابة لهذا الاختبار بعد");
+    }
+    const { data: qs } = await db
+      .from("exam_questions")
+      .select("id, position, prompt, options, correct_answer, rationale, score")
+      .eq("exam_id", data.exam_id)
+      .order("position");
+    return { questions: qs || [] };
   });

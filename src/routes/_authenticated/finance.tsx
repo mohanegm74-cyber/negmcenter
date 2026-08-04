@@ -56,6 +56,7 @@ function FinancePage() {
     const pFiltered = payments.filter(p => !month || p.month === month);
     const paid = pFiltered.filter(p => p.kind === "payment").reduce((a, b) => a + Number(b.amount), 0);
     const charged = pFiltered.filter(p => p.kind === "charge").reduce((a, b) => a + Number(b.amount), 0);
+    const exempt = pFiltered.filter(p => p.kind === "exempt").reduce((a, b) => a + Number(b.amount), 0);
     
     // إذا لم تكن هناك رسوم مسجلة يدوياً، نعتمد على رسوم المجموعات لجميع الطلاب
     let estimatedTotal = charged;
@@ -65,7 +66,7 @@ function FinancePage() {
       });
     }
 
-    return { paid, dues: estimatedTotal, outstanding: Math.max(0, estimatedTotal - paid) };
+    return { paid, exempt, dues: Math.max(0, estimatedTotal - exempt), outstanding: Math.max(0, estimatedTotal - exempt - paid) };
   }, [payments, month, students, groupMap]);
 
   const rows = useMemo(() => {
@@ -75,12 +76,13 @@ function FinancePage() {
         const studentPayments = payments.filter(p => p.student_id === s.id && (!month || p.month === month));
         const paid = studentPayments.filter(p => p.kind === "payment").reduce((a, b) => a + Number(b.amount), 0);
         const dues = studentPayments.filter(p => p.kind === "charge").reduce((a, b) => a + Number(b.amount), 0);
+        const exempt = studentPayments.filter(p => p.kind === "exempt").reduce((a, b) => a + Number(b.amount), 0);
         const fee = s.group_id ? Number(groupMap[s.group_id]?.monthly_fee || 0) : 0;
         
-        const totalDue = dues > 0 ? dues : fee; 
+        const totalDue = Math.max(0, (dues > 0 ? dues : fee) - exempt);
         const balance = totalDue - paid;
         
-        return { student: s, groupName: s.group_id ? groupMap[s.group_id]?.name : "—", totalDue, paid, balance };
+        return { student: s, groupName: s.group_id ? groupMap[s.group_id]?.name : "—", totalDue, paid, exempt, balance };
       });
   }, [students, groupMap, payments, month, groupFilter]);
 
@@ -159,7 +161,7 @@ function FinancePage() {
             <button type="button" onClick={() => setAddingFor(null)} className="p-2 hover:bg-muted rounded-full"><X className="h-5 w-5" /></button>
           </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
-            <FinF name="kind" label="النوع" type="select" options={[{v:"payment",l:"سداد"},{v:"charge",l:"مستحق"}]} />
+            <FinF name="kind" label="النوع" type="select" options={[{v:"payment",l:"سداد"},{v:"charge",l:"مستحق"},{v:"exempt",l:"إعفاء"}]} />
             <FinF name="amount" label="المبلغ" type="number" required />
             <FinF name="month" label="الشهر" defaultValue={month} />
             <FinF name="paid_at" label="التاريخ" type="date" defaultValue={new Date().toISOString().slice(0, 10)} />
@@ -177,7 +179,7 @@ function FinancePage() {
             <button type="button" onClick={() => setEditingPayment(null)} className="p-2 hover:bg-muted rounded-full"><X className="h-5 w-5" /></button>
           </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
-            <FinF name="kind" label="النوع" type="select" defaultValue={editingPayment.kind} options={[{v:"payment",l:"سداد"},{v:"charge",l:"مستحق"}]} />
+            <FinF name="kind" label="النوع" type="select" defaultValue={editingPayment.kind} options={[{v:"payment",l:"سداد"},{v:"charge",l:"مستحق"},{v:"exempt",l:"إعفاء"}]} />
             <FinF name="amount" label="المبلغ" type="number" defaultValue={String(editingPayment.amount)} required />
             <FinF name="month" label="الشهر" defaultValue={editingPayment.month || month} />
             <FinF name="paid_at" label="التاريخ" type="date" defaultValue={editingPayment.paid_at} />
@@ -202,7 +204,7 @@ function FinancePage() {
                   {payments.filter(p => p.student_id === viewingHistory.id).map(p => (
                     <tr key={p.id} className="border-t">
                       <td className="p-2">{p.paid_at}</td>
-                      <td className="p-2"><span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${p.kind === "payment" ? "bg-secondary/10 text-secondary" : "bg-gold/20 text-gold-foreground"}`}>{p.kind === "payment" ? "سداد" : "مستحق"}</span></td>
+                      <td className="p-2"><span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${p.kind === "payment" ? "bg-secondary/10 text-secondary" : p.kind === "exempt" ? "bg-sky-100 text-sky-700" : "bg-gold/20 text-gold-foreground"}`}>{p.kind === "payment" ? "سداد" : p.kind === "exempt" ? "إعفاء" : "مستحق"}</span></td>
                       <td className="p-2 text-center font-bold font-mono">{Number(p.amount).toLocaleString("ar-EG")}</td>
                       <td className="p-2">
                         <div className="flex justify-center gap-2">
@@ -228,6 +230,7 @@ function FinancePage() {
                 <th className="p-4">المجموعة</th>
                 <th className="p-4 text-center">المستحق</th>
                 <th className="p-4 text-center">المدفوع</th>
+                <th className="p-4 text-center">الإعفاء</th>
                 <th className="p-4 text-center">الرصيد</th>
                 <th className="p-4 text-center">إجراءات</th>
               </tr>
@@ -242,6 +245,7 @@ function FinancePage() {
                   <td className="p-4"><span className="rounded bg-muted px-2 py-1 text-[10px] font-bold">{r.groupName}</span></td>
                   <td className="p-4 text-center font-mono font-bold">{r.totalDue.toLocaleString("ar-EG")}</td>
                   <td className="p-4 text-center font-mono font-bold text-secondary">{r.paid.toLocaleString("ar-EG")}</td>
+                  <td className="p-4 text-center font-mono font-bold text-sky-600">{r.exempt.toLocaleString("ar-EG")}</td>
                   <td className={`p-4 text-center font-mono font-black ${r.balance > 0 ? "text-destructive" : "text-secondary"}`}>{r.balance.toLocaleString("ar-EG")}</td>
                   <td className="p-4">
                     <div className="flex justify-center gap-2">

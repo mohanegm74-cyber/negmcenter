@@ -42,7 +42,13 @@ function TeacherShell() {
     } catch {}
   }
 
-  useEffect(() => { loadStats(); const t = setInterval(loadStats, 60000); return () => clearInterval(t); }, []);
+  useEffect(() => {
+    loadStats();
+    const t = setInterval(loadStats, 60000);
+    const onRead = () => { setStats((p: any) => (p ? { ...p, newQuestions: 0 } : p)); loadStats(); };
+    window.addEventListener("najm:questions-read", onRead);
+    return () => { clearInterval(t); window.removeEventListener("najm:questions-read", onRead); };
+  }, []);
 
   async function signOut() { 
     await supabase.auth.signOut(); 

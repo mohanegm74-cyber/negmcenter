@@ -38,7 +38,7 @@ function HomeworkPage() {
     try {
       const res = await loadFn({});
       setGroups(res.groups as Group[]);
-      setItems(res.items as HW[]);
+      setItems(res.items as unknown as HW[]);
       setStudents(res.students as Student[]);
       setSubs(res.subs as Sub[]);
     } catch (e: any) { toast.error("فشل تحميل البيانات"); }

@@ -15,6 +15,7 @@ import { getStudentPortal, updateStudentProfile, askTeacher, deleteStudentQuesti
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { TEACHER_WHATSAPP_DISPLAY } from "@/lib/contact";
+import { GRADES } from "@/lib/exam-constants";
 
 export const Route = createFileRoute("/student/portal")({
   head: () => ({ meta: [{ title: "بوابة الطالب — سنتر الأستاذ محمد نجم" }] }),
@@ -29,6 +30,7 @@ function Portal() {
   const [loading, setLoading] = useState(true);
   const [codeInput, setCodeInput] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [flash, setFlash] = useState(false);
   
   const loadPortal = useServerFn(getStudentPortal);
   const updateProfile = useServerFn(updateStudentProfile);
@@ -198,24 +200,22 @@ function Portal() {
 
   return (
     <div className="min-h-screen bg-[#f8fafc]">
-      {/* رابط تعلم الإعراب - أيقونة ثابتة جهة اليسار */}
-      <a 
-        href="https://negmaie3rab.lovable.app" 
-        target="_blank" 
-        rel="noopener noreferrer"
-        className="fixed bottom-6 left-6 z-[100] flex items-center justify-center w-14 h-14 bg-gradient-to-tr from-gold to-yellow-500 text-gold-foreground rounded-full shadow-2xl hover:scale-110 active:scale-95 transition-all animate-bounce border-2 border-white group"
-        title="تعلم الإعراب والنحو"
-      >
-        <Sparkles className="w-7 h-7" />
-        <span className="absolute right-full mr-3 bg-white text-primary text-[10px] font-black py-1.5 px-3 rounded-xl shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap border">تعلم الإعراب (اضغط هنا)</span>
-      </a>
-
       {BrandHeader}
       <header className="bg-white/80 backdrop-blur-md border-b p-4 sticky top-0 z-30 shadow-sm">
         <div className="max-w-5xl mx-auto flex justify-between items-center">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-black uppercase">{student.full_name[0]}</div>
             <div><div className="font-black text-slate-800 leading-tight">{student.full_name}</div><div className="text-[10px] font-bold text-muted-foreground font-mono">{student.code}</div></div>
+            <a
+              href="https://negmaie3rab.lovable.app"
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => { setFlash(true); setTimeout(() => setFlash(false), 900); }}
+              className={`flex items-center gap-1.5 rounded-2xl border border-gold/40 bg-gradient-to-tr from-gold to-yellow-500 px-3 py-2 text-[11px] font-black text-gold-foreground shadow-sm ${flash ? "animate-pulse" : ""}`}
+              title="تعلم الإعراب والنحو"
+            >
+              <Sparkles className="h-4 w-4" /> تعلم الإعراب
+            </a>
           </div>
           <button onClick={() => {localStorage.removeItem("najm_student_code"); setData(null);}} className="p-2 rounded-xl bg-destructive/10 text-destructive hover:bg-destructive transition-all"><LogOut className="h-5 w-5" /></button>
         </div>
@@ -231,20 +231,6 @@ function Portal() {
       </header>
 
       <main className="max-w-5xl mx-auto p-4 md:p-6 pb-24">
-        {/* زر تعلم الإعراب المميز في أعلى المحتوى */}
-        <div className="mb-6 animate-bounce">
-          <a 
-            href="https://negmaie3rab.lovable.app" 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="w-full flex items-center justify-center gap-3 bg-gradient-to-l from-gold to-yellow-500 text-gold-foreground p-5 rounded-3xl shadow-xl shadow-gold/20 font-black text-lg hover:scale-[1.02] transition-transform"
-          >
-            <Sparkles className="h-6 w-6" />
-            تعلم الإعراب والنحو ( اضغط هنا )
-            <ExternalLink className="h-5 w-5" />
-          </a>
-        </div>
-
         {tab === "info" && (
           <div className="animate-in fade-in slide-in-from-bottom-4">
             <section className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100">
@@ -256,6 +242,13 @@ function Portal() {
                 <Field name="address" label="العنوان" defaultValue={student.address || ""} />
                 <Field name="school" label="المدرسة" defaultValue={student.school || ""} />
                 <Field name="section" label="الشعبة" defaultValue={student.section || ""} />
+                <div className="space-y-1.5">
+                  <label className="text-xs font-black text-slate-500">الصف الدراسي</label>
+                  <select name="grade" defaultValue={student.grade || ""} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-bold outline-none">
+                    <option value="">— غير محدد —</option>
+                    {GRADES.map((g: string) => <option key={g} value={g}>{g}</option>)}
+                  </select>
+                </div>
                 <div className="md:col-span-2 mt-4"><button type="submit" disabled={isSaving} className="w-full md:w-auto rounded-xl bg-primary px-10 py-3.5 text-sm font-black text-white shadow-lg flex items-center justify-center gap-2">{isSaving ? <Loader2 className="h-5 w-5 animate-spin" /> : <Save className="h-5 w-5" />} حفظ التعديلات</button></div>
               </form>
             </section>
@@ -371,7 +364,7 @@ function HomeworkItem({ h, studentCode, submission, onRefresh }: any) {
     const t = toast.loading("جاري الرفع...");
     try {
       // تصحيح: الوصول لبيانات الـ Path و Token بشكل صحيح من السيرفر
-      const { data: { path, token } } = await getUploadUrl({ data: { code: studentCode, homework_id: h.id, filename: file.name } });
+      const { path, token } = await getUploadUrl({ data: { code: studentCode, homework_id: h.id, filename: file.name } });
       const { error } = await supabase.storage.from("submissions").uploadToSignedUrl(path, token, file);
       if (error) throw error;
       await finalizeUpload({ data: { code: studentCode, homework_id: h.id, path } });

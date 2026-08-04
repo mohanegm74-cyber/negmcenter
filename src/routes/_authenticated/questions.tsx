@@ -45,6 +45,7 @@ function QuestionsPage() {
       await answerFn({ data: { id, answer: rows.find(r => r.id === id)?.answer || "" } });
       // تحديث محلي فوري لإخفاء الإشعار
       setRows(prev => prev.map(q => q.id === id ? { ...q, is_read: true } : q));
+      window.dispatchEvent(new CustomEvent("najm:questions-read"));
       toast.success("تم التحديد كمقروء");
     } catch (e: any) { toast.error(e.message); }
   }
@@ -55,6 +56,7 @@ function QuestionsPage() {
       await deleteFn({ data: { id } });
       toast.success("تم الحذف");
       setRows(prev => prev.filter(q => q.id !== id));
+      window.dispatchEvent(new CustomEvent("najm:questions-read"));
     } catch (e: any) { toast.error(e.message); }
   }
 
@@ -65,6 +67,7 @@ function QuestionsPage() {
       await deleteAllFn({});
       toast.success("تم مسح كافة الأسئلة");
       setRows([]);
+      window.dispatchEvent(new CustomEvent("najm:questions-read"));
     } catch (e: any) { toast.error(e.message); }
     finally { setBusy(false); }
   }
@@ -79,6 +82,7 @@ function QuestionsPage() {
       setAnswerText("");
       // تحديث محلي فوري
       setRows(prev => prev.map(q => q.id === id ? { ...q, answer: answerText.trim(), is_read: true, answered_at: new Date().toISOString() } : q));
+      window.dispatchEvent(new CustomEvent("najm:questions-read"));
     } catch (e: any) { toast.error(e.message); }
     finally { setBusy(false); }
   }
