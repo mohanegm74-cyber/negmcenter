@@ -2,9 +2,9 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
-import { Trash2, X, Loader2, FileQuestion, Plus, BrainCircuit, Timer, BarChart3, Trophy, Eye, Pencil, Send, Ban } from "lucide-react";
+import { Trash2, X, Loader2, FileQuestion, Plus, BrainCircuit, Timer, BarChart3, Trophy, Eye, Pencil, Send, Ban, KeyRound } from "lucide-react";
 import { generateExam } from "@/lib/exams.functions";
-import { updateExamStatusAdmin, getExamsDataAdmin, saveExamFullAdmin, deleteExamAdmin } from "@/lib/admin.functions";
+import { updateExamStatusAdmin, getExamsDataAdmin, saveExamFullAdmin, deleteExamAdmin, toggleExamAnswersAdmin } from "@/lib/admin.functions";
 import { QUESTION_KINDS, TERMS, GRADES, DIFFICULTIES } from "@/lib/exam-constants";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -41,6 +41,7 @@ function ExamsPage() {
   const loadFn = useServerFn(getExamsDataAdmin);
   const saveFullExamFn = useServerFn(saveExamFullAdmin);
   const deleteExamFn = useServerFn(deleteExamAdmin);
+  const toggleAnswersFn = useServerFn(toggleExamAnswersAdmin);
 
   const [form, setForm] = useState({
     grade: GRADES[0], term: TERMS[0], group_id: "", subject: "", lesson: "",
@@ -170,6 +171,15 @@ function ExamsPage() {
       toast.success(s === "published" ? "تم نشر الاختبار للطلاب" : "تم سحب الاختبار (إخفاء)"); 
       load(); 
     } catch { toast.error("فشل تحديث الحالة"); }
+  }
+
+  async function toggleAnswers(ex: any) {
+    const released = !ex.answers_released;
+    try {
+      await toggleAnswersFn({ data: { id: ex.id, released } });
+      toast.success(released ? "تم إرسال الإجابة الصحيحة للطلاب" : "تم إخفاء الإجابة الصحيحة");
+      load();
+    } catch { toast.error("فشل تحديث نموذج الإجابة"); }
   }
 
   async function remove(id: string) {
@@ -319,6 +329,9 @@ function ExamsPage() {
               ) : (
                 <button onClick={() => setStatus(ex, "draft")} className="flex-1 py-2 bg-slate-100 text-slate-600 rounded-xl text-[11px] font-black flex items-center justify-center gap-1"><Ban className="h-3.5 w-3.5" /> إغلاق</button>
               )}
+              {ex.status === "published" && (
+                <button onClick={() => toggleAnswers(ex)} className={`p-2 rounded-xl ${ex.answers_released ? "bg-gold/20 text-gold-foreground" : "bg-slate-100 text-slate-500"}`} title={ex.answers_released ? "إخفاء الإجابة الصحيحة" : "إرسال الإجابة الصحيحة للطلاب"}><KeyRound className="h-4 w-4" /></button>
+              )}
               <button onClick={() => handleEdit(ex)} className="p-2 bg-primary/10 text-primary rounded-xl" title="تعديل"><Pencil className="h-4 w-4" /></button>
               <button onClick={() => { setAnalysisExamId(ex.id); window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" }); }} className="p-2 bg-secondary/10 text-secondary rounded-xl" title="النتائج"><BarChart3 className="h-4 w-4" /></button>
               <button onClick={() => remove(ex.id)} className="p-2 bg-rose-50 text-rose-500 rounded-xl" title="حذف"><Trash2 className="h-4 w-4" /></button>
@@ -344,6 +357,9 @@ function ExamsPage() {
                       <button onClick={() => setStatus(ex, "published")} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-[11px] font-black text-white hover:scale-105 transition-all flex items-center gap-1"><Send className="h-3.5 w-3.5" /> نشر</button>
                     ) : (
                       <button onClick={() => setStatus(ex, "draft")} className="rounded-lg bg-slate-100 px-3 py-1.5 text-[11px] font-black text-slate-500 hover:bg-slate-200 transition-all flex items-center gap-1"><Ban className="h-3.5 w-3.5" /> إغلاق</button>
+                    )}
+                    {ex.status === "published" && (
+                      <button onClick={() => toggleAnswers(ex)} className={`rounded-lg px-3 py-1.5 text-[11px] font-black flex items-center gap-1 transition-all ${ex.answers_released ? "bg-gold/20 text-gold-foreground" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`} title="إرسال الإجابة الصحيحة للطلاب"><KeyRound className="h-3.5 w-3.5" /> {ex.answers_released ? "الإجابة مُرسلة" : "إرسال الإجابة"}</button>
                     )}
                     <button onClick={() => handleEdit(ex)} className="rounded-lg bg-primary/10 p-2 text-primary hover:bg-primary/20 transition-all" title="تعديل الاختبار"><Pencil className="h-4 w-4" /></button>
                     <button onClick={() => { setAnalysisExamId(ex.id); window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" }); }} className="rounded-lg bg-secondary/10 p-2 text-secondary hover:bg-secondary/20 transition-all" title="نتائج الطلاب والتحليل"><BarChart3 className="h-4 w-4" /></button>
