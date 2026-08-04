@@ -291,6 +291,7 @@ export type Database = {
       exams: {
         Row: {
           adaptive: boolean
+          answers_released: boolean
           created_at: string
           difficulty: string
           duration_minutes: number
@@ -312,6 +313,7 @@ export type Database = {
         }
         Insert: {
           adaptive?: boolean
+          answers_released?: boolean
           created_at?: string
           difficulty?: string
           duration_minutes?: number
@@ -333,6 +335,7 @@ export type Database = {
         }
         Update: {
           adaptive?: boolean
+          answers_released?: boolean
           created_at?: string
           difficulty?: string
           duration_minutes?: number
