@@ -131,7 +131,7 @@ export const updateStudentProfile = createServerFn({ method: "POST" })
     const { db, student } = await requireStudent(data.code);
     const upd: any = {};
     for (const [k, v] of Object.entries(data.fields)) {
-      if (["full_name", "phone", "parent_phone", "address", "school", "section", "group_id"].includes(k)) {
+      if (["full_name", "phone", "parent_phone", "address", "school", "section", "grade", "group_id"].includes(k)) {
         upd[k] = v === "" ? null : str(v);
       }
     }
