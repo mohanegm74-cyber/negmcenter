@@ -39,6 +39,14 @@ export const getStudentPortal = createServerFn({ method: "POST" })
       };
     }
 
+    // جلب الواجبات بناءً على المجموعة أو الصف الدراسي
+    const hwQuery = db.from("homework").select("*").order("created_at", { ascending: false });
+    if (student.group_id) {
+      hwQuery.or(`group_id.eq.${student.group_id},grade.eq."${student.grade}"`);
+    } else if (student.grade) {
+      hwQuery.eq("grade", student.grade);
+    }
+
     const [a, hs, p, n, q, g, hw, certs] = await Promise.all([
       db.from("attendance").select("id,date,status").eq("student_id", student.id).order("date", { ascending: false }).limit(100),
       db.from("homework_submissions").select("*").eq("student_id", student.id),
@@ -46,7 +54,7 @@ export const getStudentPortal = createServerFn({ method: "POST" })
       db.from("student_notes").select("*").eq("student_id", student.id).order("created_at", { ascending: false }),
       db.from("questions").select("*").eq("student_id", student.id).order("created_at", { ascending: false }),
       student.group_id ? db.from("groups").select("*").eq("id", student.group_id).maybeSingle() : Promise.resolve({ data: null }),
-      student.group_id ? db.from("homework").select("*").eq("group_id", student.group_id).order("created_at", { ascending: false }) : db.from("homework").select("*").is("group_id", null),
+      hwQuery,
       db.from("certificates").select("*").eq("student_id", student.id).order("created_at", { ascending: false }),
     ]);
 
@@ -69,7 +77,6 @@ export const getStudentExams = createServerFn({ method: "POST" })
     const { data: allExams } = await db.from("exams").select("*").eq("status", "published").order("created_at", { ascending: false });
     const { data: attempts } = await db.from("exam_attempts").select("*").eq("student_id", student.id).order("submitted_at", { ascending: false });
 
-    // فلترة مرنة تضمن ظهور الاختبارات حسب المجموعة أو الصف
     const filteredExams = (allExams || []).filter(e => {
       if (e.group_id && e.group_id === student.group_id) return true;
       if (!e.group_id && e.grade && student.grade && gradeMatches(e.grade, student.grade)) return true;
@@ -124,7 +131,6 @@ export const getAttemptDetails = createServerFn({ method: "POST" })
     return { questions: qs.data || [], answers: ans.data || [] };
   });
 
-/** نموذج الإجابة الصحيحة — يظهر للطالب فقط بعد أن يرسله الأستاذ */
 export const getExamAnswerKey = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => d as { code: string; exam_id: string })
   .handler(async ({ data }) => {
@@ -141,8 +147,6 @@ export const getExamAnswerKey = createServerFn({ method: "POST" })
       .order("position");
     return { questions: qs || [] };
   });
-
-
 
 export const updateStudentProfile = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => d as { code: string; fields: Record<string, string> })

@@ -207,7 +207,6 @@ function Portal() {
               <div className="font-black text-slate-800 leading-tight truncate">{student.full_name}</div>
               <div className="text-[10px] font-bold text-muted-foreground font-mono">{student.code}</div>
             </div>
-            {/* أيقونة تعلم الإعراب بجانب الاسم مباشرة */}
             <a 
               href="https://negmaie3rab.lovable.app" 
               target="_blank" 
@@ -273,7 +272,7 @@ function Portal() {
         {tab === "homework" && (
           <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4">
             <section>
-              <h2 className="text-2xl font-black mb-6 text-slate-800">الواجبات المدرسية</h2>
+              <h2 className="text-2xl font-black mb-6 text-slate-800">الواجبات المدرسية والمتابعة</h2>
               {(!homework || homework.length === 0) ? <EmptyState icon={BookOpen} text="لا توجد واجبات حالياً" /> : (
                 <div className="grid gap-6">{homework.map((h: any) => (<HomeworkItem key={h.id} h={h} studentCode={student.code} submission={subs?.find((s: any) => s.homework_id === h.id)} onRefresh={() => loadData(student.code)} />))}</div>
               )}
@@ -353,7 +352,7 @@ function HomeworkItem({ h, studentCode, submission, onRefresh }: any) {
     setBusy(true);
     try {
       await submitText({ data: { code: studentCode, homework_id: h.id, answer_text: text } });
-      toast.success("تم الحفظ");
+      toast.success("تم حفظ إجابتك النصية بنجاح");
       onRefresh();
     } catch (e: any) { toast.error(e.message); }
     finally { setBusy(false); }
@@ -363,46 +362,92 @@ function HomeworkItem({ h, studentCode, submission, onRefresh }: any) {
     const file = e.target.files?.[0];
     if (!file) return;
     setBusy(true);
-    const t = toast.loading("جاري الرفع...");
+    const t = toast.loading("جاري رفع صورة الواجب...");
     try {
-      // تصحيح: الوصول لبيانات الـ Path و Token بشكل صحيح من السيرفر
       const { path, token } = await getUploadUrl({ data: { code: studentCode, homework_id: h.id, filename: file.name } });
       const { error } = await supabase.storage.from("submissions").uploadToSignedUrl(path, token, file);
       if (error) throw error;
       await finalizeUpload({ data: { code: studentCode, homework_id: h.id, path } });
-      toast.success("تم الرفع", { id: t });
+      toast.success("تم رفع الصورة بنجاح", { id: t });
       onRefresh();
     } catch (err: any) { toast.error(err.message, { id: t }); }
     finally { setBusy(false); }
   }
 
+  const isGraded = submission?.status === 'graded';
+
   return (
-    <div className="bg-white rounded-[2rem] border overflow-hidden shadow-sm">
-      <div className="p-6 border-b bg-slate-50/50">
-        <h3 className="text-xl font-black">{h.title}</h3>
-        <p className="text-sm text-slate-500 font-bold">{h.description || "لا يوجد وصف"}</p>
-      </div>
-      <div className="p-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="space-y-4">
-          <div className="text-xs font-black text-primary">الحل النصي:</div>
-          <textarea value={text} onChange={e => setText(e.target.value)} rows={4} className="w-full rounded-2xl border p-4 text-sm font-bold outline-none" />
-          <button onClick={handleTextSubmit} disabled={busy} className="rounded-xl bg-primary px-6 py-2 text-xs font-black text-white">حفظ الحل</button>
+    <div className={`bg-white rounded-[2.5rem] border-2 overflow-hidden shadow-sm transition-all ${isGraded ? 'border-emerald-200' : 'border-slate-100'}`}>
+      <div className={`p-6 border-b flex justify-between items-center ${isGraded ? 'bg-emerald-50/50' : 'bg-slate-50/50'}`}>
+        <div className="flex-1">
+          <h3 className="text-xl font-black text-slate-800">{h.title}</h3>
+          <p className="text-sm text-slate-500 font-bold mt-1 leading-relaxed">{h.description || "لا يوجد وصف إضافي للواجب."}</p>
         </div>
+        {isGraded && (
+          <div className="bg-emerald-600 text-white px-5 py-2.5 rounded-2xl text-center shadow-lg animate-in zoom-in-50">
+            <div className="text-[10px] font-black uppercase opacity-80">الدرجة النهائية</div>
+            <div className="text-xl font-black">{submission.score} / {h.max_score}</div>
+          </div>
+        )}
+      </div>
+
+      {isGraded && submission.note && (
+        <div className="p-6 bg-emerald-50/30 border-b border-emerald-100">
+          <div className="text-xs font-black text-emerald-700 mb-2 flex items-center gap-1.5 uppercase">
+            <MessageSquare className="h-4 w-4" /> ملاحظات وتقييم الأستاذ:
+          </div>
+          <div className="bg-white p-4 rounded-2xl border-2 border-emerald-100 text-sm font-bold text-slate-700 italic shadow-sm leading-loose">
+            "{submission.note}"
+          </div>
+          {h.model_solution && (
+            <div className="mt-4">
+              <div className="text-xs font-black text-primary mb-2 flex items-center gap-1.5 uppercase">
+                <CheckCircle2 className="h-4 w-4" /> نموذج الإجابة الصحيحة:
+              </div>
+              <div className="bg-primary/5 p-4 rounded-2xl border-2 border-primary/10 text-sm font-bold text-slate-700 leading-loose">
+                {h.model_solution}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="p-6 grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div className="space-y-4">
-          <div className="text-xs font-black text-secondary">رفع صورة الواجب:</div>
+          <div className="text-[11px] font-black text-slate-500 uppercase ms-2 flex items-center gap-1.5"><FileText className="h-3.5 w-3.5" /> حل الواجب (نصي):</div>
+          <textarea 
+            value={text} 
+            onChange={e => setText(e.target.value)} 
+            rows={5} 
+            disabled={isGraded}
+            placeholder="اكتب إجابتك هنا في حال لم تكن تريد رفع صورة..."
+            className="w-full rounded-2xl border-2 border-slate-100 p-4 text-sm font-bold outline-none focus:border-primary focus:bg-slate-50 transition-all" 
+          />
+          {!isGraded && (
+            <button onClick={handleTextSubmit} disabled={busy} className="w-full sm:w-auto rounded-xl bg-primary px-8 py-3 text-sm font-black text-white shadow-lg shadow-primary/20 hover:scale-105 transition-all">حفظ الحل المكتوب</button>
+          )}
+        </div>
+        
+        <div className="space-y-4">
+          <div className="text-[11px] font-black text-slate-500 uppercase ms-2 flex items-center gap-1.5"><ImageIcon className="h-3.5 w-3.5" /> تصوير الكراسة ورفع الصورة:</div>
           {imageUrl ? (
-            <div className="relative rounded-2xl overflow-hidden border aspect-video bg-slate-50 flex items-center justify-center">
+            <div className="relative rounded-2xl overflow-hidden border-2 border-slate-100 aspect-video bg-slate-50 flex items-center justify-center shadow-inner group">
               <img src={imageUrl} className="max-h-full object-contain" alt="submission" />
-              <label className="absolute inset-0 bg-black/20 opacity-0 hover:opacity-100 flex items-center justify-center cursor-pointer transition-all">
-                <span className="bg-white text-primary px-4 py-2 rounded-xl text-xs font-black">تغيير الصورة</span>
-                <input type="file" accept="image/*" className="hidden" onChange={handleFileUpload} />
-              </label>
+              {!isGraded && (
+                <label className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center cursor-pointer transition-all">
+                  <div className="bg-white text-primary px-5 py-2.5 rounded-2xl text-xs font-black shadow-xl">تغيير الصورة المرفوعة</div>
+                  <input type="file" accept="image/*" className="hidden" onChange={handleFileUpload} />
+                </label>
+              )}
             </div>
           ) : (
-            <label className="flex flex-col items-center justify-center gap-3 border-2 border-dashed rounded-2xl aspect-video bg-slate-50 cursor-pointer">
-              <UploadCloud className="h-10 w-10 text-slate-300" />
-              <span className="text-xs font-black text-slate-400">اضغط للرفع</span>
-              <input type="file" accept="image/*" className="hidden" onChange={handleFileUpload} />
+            <label className={`flex flex-col items-center justify-center gap-4 border-2 border-dashed rounded-3xl aspect-video bg-slate-50 transition-all ${isGraded ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-slate-100 border-slate-300'}`}>
+              <UploadCloud className="h-12 w-12 text-slate-300" />
+              <div className="text-center">
+                <span className="text-xs font-black text-slate-400 block">اضغط لاختيار صورة من هاتفك</span>
+                <span className="text-[10px] text-slate-300 font-bold uppercase mt-1">JPG, PNG, PDF</span>
+              </div>
+              {!isGraded && <input type="file" accept="image/*" className="hidden" onChange={handleFileUpload} />}
             </label>
           )}
         </div>
@@ -413,19 +458,19 @@ function HomeworkItem({ h, studentCode, submission, onRefresh }: any) {
 
 function TabBtn({ label, icon: Icon, active, badge, onClick }: any) {
   return (
-    <button onClick={onClick} className={`relative shrink-0 flex items-center gap-1.5 px-5 py-2.5 rounded-2xl text-[13px] font-black transition-all ${active ? "bg-primary text-white shadow-lg" : "bg-white text-slate-500 border border-slate-100"}`}>
+    <button onClick={onClick} className={`relative shrink-0 flex items-center gap-2 px-5 py-2.5 rounded-2xl text-[13px] font-black transition-all ${active ? "bg-primary text-white shadow-lg" : "bg-white text-slate-500 border border-slate-100 hover:border-primary/30"}`}>
       <Icon className="h-4 w-4" /> 
       {label}
-      {badge && <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-600 text-[8px] text-white animate-pulse">{badge}</span>}
+      {badge && <span className="absolute -top-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-600 text-[10px] font-black text-white animate-pulse shadow-md px-1">{badge}</span>}
     </button>
   );
 }
 function Field({ name, label, defaultValue, required = false }: any) {
-  return (<div className="space-y-1.5"><label className="text-xs font-black text-slate-500">{label}</label><input name={name} defaultValue={defaultValue} required={required} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-bold outline-none" /></div>);
+  return (<div className="space-y-1.5"><label className="text-xs font-black text-slate-500 ms-1 uppercase">{label}</label><input name={name} defaultValue={defaultValue} required={required} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-bold outline-none focus:bg-white focus:border-primary transition-all" /></div>);
 }
 function InfoCard({ label, value }: { label: string; value: string }) {
-  return (<div className="p-4 rounded-2xl bg-slate-50 border"><div className="text-[10px] font-black text-muted-foreground uppercase">{label}</div><div className="font-black">{value}</div></div>);
+  return (<div className="p-5 rounded-3xl bg-slate-50 border-2 border-slate-100 shadow-sm"><div className="text-[10px] font-black text-muted-foreground uppercase mb-1 tracking-wider">{label}</div><div className="font-black text-slate-800">{value}</div></div>);
 }
 function EmptyState({ icon: Icon, text }: { icon: any; text: string }) {
-  return (<div className="bg-white p-12 rounded-[2.5rem] border border-dashed text-center"><Icon className="mx-auto h-12 w-12 text-muted/30 mb-3" /><p className="text-muted-foreground font-bold">{text}</p></div>);
+  return (<div className="bg-white p-16 rounded-[2.5rem] border-2 border-dashed border-slate-100 text-center"><Icon className="mx-auto h-16 w-16 text-muted/20 mb-4" /><p className="text-slate-400 font-black text-lg">{text}</p></div>);
 }
