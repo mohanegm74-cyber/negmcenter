@@ -415,27 +415,36 @@ export type Database = {
           created_at: string
           description: string | null
           due_date: string | null
+          grade: string | null
           group_id: string | null
           id: string
           max_score: number | null
+          model_solution: string | null
+          results_released: boolean
           title: string
         }
         Insert: {
           created_at?: string
           description?: string | null
           due_date?: string | null
+          grade?: string | null
           group_id?: string | null
           id?: string
           max_score?: number | null
+          model_solution?: string | null
+          results_released?: boolean
           title: string
         }
         Update: {
           created_at?: string
           description?: string | null
           due_date?: string | null
+          grade?: string | null
           group_id?: string | null
           id?: string
           max_score?: number | null
+          model_solution?: string | null
+          results_released?: boolean
           title?: string
         }
         Relationships: [
