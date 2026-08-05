@@ -374,7 +374,8 @@ function HomeworkItem({ h, studentCode, submission, onRefresh }: any) {
     finally { setBusy(false); }
   }
 
-  const isGraded = submission?.status === 'graded';
+  const released = h.results_released !== false;
+  const isGraded = submission?.status === 'graded' && released;
 
   return (
     <div className={`bg-white rounded-[2.5rem] border-2 overflow-hidden shadow-sm transition-all ${isGraded ? 'border-emerald-200' : 'border-slate-100'}`}>
