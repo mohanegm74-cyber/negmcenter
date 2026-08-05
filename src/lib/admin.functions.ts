@@ -114,7 +114,7 @@ export const getHomeworkDataAdmin = createServerFn({ method: "GET" })
     const [g, h, s, sb] = await Promise.all([
       supabaseAdmin.from("groups").select("id,name,grade").order("name"),
       supabaseAdmin.from("homework").select("*").order("created_at", { ascending: false }),
-      supabaseAdmin.from("students").select("id,full_name,code,group_id").order("full_name"),
+      supabaseAdmin.from("students").select("id,full_name,code,group_id,grade").order("full_name"),
       supabaseAdmin.from("homework_submissions").select("*"),
     ]);
     return { groups: g.data || [], items: h.data || [], students: s.data || [], subs: sb.data || [] };
@@ -125,8 +125,10 @@ export const saveHomeworkAdmin = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => d as { id?: string; payload: any })
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const q = data.id ? supabaseAdmin.from("homework").update(data.payload).eq("id", data.id) : supabaseAdmin.from("homework").insert(data.payload);
-    await q; return { ok: true };
+    const q = data.id ? supabaseAdmin.from("homework").update(data.payload).eq("id", data.id).select("id") : supabaseAdmin.from("homework").insert(data.payload).select("id");
+    const { data: row, error } = await q;
+    if (error) throw new Error("تعذر حفظ الواجب: " + error.message);
+    return { ok: true, id: row?.[0]?.id as string | undefined };
   });
 
 export const deleteHomeworkAdmin = createServerFn({ method: "POST" })
@@ -138,14 +140,26 @@ export const deleteHomeworkAdmin = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const releaseHomeworkResultsAdmin = createServerFn({ method: "POST" })
+  .middleware([requireAuthMiddleware])
+  .inputValidator((d: unknown) => d as { id: string; released: boolean })
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await supabaseAdmin.from("homework").update({ results_released: data.released } as any).eq("id", data.id);
+    if (error) throw new Error("تعذر إرسال النتائج: " + error.message);
+    return { ok: true };
+  });
+
 export const upsertHomeworkSubmissionAdmin = createServerFn({ method: "POST" })
   .middleware([requireAuthMiddleware])
   .inputValidator((d: unknown) => d as { id?: string; payload: any })
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: ex } = await supabaseAdmin.from("homework_submissions").select("id").eq("student_id", data.payload.student_id).eq("homework_id", data.payload.homework_id).maybeSingle();
-    if (ex) await supabaseAdmin.from("homework_submissions").update(data.payload).eq("id", ex.id);
-    else await supabaseAdmin.from("homework_submissions").insert(data.payload);
+    const { error } = ex
+      ? await supabaseAdmin.from("homework_submissions").update(data.payload).eq("id", ex.id)
+      : await supabaseAdmin.from("homework_submissions").insert(data.payload);
+    if (error) throw new Error("تعذر حفظ التقييم: " + error.message);
     return { ok: true };
   });
 

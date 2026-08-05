@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { Plus, Trash2, Pencil, X, Printer, BookOpen, Loader2, FileText, ImageIcon, Eye, CheckCircle2, ChevronDown, ChevronUp } from "lucide-react";
 import { openPrint, esc } from "@/lib/print";
 import { useServerFn } from "@tanstack/react-start";
-import { getHomeworkDataAdmin, saveHomeworkAdmin, upsertHomeworkSubmissionAdmin, deleteHomeworkAdmin, getHomeworkSubmissionFileUrl } from "@/lib/admin.functions";
+import { getHomeworkDataAdmin, saveHomeworkAdmin, upsertHomeworkSubmissionAdmin, deleteHomeworkAdmin, getHomeworkSubmissionFileUrl, releaseHomeworkResultsAdmin } from "@/lib/admin.functions";
 import { GRADES } from "@/lib/exam-constants";
 
 export const Route = createFileRoute("/_authenticated/homework")({
@@ -13,8 +13,8 @@ export const Route = createFileRoute("/_authenticated/homework")({
 });
 
 type Group = { id: string; name: string; grade: string | null };
-type HW = { id: string; group_id: string | null; title: string; description: string | null; due_date: string | null; max_score: number | null; grade: string | null; model_solution?: string | null };
-type Student = { id: string; full_name: string; code: string; group_id: string | null };
+type HW = { id: string; group_id: string | null; title: string; description: string | null; due_date: string | null; max_score: number | null; grade: string | null; model_solution?: string | null; results_released?: boolean; created_at?: string };
+type Student = { id: string; full_name: string; code: string; group_id: string | null; grade?: string | null };
 type Sub = { id: string; homework_id: string; student_id: string; score: number | null; status: string; note: string | null; answer_text: string | null; file_url: string | null };
 
 function HomeworkPage() {
@@ -32,6 +32,7 @@ function HomeworkPage() {
   const saveHWFn = useServerFn(saveHomeworkAdmin);
   const upsertSubFn = useServerFn(upsertHomeworkSubmissionAdmin);
   const deleteHWFn = useServerFn(deleteHomeworkAdmin);
+  const releaseFn = useServerFn(releaseHomeworkResultsAdmin);
 
   async function load() {
     setLoading(true);
@@ -71,6 +72,14 @@ function HomeworkPage() {
     if (!confirm("حذف هذا الواجب؟")) return;
     try { await deleteHWFn({ data: { id } }); toast.success("تم الحذف"); load(); }
     catch (err: any) { toast.error(err.message); }
+  }
+
+  async function toggleRelease(h: HW) {
+    try {
+      await releaseFn({ data: { id: h.id, released: !h.results_released } });
+      toast.success(h.results_released ? "تم إخفاء الحل والدرجات عن الطلاب" : "تم إرسال الحل والدرجات لصفحات الطلاب");
+      load();
+    } catch (err: any) { toast.error(err.message); }
   }
 
   const groupMap = useMemo(() => Object.fromEntries(groups.map(g => [g.id, g])), [groups]);
@@ -141,7 +150,26 @@ function HomeworkPage() {
               </div>
             </div>
             {h.description && <p className="mt-3 text-xs text-slate-600 line-clamp-2 italic leading-relaxed">"{h.description}"</p>}
-            <div className="mt-6 flex gap-2">
+
+            <details className="mt-4 rounded-2xl bg-slate-50 border border-slate-100 p-3">
+              <summary className="cursor-pointer text-[10px] font-black text-slate-500 uppercase select-none">نسخة الواجب المُرسل (تفاصيل ما تم إرساله)</summary>
+              <div className="mt-3 space-y-1.5 text-[11px] font-bold text-slate-600">
+                <div>العنوان: {h.title}</div>
+                <div>الصف: {h.grade || "كل الصفوف"} — المجموعة: {groupMap[h.group_id || ""]?.name || "الكل"}</div>
+                <div>الدرجة القصوى: {h.max_score ?? "—"} — التسليم: {h.due_date || "مفتوح"}</div>
+                <div>تاريخ الإرسال: {h.created_at ? new Date(h.created_at).toLocaleString("ar-EG") : "—"}</div>
+                <div>عدد الطلاب المستهدفين: {students.filter(s => (!h.group_id || s.group_id === h.group_id) && (!h.grade || s.grade === h.grade)).length}</div>
+                <div>عدد من سلّم: {subs.filter(x => x.homework_id === h.id && (x.answer_text || x.file_url)).length}</div>
+                <div className="pt-1.5 border-t border-dashed">المطلوب: {h.description || "—"}</div>
+                <div>نموذج الحل: {h.model_solution || "لم يُضف بعد"}</div>
+              </div>
+            </details>
+            <div className="mt-4">
+              <button onClick={() => toggleRelease(h)} className={`w-full rounded-2xl px-4 py-2.5 text-xs font-black transition-all ${h.results_released ? "bg-emerald-600 text-white shadow-lg shadow-emerald-600/20" : "bg-amber-50 text-amber-700 border-2 border-amber-200 hover:bg-amber-100"}`}>
+                {h.results_released ? "✓ تم إرسال الحل والدرجات للطلاب (اضغط للإخفاء)" : "إرسال الحل والدرجات للطلاب"}
+              </button>
+            </div>
+            <div className="mt-3 flex gap-2">
               <button onClick={() => setActiveHW(h)} className="flex-1 rounded-2xl bg-primary px-4 py-2.5 text-xs font-black text-white shadow-lg shadow-primary/20 hover:scale-[1.02] transition-all">تقييم حلول الطلاب</button>
               <button onClick={() => {
                 const list = students.filter(s => (!h.group_id || s.group_id === h.group_id) && (!h.grade || s.grade === h.grade));
