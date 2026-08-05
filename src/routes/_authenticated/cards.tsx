@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Printer, IdCard, Loader2 } from "lucide-react";
+import { Printer, IdCard, Loader2, Phone, GraduationCap } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import QRCode from "qrcode";
 import { LOGO_URL } from "@/components/BrandLogo";
@@ -60,10 +60,10 @@ function CardsPage() {
       .grid { display:grid; grid-template-columns: repeat(2, 1fr); gap: 12px; padding: 12px; }
       .card { background: linear-gradient(135deg,#1e3a8a 0%,#1e40af 60%,#1e3a8a 100%); color:#fff; border-radius: 14px; padding: 14px; display:flex; gap:12px; box-shadow:0 4px 14px rgba(0,0,0,.1); page-break-inside: avoid; }
       .card .logo { width:64px; height:64px; border-radius:10px; background:#fff url('${logoAbs}') center/contain no-repeat; flex-shrink:0; }
-      .card .info { flex:1; }
+      .card .info { flex:1; overflow: hidden; }
       .card h3 { margin:0 0 4px; font-size:16px; font-weight:900; color:#facc15; }
-      .card .name { font-size:15px; font-weight:800; }
-      .card .row { font-size:11px; opacity:.9; margin-top:2px; }
+      .card .name { font-size:15px; font-weight:800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .card .row { font-size:11px; opacity:.9; margin-top:2px; display:flex; align-items:center; gap:4px; }
       .card .qr { background:#fff; padding:4px; border-radius:8px; align-self:center; }
       .card .qr img { display:block; width:74px; height:74px; }
       .toolbar { padding:10px; text-align:left; }
@@ -105,8 +105,14 @@ function CardsPage() {
               <h3 className="mb-1 text-base font-black" style={{ color: "#facc15" }}>سنتر الأستاذ محمد نجم</h3>
               <div className="name text-sm font-extrabold">{s.full_name}</div>
               <div className="row text-xs opacity-90">الكود: <span className="font-mono">{s.code}</span></div>
-              <div className="row text-xs opacity-90">الصف: {s.grade || "—"} · المجموعة: {groupMap[s.group_id || ""] || "—"}</div>
-              <div className="row text-xs opacity-90" dir="ltr">☎ {s.phone || "—"}</div>
+              <div className="row text-xs opacity-90">
+                <span>الصف: {s.grade || "—"}</span>
+                <span> · </span>
+                <span>المجموعة: {groupMap[s.group_id || ""] || "—"}</span>
+              </div>
+              <div className="row text-xs opacity-90" dir="ltr">
+                <span>☎ {s.phone || "—"}</span>
+              </div>
             </div>
             <div className="qr self-center rounded-md bg-white p-1">
               {qrs[s.id] && <img src={qrs[s.id]} alt="qr" width={74} height={74} />}
