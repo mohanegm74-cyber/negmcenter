@@ -25,6 +25,7 @@ import { Route as AuthenticatedGroupListsRouteImport } from './routes/_authentic
 import { Route as AuthenticatedFinanceRouteImport } from './routes/_authenticated/finance'
 import { Route as AuthenticatedExamsRouteImport } from './routes/_authenticated/exams'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as AuthenticatedContestsRouteImport } from './routes/_authenticated/contests'
 import { Route as AuthenticatedCertificatesRouteImport } from './routes/_authenticated/certificates'
 import { Route as AuthenticatedCardsRouteImport } from './routes/_authenticated/cards'
 import { Route as AuthenticatedBackupRouteImport } from './routes/_authenticated/backup'
@@ -109,6 +110,11 @@ const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedContestsRoute = AuthenticatedContestsRouteImport.update({
+  id: '/contests',
+  path: '/contests',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedCertificatesRoute =
   AuthenticatedCertificatesRouteImport.update({
     id: '/certificates',
@@ -138,6 +144,7 @@ export interface FileRoutesByFullPath {
   '/backup': typeof AuthenticatedBackupRoute
   '/cards': typeof AuthenticatedCardsRoute
   '/certificates': typeof AuthenticatedCertificatesRoute
+  '/contests': typeof AuthenticatedContestsRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/exams': typeof AuthenticatedExamsRoute
   '/finance': typeof AuthenticatedFinanceRoute
@@ -159,6 +166,7 @@ export interface FileRoutesByTo {
   '/backup': typeof AuthenticatedBackupRoute
   '/cards': typeof AuthenticatedCardsRoute
   '/certificates': typeof AuthenticatedCertificatesRoute
+  '/contests': typeof AuthenticatedContestsRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/exams': typeof AuthenticatedExamsRoute
   '/finance': typeof AuthenticatedFinanceRoute
@@ -182,6 +190,7 @@ export interface FileRoutesById {
   '/_authenticated/backup': typeof AuthenticatedBackupRoute
   '/_authenticated/cards': typeof AuthenticatedCardsRoute
   '/_authenticated/certificates': typeof AuthenticatedCertificatesRoute
+  '/_authenticated/contests': typeof AuthenticatedContestsRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/exams': typeof AuthenticatedExamsRoute
   '/_authenticated/finance': typeof AuthenticatedFinanceRoute
@@ -205,6 +214,7 @@ export interface FileRouteTypes {
     | '/backup'
     | '/cards'
     | '/certificates'
+    | '/contests'
     | '/dashboard'
     | '/exams'
     | '/finance'
@@ -226,6 +236,7 @@ export interface FileRouteTypes {
     | '/backup'
     | '/cards'
     | '/certificates'
+    | '/contests'
     | '/dashboard'
     | '/exams'
     | '/finance'
@@ -248,6 +259,7 @@ export interface FileRouteTypes {
     | '/_authenticated/backup'
     | '/_authenticated/cards'
     | '/_authenticated/certificates'
+    | '/_authenticated/contests'
     | '/_authenticated/dashboard'
     | '/_authenticated/exams'
     | '/_authenticated/finance'
@@ -385,6 +397,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDashboardRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/contests': {
+      id: '/_authenticated/contests'
+      path: '/contests'
+      fullPath: '/contests'
+      preLoaderRoute: typeof AuthenticatedContestsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/certificates': {
       id: '/_authenticated/certificates'
       path: '/certificates'
@@ -421,6 +440,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedBackupRoute: typeof AuthenticatedBackupRoute
   AuthenticatedCardsRoute: typeof AuthenticatedCardsRoute
   AuthenticatedCertificatesRoute: typeof AuthenticatedCertificatesRoute
+  AuthenticatedContestsRoute: typeof AuthenticatedContestsRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedExamsRoute: typeof AuthenticatedExamsRoute
   AuthenticatedFinanceRoute: typeof AuthenticatedFinanceRoute
@@ -439,6 +459,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedBackupRoute: AuthenticatedBackupRoute,
   AuthenticatedCardsRoute: AuthenticatedCardsRoute,
   AuthenticatedCertificatesRoute: AuthenticatedCertificatesRoute,
+  AuthenticatedContestsRoute: AuthenticatedContestsRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedExamsRoute: AuthenticatedExamsRoute,
   AuthenticatedFinanceRoute: AuthenticatedFinanceRoute,
@@ -465,13 +486,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
