@@ -1,8 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Camera, StopCircle, CheckCircle2 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { Camera, StopCircle, CheckCircle2, Loader2 } from "lucide-react";
+import { useServerFn } from "@tanstack/react-start";
+import { getAdminDataSummary, markAttendanceAdmin } from "@/lib/admin.functions";
 
 export const Route = createFileRoute("/_authenticated/scan")({
   head: () => ({ meta: [{ title: "مسح QR — الأستاذ" }, { name: "description", content: "تسجيل الحضور بمسح كود QR." }] }),
@@ -10,16 +11,30 @@ export const Route = createFileRoute("/_authenticated/scan")({
 });
 
 type Group = { id: string; name: string };
+type Student = { id: string; full_name: string; code: string };
 
 function ScanPage() {
   const [groups, setGroups] = useState<Group[]>([]);
+  const [students, setStudents] = useState<Student[]>([]);
   const [groupId, setGroupId] = useState("");
+  const [loading, setLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
   const [log, setLog] = useState<Array<{ code: string; name: string; time: string }>>([]);
   const scannerRef = useRef<any>(null);
   const seenRef = useRef<Set<string>>(new Set());
+  const groupRef = useRef("");
 
-  useEffect(() => { supabase.from("groups").select("id,name").order("name").then(({ data }) => setGroups((data as Group[]) || [])); }, []);
+  const loadData = useServerFn(getAdminDataSummary);
+  const markFn = useServerFn(markAttendanceAdmin);
+
+  useEffect(() => {
+    loadData({})
+      .then((res: any) => { setGroups((res.groups || []) as Group[]); setStudents((res.students || []) as Student[]); })
+      .catch((e: any) => toast.error("فشل تحميل المجموعات: " + e.message))
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => { groupRef.current = groupId; }, [groupId]);
 
   async function start() {
     if (!groupId) { toast.error("اختر المجموعة أولاً"); return; }
@@ -47,11 +62,12 @@ function ScanPage() {
     const code = text.trim().toUpperCase();
     if (seenRef.current.has(code)) return;
     seenRef.current.add(code);
-    const { data: s } = await supabase.from("students").select("id, full_name, code").eq("code", code).maybeSingle();
+    const s = students.find(x => (x.code || "").toUpperCase() === code);
     if (!s) { toast.error("كود غير معروف: " + code); return; }
     const today = new Date().toISOString().slice(0, 10);
-    const { error } = await supabase.from("attendance").upsert({ student_id: s.id, group_id: groupId, date: today, status: "present" }, { onConflict: "student_id,date" });
-    if (error) { toast.error(error.message); return; }
+    try {
+      await markFn({ data: { student_id: s.id, group_id: groupRef.current, date: today, status: "present" } });
+    } catch (e: any) { toast.error(e.message); return; }
     toast.success("✓ " + s.full_name);
     setLog(l => [{ code: s.code, name: s.full_name, time: new Date().toLocaleTimeString("ar-EG") }, ...l]);
   }
@@ -62,10 +78,14 @@ function ScanPage() {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <div className="rounded-2xl bg-white p-5 shadow-sm">
           <label className="mb-1.5 block text-sm font-semibold">المجموعة</label>
-          <select value={groupId} onChange={(e) => setGroupId(e.target.value)} disabled={scanning} className="w-full rounded-lg border border-input bg-white px-3 py-2 text-sm">
-            <option value="">— اختر —</option>
-            {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
-          </select>
+          {loading ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> جاري تحميل المجموعات…</div>
+          ) : (
+            <select value={groupId} onChange={(e) => setGroupId(e.target.value)} disabled={scanning} className="w-full rounded-lg border border-input bg-white px-3 py-2 text-sm">
+              <option value="">— اختر مجموعة —</option>
+              {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+            </select>
+          )}
 
           <div id="qr-reader" className="mt-4 overflow-hidden rounded-xl border bg-black/5" style={{ minHeight: 240 }} />
 

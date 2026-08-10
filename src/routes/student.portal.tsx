@@ -22,7 +22,7 @@ export const Route = createFileRoute("/student/portal")({
   component: Portal,
 });
 
-type Tab = "info" | "schedule" | "homework" | "ask" | "notes" | "finance" | "exams";
+type Tab = "info" | "schedule" | "attendance" | "homework" | "ask" | "notes" | "finance" | "exams";
 
 function Portal() {
   const [data, setData] = useState<any>(null);
@@ -190,11 +190,19 @@ function Portal() {
     );
   }
 
-  const { student, group, payments, notes, homework, certificates, questions, subs, counts } = data;
+  const { student, group, payments, notes, homework, certificates, questions, subs, counts, attendance } = data;
   const totalPaid = (payments || []).filter((p: any) => p.kind === "payment").reduce((acc: number, p: any) => acc + Number(p.amount), 0);
   const totalDues = (payments || []).filter((p: any) => p.kind === "charge").reduce((acc: number, p: any) => acc + Number(p.amount), 0);
   const estimatedDues = totalDues > 0 ? totalDues : (group?.monthly_fee || 0);
   const balance = estimatedDues - totalPaid;
+
+  const lastQuestionAt = questions?.[0]?.created_at ? new Date(questions[0].created_at).getTime() : 0;
+  const msLeft = lastQuestionAt ? lastQuestionAt + 24 * 60 * 60 * 1000 - Date.now() : 0;
+  const canAsk = msLeft <= 0;
+  const hoursLeft = Math.max(1, Math.ceil(msLeft / 3600000));
+
+  const attendanceRows = [...(attendance || [])].sort((a: any, b: any) => (a.date < b.date ? 1 : -1));
+  const attCount = (s: string) => attendanceRows.filter((a: any) => a.status === s).length;
 
   return (
     <div className="min-h-screen bg-[#f8fafc]">
@@ -222,6 +230,7 @@ function Portal() {
         <nav className="max-w-5xl mx-auto flex gap-1.5 overflow-x-auto mt-4 no-scrollbar pb-1">
           <TabBtn label="بياناتي" icon={UserCircle} active={tab === "info"} onClick={() => setTab("info")} />
           <TabBtn label="المواعيد" icon={Calendar} active={tab === "schedule"} onClick={() => setTab("schedule")} />
+          <TabBtn label="الحضور والغياب" icon={ClipboardList} active={tab === "attendance"} onClick={() => setTab("attendance")} />
           <TabBtn label="الواجبات والشهادات" icon={BookOpen} active={tab === "homework"} badge={counts?.pendingHw > 0 || counts?.certificates > 0 ? "!" : null} onClick={() => setTab("homework")} />
           <TabBtn label="الاختبارات" icon={Sparkles} active={tab === "exams"} onClick={() => setTab("exams")} />
           <TabBtn label="الموقف المالي" icon={CreditCard} active={tab === "finance"} onClick={() => setTab("finance")} />
@@ -269,6 +278,48 @@ function Portal() {
           </section>
         )}
 
+        {tab === "attendance" && (
+          <div className="animate-in fade-in slide-in-from-bottom-4 space-y-6">
+            <div className="grid grid-cols-3 gap-3">
+              <div className="bg-emerald-50 border border-emerald-100 p-5 rounded-2xl text-center"><div className="text-[10px] font-black text-emerald-600">حاضر</div><div className="text-2xl font-black text-emerald-700">{attCount("present")}</div></div>
+              <div className="bg-amber-50 border border-amber-100 p-5 rounded-2xl text-center"><div className="text-[10px] font-black text-amber-600">متأخر</div><div className="text-2xl font-black text-amber-700">{attCount("late")}</div></div>
+              <div className="bg-rose-50 border border-rose-100 p-5 rounded-2xl text-center"><div className="text-[10px] font-black text-rose-600">غائب</div><div className="text-2xl font-black text-rose-700">{attCount("absent")}</div></div>
+            </div>
+
+            <section className="bg-white rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden">
+              <h2 className="text-xl font-black p-6 pb-4 flex items-center gap-2"><ClipboardList className="h-6 w-6 text-primary" /> سجل الحضور والغياب</h2>
+              {attendanceRows.length === 0 ? (
+                <div className="p-6"><EmptyState icon={ClipboardList} text="لم يتم تسجيل حضور بعد" /></div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm text-right">
+                    <thead className="bg-slate-50 text-slate-500">
+                      <tr><th className="p-4 font-black">اليوم</th><th className="p-4 font-black">التاريخ</th><th className="p-4 font-black">الحالة</th></tr>
+                    </thead>
+                    <tbody>
+                      {attendanceRows.map((a: any) => {
+                        const d = new Date(a.date + "T00:00:00");
+                        const day = d.toLocaleDateString("ar-EG", { weekday: "long" });
+                        const label = a.status === "present" ? "حاضر" : a.status === "late" ? "متأخر" : "غائب";
+                        const cls = a.status === "present" ? "bg-emerald-100 text-emerald-700" : a.status === "late" ? "bg-amber-100 text-amber-700" : "bg-rose-100 text-rose-700";
+                        return (
+                          <tr key={a.id} className="border-t">
+                            <td className="p-4 font-bold text-slate-700">{day}</td>
+                            <td className="p-4 font-mono text-xs text-slate-500">{d.toLocaleDateString("ar-EG")}</td>
+                            <td className="p-4"><span className={`inline-block rounded-full px-4 py-1.5 text-xs font-black ${cls}`}>{label}</span></td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+          </div>
+        )}
+
+
+
         {tab === "homework" && (
           <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4">
             <section>
@@ -302,9 +353,12 @@ function Portal() {
         {tab === "ask" && (
           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
             <section className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100">
-              <h2 className="text-xl font-black mb-6">اسأل معلمك</h2>
-              {questions.length >= 1 ? (
-                <div className="p-6 bg-amber-50 rounded-2xl border text-center"><p className="text-sm font-black">تم إرسال سؤالك بنجاح. احذفه إذا أردت إرسال سؤال جديد.</p></div>
+              <h2 className="text-xl font-black mb-2">اسأل معلمك</h2>
+              <p className="text-xs font-bold text-muted-foreground mb-6">مسموح بسؤال واحد كل ٢٤ ساعة، ويُحفظ سؤالك دائماً في سجلك.</p>
+              {!canAsk ? (
+                <div className="p-6 bg-amber-50 rounded-2xl border text-center">
+                  <p className="text-sm font-black">تم إرسال سؤالك بنجاح. يمكنك إرسال سؤال جديد بعد {hoursLeft} ساعة تقريباً.</p>
+                </div>
               ) : (
                 <form onSubmit={handleAsk} className="space-y-4">
                   <textarea name="body" placeholder="اكتب سؤالك هنا..." required rows={5} className="w-full rounded-2xl border p-4 text-sm font-bold focus:border-primary outline-none" />
@@ -313,8 +367,10 @@ function Portal() {
               )}
             </section>
             <section>
-              <h3 className="font-black mb-4">سؤالك الحالي</h3>
-              <div className="space-y-3">{questions.map((q: any) => (<div key={q.id} className="bg-white p-4 rounded-2xl border shadow-sm flex justify-between items-start"><div className="flex-1"><div className="text-sm font-bold">{q.body}</div>{q.answer && <div className="mt-3 bg-primary/5 p-3 rounded-xl text-sm"><div className="text-[10px] font-black text-primary">رد المعلم:</div><div className="font-bold">{q.answer}</div></div>}</div><button onClick={() => handleRemoveQuestion(q.id)} className="p-2 text-rose-400"><Trash2 className="h-4 w-4" /></button></div>))}</div>
+              <h3 className="font-black mb-4">أسئلتي السابقة</h3>
+              {questions.length === 0 ? <EmptyState icon={MessageCircleQuestion} text="لم ترسل أي سؤال بعد" /> : (
+                <div className="space-y-3">{questions.map((q: any) => (<div key={q.id} className="bg-white p-4 rounded-2xl border shadow-sm"><div className="text-[10px] font-bold text-muted-foreground mb-1">{new Date(q.created_at).toLocaleString("ar-EG")}</div><div className="text-sm font-bold">{q.body}</div>{q.answer && <div className="mt-3 bg-primary/5 p-3 rounded-xl text-sm"><div className="text-[10px] font-black text-primary">رد المعلم:</div><div className="font-bold">{q.answer}</div></div>}</div>))}</div>
+              )}
             </section>
           </div>
         )}

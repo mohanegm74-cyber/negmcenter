@@ -44,6 +44,32 @@ export const markAttendanceAdmin = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const markAttendanceBulkAdmin = createServerFn({ method: "POST" })
+  .middleware([requireAuthMiddleware])
+  .inputValidator((d: unknown) => d as { student_ids: string[]; group_id: string; date: string; status: string })
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const ids = (data.student_ids || []).filter(Boolean);
+    if (ids.length === 0) throw new Error("لم يتم تحديد أي طالب");
+    const { data: existing } = await supabaseAdmin
+      .from("attendance")
+      .select("id,student_id")
+      .eq("date", data.date)
+      .in("student_id", ids);
+    const map = new Map((existing || []).map((r: any) => [r.student_id, r.id]));
+    const toInsert = ids.filter(id => !map.has(id)).map(id => ({ student_id: id, group_id: data.group_id, date: data.date, status: data.status }));
+    const updateIds = (existing || []).map((r: any) => r.id);
+    if (updateIds.length > 0) {
+      const { error } = await supabaseAdmin.from("attendance").update({ status: data.status, group_id: data.group_id }).in("id", updateIds);
+      if (error) throw new Error(error.message);
+    }
+    if (toInsert.length > 0) {
+      const { error } = await supabaseAdmin.from("attendance").insert(toInsert);
+      if (error) throw new Error(error.message);
+    }
+    return { ok: true, count: ids.length };
+  });
+
 export const getGroupsAdmin = createServerFn({ method: "GET" })
   .middleware([requireAuthMiddleware])
   .handler(async () => {
