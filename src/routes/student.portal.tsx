@@ -22,7 +22,7 @@ export const Route = createFileRoute("/student/portal")({
   component: Portal,
 });
 
-type Tab = "info" | "schedule" | "homework" | "ask" | "notes" | "finance" | "exams";
+type Tab = "info" | "schedule" | "attendance" | "homework" | "ask" | "notes" | "finance" | "exams";
 
 function Portal() {
   const [data, setData] = useState<any>(null);
