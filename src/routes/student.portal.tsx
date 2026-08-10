@@ -278,6 +278,48 @@ function Portal() {
           </section>
         )}
 
+        {tab === "attendance" && (
+          <div className="animate-in fade-in slide-in-from-bottom-4 space-y-6">
+            <div className="grid grid-cols-3 gap-3">
+              <div className="bg-emerald-50 border border-emerald-100 p-5 rounded-2xl text-center"><div className="text-[10px] font-black text-emerald-600">حاضر</div><div className="text-2xl font-black text-emerald-700">{attCount("present")}</div></div>
+              <div className="bg-amber-50 border border-amber-100 p-5 rounded-2xl text-center"><div className="text-[10px] font-black text-amber-600">متأخر</div><div className="text-2xl font-black text-amber-700">{attCount("late")}</div></div>
+              <div className="bg-rose-50 border border-rose-100 p-5 rounded-2xl text-center"><div className="text-[10px] font-black text-rose-600">غائب</div><div className="text-2xl font-black text-rose-700">{attCount("absent")}</div></div>
+            </div>
+
+            <section className="bg-white rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden">
+              <h2 className="text-xl font-black p-6 pb-4 flex items-center gap-2"><ClipboardList className="h-6 w-6 text-primary" /> سجل الحضور والغياب</h2>
+              {attendanceRows.length === 0 ? (
+                <div className="p-6"><EmptyState icon={ClipboardList} text="لم يتم تسجيل حضور بعد" /></div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm text-right">
+                    <thead className="bg-slate-50 text-slate-500">
+                      <tr><th className="p-4 font-black">اليوم</th><th className="p-4 font-black">التاريخ</th><th className="p-4 font-black">الحالة</th></tr>
+                    </thead>
+                    <tbody>
+                      {attendanceRows.map((a: any) => {
+                        const d = new Date(a.date + "T00:00:00");
+                        const day = d.toLocaleDateString("ar-EG", { weekday: "long" });
+                        const label = a.status === "present" ? "حاضر" : a.status === "late" ? "متأخر" : "غائب";
+                        const cls = a.status === "present" ? "bg-emerald-100 text-emerald-700" : a.status === "late" ? "bg-amber-100 text-amber-700" : "bg-rose-100 text-rose-700";
+                        return (
+                          <tr key={a.id} className="border-t">
+                            <td className="p-4 font-bold text-slate-700">{day}</td>
+                            <td className="p-4 font-mono text-xs text-slate-500">{d.toLocaleDateString("ar-EG")}</td>
+                            <td className="p-4"><span className={`inline-block rounded-full px-4 py-1.5 text-xs font-black ${cls}`}>{label}</span></td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+          </div>
+        )}
+
+
+
         {tab === "homework" && (
           <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4">
             <section>
