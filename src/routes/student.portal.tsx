@@ -196,6 +196,14 @@ function Portal() {
   const estimatedDues = totalDues > 0 ? totalDues : (group?.monthly_fee || 0);
   const balance = estimatedDues - totalPaid;
 
+  const lastQuestionAt = questions?.[0]?.created_at ? new Date(questions[0].created_at).getTime() : 0;
+  const msLeft = lastQuestionAt ? lastQuestionAt + 24 * 60 * 60 * 1000 - Date.now() : 0;
+  const canAsk = msLeft <= 0;
+  const hoursLeft = Math.max(1, Math.ceil(msLeft / 3600000));
+
+  const attendanceRows = [...(attendance || [])].sort((a: any, b: any) => (a.date < b.date ? 1 : -1));
+  const attCount = (s: string) => attendanceRows.filter((a: any) => a.status === s).length;
+
   return (
     <div className="min-h-screen bg-[#f8fafc]">
       {BrandHeader}
