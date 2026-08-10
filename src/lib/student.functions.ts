@@ -169,9 +169,20 @@ export const askTeacher = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { requireStudent, str } = await import("./student.server");
     const { db, student } = await requireStudent(data.code);
-    
-    const { count } = await db.from("questions").select("*", { count: "exact", head: true }).eq("student_id", student.id);
-    if ((count ?? 0) >= 1) throw new Error("مسموح بسؤال واحد فقط. احذف سؤالك السابق لإرسال سؤال جديد.");
+
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const { data: recent } = await db
+      .from("questions")
+      .select("created_at")
+      .eq("student_id", student.id)
+      .gte("created_at", since)
+      .order("created_at", { ascending: false })
+      .limit(1);
+    if (recent && recent.length > 0) {
+      const next = new Date(new Date(recent[0].created_at as string).getTime() + 24 * 60 * 60 * 1000);
+      const hours = Math.max(1, Math.ceil((next.getTime() - Date.now()) / 3600000));
+      throw new Error(`مسموح بسؤال واحد كل ٢٤ ساعة. يمكنك إرسال سؤال جديد بعد ${hours} ساعة تقريباً.`);
+    }
 
     const body = str(data.body, 2000);
     if (!body) throw new Error("السؤال فارغ");
