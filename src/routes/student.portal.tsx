@@ -303,9 +303,12 @@ function Portal() {
         {tab === "ask" && (
           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
             <section className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100">
-              <h2 className="text-xl font-black mb-6">اسأل معلمك</h2>
-              {questions.length >= 1 ? (
-                <div className="p-6 bg-amber-50 rounded-2xl border text-center"><p className="text-sm font-black">تم إرسال سؤالك بنجاح. احذفه إذا أردت إرسال سؤال جديد.</p></div>
+              <h2 className="text-xl font-black mb-2">اسأل معلمك</h2>
+              <p className="text-xs font-bold text-muted-foreground mb-6">مسموح بسؤال واحد كل ٢٤ ساعة، ويُحفظ سؤالك دائماً في سجلك.</p>
+              {!canAsk ? (
+                <div className="p-6 bg-amber-50 rounded-2xl border text-center">
+                  <p className="text-sm font-black">تم إرسال سؤالك بنجاح. يمكنك إرسال سؤال جديد بعد {hoursLeft} ساعة تقريباً.</p>
+                </div>
               ) : (
                 <form onSubmit={handleAsk} className="space-y-4">
                   <textarea name="body" placeholder="اكتب سؤالك هنا..." required rows={5} className="w-full rounded-2xl border p-4 text-sm font-bold focus:border-primary outline-none" />
@@ -314,8 +317,10 @@ function Portal() {
               )}
             </section>
             <section>
-              <h3 className="font-black mb-4">سؤالك الحالي</h3>
-              <div className="space-y-3">{questions.map((q: any) => (<div key={q.id} className="bg-white p-4 rounded-2xl border shadow-sm flex justify-between items-start"><div className="flex-1"><div className="text-sm font-bold">{q.body}</div>{q.answer && <div className="mt-3 bg-primary/5 p-3 rounded-xl text-sm"><div className="text-[10px] font-black text-primary">رد المعلم:</div><div className="font-bold">{q.answer}</div></div>}</div><button onClick={() => handleRemoveQuestion(q.id)} className="p-2 text-rose-400"><Trash2 className="h-4 w-4" /></button></div>))}</div>
+              <h3 className="font-black mb-4">أسئلتي السابقة</h3>
+              {questions.length === 0 ? <EmptyState icon={MessageCircleQuestion} text="لم ترسل أي سؤال بعد" /> : (
+                <div className="space-y-3">{questions.map((q: any) => (<div key={q.id} className="bg-white p-4 rounded-2xl border shadow-sm"><div className="text-[10px] font-bold text-muted-foreground mb-1">{new Date(q.created_at).toLocaleString("ar-EG")}</div><div className="text-sm font-bold">{q.body}</div>{q.answer && <div className="mt-3 bg-primary/5 p-3 rounded-xl text-sm"><div className="text-[10px] font-black text-primary">رد المعلم:</div><div className="font-bold">{q.answer}</div></div>}</div>))}</div>
+              )}
             </section>
           </div>
         )}
