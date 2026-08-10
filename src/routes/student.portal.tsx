@@ -190,7 +190,7 @@ function Portal() {
     );
   }
 
-  const { student, group, payments, notes, homework, certificates, questions, subs, counts } = data;
+  const { student, group, payments, notes, homework, certificates, questions, subs, counts, attendance } = data;
   const totalPaid = (payments || []).filter((p: any) => p.kind === "payment").reduce((acc: number, p: any) => acc + Number(p.amount), 0);
   const totalDues = (payments || []).filter((p: any) => p.kind === "charge").reduce((acc: number, p: any) => acc + Number(p.amount), 0);
   const estimatedDues = totalDues > 0 ? totalDues : (group?.monthly_fee || 0);
