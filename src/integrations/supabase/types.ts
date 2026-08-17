@@ -59,6 +59,44 @@ export type Database = {
           },
         ]
       }
+      board_images: {
+        Row: {
+          created_at: string
+          date: string
+          grade: string | null
+          group_id: string | null
+          id: string
+          paths: Json
+          title: string | null
+        }
+        Insert: {
+          created_at?: string
+          date?: string
+          grade?: string | null
+          group_id?: string | null
+          id?: string
+          paths?: Json
+          title?: string | null
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          grade?: string | null
+          group_id?: string | null
+          id?: string
+          paths?: Json
+          title?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "board_images_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       certificates: {
         Row: {
           created_at: string

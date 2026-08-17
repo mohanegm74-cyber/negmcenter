@@ -425,3 +425,65 @@ export const factoryResetSystem = createServerFn({ method: "POST" })
     }
     return { ok: true };
   });
+/* ===== صور السبورة ===== */
+
+export const getBoardImagesAdmin = createServerFn({ method: "GET" })
+  .middleware([requireAuthMiddleware])
+  .handler(async () => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const [g, b] = await Promise.all([
+      supabaseAdmin.from("groups").select("id, name, grade").order("name"),
+      supabaseAdmin.from("board_images").select("*").order("date", { ascending: false }).order("created_at", { ascending: false }),
+    ]);
+    const posts = await Promise.all((b.data || []).map(async (p: any) => {
+      const paths: string[] = Array.isArray(p.paths) ? p.paths : [];
+      const urls = await Promise.all(paths.map(async (path) => {
+        const { data } = await supabaseAdmin.storage.from("board-images").createSignedUrl(path, 3600);
+        return data?.signedUrl || null;
+      }));
+      return { ...p, paths, urls: urls.filter(Boolean) as string[] };
+    }));
+    return { groups: g.data || [], posts };
+  });
+
+export const createBoardUploadUrlAdmin = createServerFn({ method: "POST" })
+  .middleware([requireAuthMiddleware])
+  .inputValidator((d: unknown) => d as { filename: string })
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const safe = String(data.filename || "board.jpg").replace(/[^\w.\-]/g, "_").slice(-60);
+    const path = `${new Date().toISOString().slice(0, 10)}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${safe}`;
+    const { data: res, error } = await supabaseAdmin.storage.from("board-images").createSignedUploadUrl(path);
+    if (error) throw new Error(error.message);
+    return { path, token: res.token };
+  });
+
+export const saveBoardImagePostAdmin = createServerFn({ method: "POST" })
+  .middleware([requireAuthMiddleware])
+  .inputValidator((d: unknown) => d as { id?: string; payload: { group_id: string | null; grade: string | null; date: string; title: string | null; paths: string[] } })
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const payload = { ...data.payload, paths: data.payload.paths || [] } as any;
+    if (!payload.paths.length) throw new Error("يجب رفع صورة واحدة على الأقل");
+    if (data.id) {
+      const { error } = await supabaseAdmin.from("board_images").update(payload).eq("id", data.id);
+      if (error) throw new Error(error.message);
+      return { ok: true, id: data.id };
+    }
+    const { data: row, error } = await supabaseAdmin.from("board_images").insert(payload).select("id").single();
+    if (error) throw new Error(error.message);
+    return { ok: true, id: row.id };
+  });
+
+export const deleteBoardImagePostAdmin = createServerFn({ method: "POST" })
+  .middleware([requireAuthMiddleware])
+  .inputValidator((d: unknown) => d as { id: string })
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: row } = await supabaseAdmin.from("board_images").select("paths").eq("id", data.id).maybeSingle();
+    const paths: string[] = Array.isArray(row?.paths) ? (row!.paths as any) : [];
+    if (paths.length) await supabaseAdmin.storage.from("board-images").remove(paths);
+    const { error } = await supabaseAdmin.from("board_images").delete().eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });

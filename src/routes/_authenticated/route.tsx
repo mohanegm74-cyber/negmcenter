@@ -1,7 +1,7 @@
 import { createFileRoute, Outlet, Link, redirect, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { LayoutDashboard, Users, Boxes, ClipboardCheck, LogOut, Home, Wallet, BookOpen, FileBarChart, IdCard, Award, MessageCircleQuestion, FileQuestion, DatabaseBackup, ListChecks, Settings, Trophy } from "lucide-react";
+import { LayoutDashboard, Users, Boxes, ClipboardCheck, LogOut, Home, Wallet, BookOpen, FileBarChart, IdCard, Award, MessageCircleQuestion, FileQuestion, DatabaseBackup, ListChecks, Settings, Trophy, Image } from "lucide-react";
 import { Toaster } from "sonner";
 import { BrandLogo } from "@/components/BrandLogo";
 import { useServerFn } from "@tanstack/react-start";
@@ -57,6 +57,7 @@ function TeacherShell() {
     { to: "/attendance", label: "الحضور", icon: ClipboardCheck },
     { to: "/finance", label: "الماليات", icon: Wallet },
     { to: "/homework", label: "الواجبات", icon: BookOpen },
+    { to: "/board", label: "صورة السبورة", icon: Image },
     { to: "/exams", label: "الاختبارات الذكية", icon: FileQuestion },
     { to: "/contests", label: "مسابقات نجمية", icon: Trophy },
     { to: "/questions", label: "أسئلة الطلاب", icon: MessageCircleQuestion, badge: stats?.newQuestions > 0 ? stats.newQuestions : null },

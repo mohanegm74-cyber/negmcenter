@@ -278,3 +278,25 @@ export const submitExamAttempt = createServerFn({ method: "POST" })
     await db.from("exam_answers").insert(answersToInsert);
     return { total: result.total, max: result.max, percentage: result.percentage };
   });
+export const getBoardImagesPortal = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) => d as { code: string })
+  .handler(async ({ data }) => {
+    const { requireStudent } = await import("./student.server");
+    const { gradeMatches } = await import("./exam-constants");
+    const { db, student } = await requireStudent(data.code);
+    const { data: rows } = await db.from("board_images").select("*").order("date", { ascending: false }).order("created_at", { ascending: false });
+    const filtered = (rows || []).filter((r: any) => {
+      if (r.group_id) return r.group_id === student.group_id;
+      if (r.grade) return student.grade ? gradeMatches(r.grade, student.grade) : false;
+      return true;
+    });
+    const posts = await Promise.all(filtered.map(async (p: any) => {
+      const paths: string[] = Array.isArray(p.paths) ? p.paths : [];
+      const urls = await Promise.all(paths.map(async (path) => {
+        const { data: s } = await db.storage.from("board-images").createSignedUrl(path, 3600);
+        return s?.signedUrl || null;
+      }));
+      return { id: p.id, title: p.title, date: p.date, grade: p.grade, urls: urls.filter(Boolean) as string[] };
+    }));
+    return { posts };
+  });

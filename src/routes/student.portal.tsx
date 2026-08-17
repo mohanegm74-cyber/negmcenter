@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { BrandLogo } from "@/components/BrandLogo";
 import { ExamsTab } from "@/components/ExamsTab";
-import { getStudentPortal, updateStudentProfile, askTeacher, deleteStudentQuestionPortal, submitHomeworkText, createHomeworkUploadUrl, finalizeHomeworkUpload, getSubmissionUrl, markNotesAsRead, deleteCertificatePortal } from "@/lib/student.functions";
+import { getBoardImagesPortal, getStudentPortal, updateStudentProfile, askTeacher, deleteStudentQuestionPortal, submitHomeworkText, createHomeworkUploadUrl, finalizeHomeworkUpload, getSubmissionUrl, markNotesAsRead, deleteCertificatePortal } from "@/lib/student.functions";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { GRADES } from "@/lib/exam-constants";
@@ -22,7 +22,7 @@ export const Route = createFileRoute("/student/portal")({
   component: Portal,
 });
 
-type Tab = "info" | "schedule" | "attendance" | "homework" | "ask" | "notes" | "finance" | "exams";
+type Tab = "info" | "schedule" | "attendance" | "homework" | "ask" | "notes" | "finance" | "exams" | "board";
 
 function Portal() {
   const [data, setData] = useState<any>(null);
@@ -37,6 +37,9 @@ function Portal() {
   const deleteQFn = useServerFn(deleteStudentQuestionPortal);
   const markNotesFn = useServerFn(markNotesAsRead);
   const deleteCertFn = useServerFn(deleteCertificatePortal);
+  const boardFn = useServerFn(getBoardImagesPortal);
+  const [boardPosts, setBoardPosts] = useState<any[]>([]);
+  const [boardLoading, setBoardLoading] = useState(false);
 
   useEffect(() => {
     const c = localStorage.getItem("najm_student_code");
@@ -55,6 +58,16 @@ function Portal() {
       markNotesFn({ data: { code: data.student.code } }).then(() => {
         setData((prev: any) => prev ? { ...prev, counts: { ...prev.counts, unreadNotes: 0 } } : prev);
       });
+    }
+  }, [tab]);
+
+  useEffect(() => {
+    if (tab === "board" && data?.student?.code && !data.pending) {
+      setBoardLoading(true);
+      boardFn({ data: { code: data.student.code } })
+        .then((r: any) => setBoardPosts(r.posts || []))
+        .catch(() => toast.error("فشل تحميل صور السبورة"))
+        .finally(() => setBoardLoading(false));
     }
   }, [tab]);
 
@@ -232,6 +245,7 @@ function Portal() {
           <TabBtn label="المواعيد" icon={Calendar} active={tab === "schedule"} onClick={() => setTab("schedule")} />
           <TabBtn label="الحضور والغياب" icon={ClipboardList} active={tab === "attendance"} onClick={() => setTab("attendance")} />
           <TabBtn label="الواجبات والشهادات" icon={BookOpen} active={tab === "homework"} badge={counts?.pendingHw > 0 || counts?.certificates > 0 ? "!" : null} onClick={() => setTab("homework")} />
+          <TabBtn label="صورة السبورة" icon={ImageIcon} active={tab === "board"} onClick={() => setTab("board")} />
           <TabBtn label="الاختبارات" icon={Sparkles} active={tab === "exams"} onClick={() => setTab("exams")} />
           <TabBtn label="الموقف المالي" icon={CreditCard} active={tab === "finance"} onClick={() => setTab("finance")} />
           <TabBtn label="اسأل معلمك" icon={MessageCircleQuestion} active={tab === "ask"} onClick={() => setTab("ask")} />
@@ -319,6 +333,35 @@ function Portal() {
         )}
 
 
+
+        {tab === "board" && (
+          <div className="animate-in fade-in slide-in-from-bottom-4 space-y-6">
+            <h2 className="text-2xl font-black flex items-center gap-2"><ImageIcon className="h-6 w-6 text-primary" /> صور السبورة</h2>
+            {boardLoading ? (
+              <div className="flex justify-center p-12"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
+            ) : boardPosts.length === 0 ? (
+              <EmptyState icon={ImageIcon} text="لم يتم إرسال صور سبورة بعد" />
+            ) : (
+              <div className="space-y-5">
+                {boardPosts.map((p: any) => (
+                  <section key={p.id} className="bg-white rounded-[2rem] shadow-sm border border-slate-100 p-5">
+                    <div className="mb-3 flex items-center justify-between gap-2">
+                      <div className="font-black">{p.title || "صورة السبورة"}</div>
+                      <div className="text-[11px] font-bold text-slate-500 flex items-center gap-1"><Calendar className="h-3.5 w-3.5" /> {new Date(p.date + "T00:00:00").toLocaleDateString("ar-EG", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}</div>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                      {p.urls.map((u: string, i: number) => (
+                        <a key={i} href={u} target="_blank" rel="noreferrer" className="overflow-hidden rounded-xl border">
+                          <img src={u} alt={`صورة السبورة ${i + 1} بتاريخ ${p.date}`} loading="lazy" className="h-32 w-full object-cover transition hover:scale-105" />
+                        </a>
+                      ))}
+                    </div>
+                  </section>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {tab === "homework" && (
           <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4">
