@@ -28,6 +28,7 @@ import { Route as AuthenticatedDashboardRouteImport } from './routes/_authentica
 import { Route as AuthenticatedContestsRouteImport } from './routes/_authenticated/contests'
 import { Route as AuthenticatedCertificatesRouteImport } from './routes/_authenticated/certificates'
 import { Route as AuthenticatedCardsRouteImport } from './routes/_authenticated/cards'
+import { Route as AuthenticatedBoardRouteImport } from './routes/_authenticated/board'
 import { Route as AuthenticatedBackupRouteImport } from './routes/_authenticated/backup'
 import { Route as AuthenticatedAttendanceRouteImport } from './routes/_authenticated/attendance'
 
@@ -126,6 +127,11 @@ const AuthenticatedCardsRoute = AuthenticatedCardsRouteImport.update({
   path: '/cards',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedBoardRoute = AuthenticatedBoardRouteImport.update({
+  id: '/board',
+  path: '/board',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedBackupRoute = AuthenticatedBackupRouteImport.update({
   id: '/backup',
   path: '/backup',
@@ -142,6 +148,7 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/attendance': typeof AuthenticatedAttendanceRoute
   '/backup': typeof AuthenticatedBackupRoute
+  '/board': typeof AuthenticatedBoardRoute
   '/cards': typeof AuthenticatedCardsRoute
   '/certificates': typeof AuthenticatedCertificatesRoute
   '/contests': typeof AuthenticatedContestsRoute
@@ -164,6 +171,7 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/attendance': typeof AuthenticatedAttendanceRoute
   '/backup': typeof AuthenticatedBackupRoute
+  '/board': typeof AuthenticatedBoardRoute
   '/cards': typeof AuthenticatedCardsRoute
   '/certificates': typeof AuthenticatedCertificatesRoute
   '/contests': typeof AuthenticatedContestsRoute
@@ -188,6 +196,7 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/_authenticated/attendance': typeof AuthenticatedAttendanceRoute
   '/_authenticated/backup': typeof AuthenticatedBackupRoute
+  '/_authenticated/board': typeof AuthenticatedBoardRoute
   '/_authenticated/cards': typeof AuthenticatedCardsRoute
   '/_authenticated/certificates': typeof AuthenticatedCertificatesRoute
   '/_authenticated/contests': typeof AuthenticatedContestsRoute
@@ -212,6 +221,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/attendance'
     | '/backup'
+    | '/board'
     | '/cards'
     | '/certificates'
     | '/contests'
@@ -234,6 +244,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/attendance'
     | '/backup'
+    | '/board'
     | '/cards'
     | '/certificates'
     | '/contests'
@@ -257,6 +268,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/_authenticated/attendance'
     | '/_authenticated/backup'
+    | '/_authenticated/board'
     | '/_authenticated/cards'
     | '/_authenticated/certificates'
     | '/_authenticated/contests'
@@ -418,6 +430,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedCardsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/board': {
+      id: '/_authenticated/board'
+      path: '/board'
+      fullPath: '/board'
+      preLoaderRoute: typeof AuthenticatedBoardRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/backup': {
       id: '/_authenticated/backup'
       path: '/backup'
@@ -438,6 +457,7 @@ declare module '@tanstack/react-router' {
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAttendanceRoute: typeof AuthenticatedAttendanceRoute
   AuthenticatedBackupRoute: typeof AuthenticatedBackupRoute
+  AuthenticatedBoardRoute: typeof AuthenticatedBoardRoute
   AuthenticatedCardsRoute: typeof AuthenticatedCardsRoute
   AuthenticatedCertificatesRoute: typeof AuthenticatedCertificatesRoute
   AuthenticatedContestsRoute: typeof AuthenticatedContestsRoute
@@ -457,6 +477,7 @@ interface AuthenticatedRouteRouteChildren {
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAttendanceRoute: AuthenticatedAttendanceRoute,
   AuthenticatedBackupRoute: AuthenticatedBackupRoute,
+  AuthenticatedBoardRoute: AuthenticatedBoardRoute,
   AuthenticatedCardsRoute: AuthenticatedCardsRoute,
   AuthenticatedCertificatesRoute: AuthenticatedCertificatesRoute,
   AuthenticatedContestsRoute: AuthenticatedContestsRoute,
