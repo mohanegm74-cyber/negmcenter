@@ -499,8 +499,10 @@ export type Database = {
         Row: {
           answer_text: string | null
           file_url: string | null
+          file_urls: Json
           homework_id: string
           id: string
+          level: string | null
           note: string | null
           score: number | null
           status: string
@@ -510,8 +512,10 @@ export type Database = {
         Insert: {
           answer_text?: string | null
           file_url?: string | null
+          file_urls?: Json
           homework_id: string
           id?: string
+          level?: string | null
           note?: string | null
           score?: number | null
           status?: string
@@ -521,8 +525,10 @@ export type Database = {
         Update: {
           answer_text?: string | null
           file_url?: string | null
+          file_urls?: Json
           homework_id?: string
           id?: string
+          level?: string | null
           note?: string | null
           score?: number | null
           status?: string
@@ -656,6 +662,54 @@ export type Database = {
           title?: string | null
         }
         Relationships: []
+      }
+      student_records: {
+        Row: {
+          created_at: string
+          date: string
+          exam_level: string | null
+          group_id: string | null
+          id: string
+          note: string | null
+          recitation_level: string | null
+          student_id: string
+        }
+        Insert: {
+          created_at?: string
+          date?: string
+          exam_level?: string | null
+          group_id?: string | null
+          id?: string
+          note?: string | null
+          recitation_level?: string | null
+          student_id: string
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          exam_level?: string | null
+          group_id?: string | null
+          id?: string
+          note?: string | null
+          recitation_level?: string | null
+          student_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "student_records_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "student_records_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       students: {
         Row: {

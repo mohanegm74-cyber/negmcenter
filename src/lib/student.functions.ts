@@ -47,7 +47,7 @@ export const getStudentPortal = createServerFn({ method: "POST" })
       hwQuery.eq("grade", student.grade);
     }
 
-    const [a, hs, p, n, q, g, hw, certs] = await Promise.all([
+    const [a, hs, p, n, q, g, hw, certs, records] = await Promise.all([
       db.from("attendance").select("id,date,status").eq("student_id", student.id).order("date", { ascending: false }).limit(100),
       db.from("homework_submissions").select("*").eq("student_id", student.id),
       db.from("payments").select("*").eq("student_id", student.id).order("paid_at", { ascending: false }),
@@ -56,13 +56,14 @@ export const getStudentPortal = createServerFn({ method: "POST" })
       student.group_id ? db.from("groups").select("*").eq("id", student.group_id).maybeSingle() : Promise.resolve({ data: null }),
       hwQuery,
       db.from("certificates").select("*").eq("student_id", student.id).order("created_at", { ascending: false }),
+      db.from("student_records").select("*").eq("student_id", student.id).order("date", { ascending: false }),
     ]);
 
     const unreadNotes = (n.data || []).filter((x: any) => x.is_read === false).length;
     const pendingHw = (hw.data || []).filter((h: any) => !hs.data?.some((s: any) => s.homework_id === h.id)).length;
     
     return { 
-      student, group: g.data, attendance: a.data || [], subs: hs.data || [], payments: p.data || [], notes: n.data || [], questions: q.data || [], homework: hw.data || [], certificates: certs.data || [],
+      student, group: g.data, attendance: a.data || [], subs: hs.data || [], payments: p.data || [], notes: n.data || [], records: records.data || [], questions: q.data || [], homework: hw.data || [], certificates: certs.data || [],
       counts: { unreadNotes, pendingHw, certificates: certs.data?.length || 0 }
     };
   });
@@ -207,11 +208,9 @@ export const submitHomeworkText = createServerFn({ method: "POST" })
     const { requireStudent, str } = await import("./student.server");
     const { db, student } = await requireStudent(data.code);
     const { data: existing } = await db.from("homework_submissions").select("id").eq("student_id", student.id).eq("homework_id", data.homework_id).maybeSingle();
-    if (existing) {
-      await db.from("homework_submissions").update({ answer_text: str(data.answer_text, 5000), status: "submitted", submitted_at: new Date().toISOString() }).eq("id", existing.id);
-    } else {
-      await db.from("homework_submissions").insert({ student_id: student.id, homework_id: data.homework_id, answer_text: str(data.answer_text, 5000), status: "submitted", submitted_at: new Date().toISOString() });
-    }
+    const payload = { answer_text: str(data.answer_text, 5000), status: "submitted", submitted_at: new Date().toISOString() };
+    if (existing) await db.from("homework_submissions").update(payload).eq("id", existing.id);
+    else await db.from("homework_submissions").insert({ student_id: student.id, homework_id: data.homework_id, ...payload });
     return { ok: true };
   });
 
@@ -220,7 +219,8 @@ export const createHomeworkUploadUrl = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { requireStudent } = await import("./student.server");
     const { db, student } = await requireStudent(data.code);
-    const path = `${student.id}/${data.homework_id}/${Date.now()}-${data.filename}`;
+    const safe = String(data.filename || "homework.jpg").replace(/[^\\w.\\-]/g, "_").slice(-80);
+    const path = `${student.id}/${data.homework_id}/${Date.now()}-${safe}`;
     const { data: res, error } = await db.storage.from("submissions").createSignedUploadUrl(path);
     if (error) throw new Error(error.message);
     return { path, token: res.token };
@@ -231,12 +231,12 @@ export const finalizeHomeworkUpload = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { requireStudent } = await import("./student.server");
     const { db, student } = await requireStudent(data.code);
-    const { data: existing } = await db.from("homework_submissions").select("id").eq("student_id", student.id).eq("homework_id", data.homework_id).maybeSingle();
-    if (existing) {
-      await db.from("homework_submissions").update({ file_url: data.path, status: "submitted", submitted_at: new Date().toISOString() }).eq("id", existing.id);
-    } else {
-      await db.from("homework_submissions").insert({ student_id: student.id, homework_id: data.homework_id, file_url: data.path, status: "submitted", submitted_at: new Date().toISOString() });
-    }
+    const { data: existing } = await db.from("homework_submissions").select("id,file_urls").eq("student_id", student.id).eq("homework_id", data.homework_id).maybeSingle();
+    const oldPaths = Array.isArray(existing?.file_urls) ? existing.file_urls : (existing?.file_url ? [existing.file_url] : []);
+    const file_urls = [...oldPaths.filter((p: string) => p !== data.path), data.path];
+    const payload = { file_url: data.path, file_urls, status: "submitted", submitted_at: new Date().toISOString() };
+    if (existing) await db.from("homework_submissions").update(payload).eq("id", existing.id);
+    else await db.from("homework_submissions").insert({ student_id: student.id, homework_id: data.homework_id, ...payload });
     return { ok: true };
   });
 
