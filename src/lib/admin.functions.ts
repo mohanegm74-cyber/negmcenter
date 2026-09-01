@@ -487,3 +487,68 @@ export const deleteBoardImagePostAdmin = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true };
   });
+
+/* ===== ملاحظات ودرجات المتابعة (الاختبار والتسميع) ===== */
+
+export const getStudentRecordsAdmin = createServerFn({ method: "GET" })
+  .middleware([requireAuthMiddleware])
+  .handler(async () => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const [g, s, r] = await Promise.all([
+      supabaseAdmin.from("groups").select("id,name,grade").order("name"),
+      supabaseAdmin.from("students").select("id,full_name,code,group_id,grade").order("full_name"),
+      supabaseAdmin.from("student_records").select("*").order("date", { ascending: false }),
+    ]);
+    return { groups: g.data || [], students: s.data || [], records: r.data || [] };
+  });
+
+export const saveStudentRecordAdmin = createServerFn({ method: "POST" })
+  .middleware([requireAuthMiddleware])
+  .inputValidator((d: unknown) => d as { id?: string; payload: { student_id: string; group_id: string | null; date: string; exam_level: string | null; recitation_level: string | null; note: string | null } })
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const q = data.id
+      ? supabaseAdmin.from("student_records").update(data.payload).eq("id", data.id)
+      : supabaseAdmin.from("student_records").insert(data.payload);
+    const { error } = await q;
+    if (error) throw new Error("تعذر الحفظ: " + error.message);
+    return { ok: true };
+  });
+
+export const saveStudentRecordsBulkAdmin = createServerFn({ method: "POST" })
+  .middleware([requireAuthMiddleware])
+  .inputValidator((d: unknown) => d as { rows: { student_id: string; group_id: string | null; date: string; exam_level: string | null; recitation_level: string | null; note: string | null }[] })
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const rows = (data.rows || []).filter(r => r.student_id && (r.exam_level || r.recitation_level || r.note));
+    if (!rows.length) throw new Error("لا توجد بيانات للحفظ");
+    for (const r of rows) {
+      const { data: ex } = await supabaseAdmin.from("student_records").select("id").eq("student_id", r.student_id).eq("date", r.date).maybeSingle();
+      if (ex) await supabaseAdmin.from("student_records").update(r).eq("id", ex.id);
+      else await supabaseAdmin.from("student_records").insert(r);
+    }
+    return { ok: true, count: rows.length };
+  });
+
+export const deleteStudentRecordAdmin = createServerFn({ method: "POST" })
+  .middleware([requireAuthMiddleware])
+  .inputValidator((d: unknown) => d as { id: string })
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await supabaseAdmin.from("student_records").delete().eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+/** روابط موقعة لعدة صور واجب */
+export const getHomeworkSubmissionFileUrls = createServerFn({ method: "POST" })
+  .middleware([requireAuthMiddleware])
+  .inputValidator((d: unknown) => d as { paths: string[] })
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const urls = await Promise.all((data.paths || []).map(async (p) => {
+      const { data: res } = await supabaseAdmin.storage.from("submissions").createSignedUrl(p, 3600);
+      return res?.signedUrl || null;
+    }));
+    return { urls: urls.filter(Boolean) as string[] };
+  });
