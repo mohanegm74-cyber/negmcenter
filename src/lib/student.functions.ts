@@ -47,7 +47,7 @@ export const getStudentPortal = createServerFn({ method: "POST" })
       hwQuery.eq("grade", student.grade);
     }
 
-    const [a, hs, p, n, q, g, hw, certs] = await Promise.all([
+    const [a, hs, p, n, q, g, hw, certs, records] = await Promise.all([
       db.from("attendance").select("id,date,status").eq("student_id", student.id).order("date", { ascending: false }).limit(100),
       db.from("homework_submissions").select("*").eq("student_id", student.id),
       db.from("payments").select("*").eq("student_id", student.id).order("paid_at", { ascending: false }),
@@ -56,13 +56,14 @@ export const getStudentPortal = createServerFn({ method: "POST" })
       student.group_id ? db.from("groups").select("*").eq("id", student.group_id).maybeSingle() : Promise.resolve({ data: null }),
       hwQuery,
       db.from("certificates").select("*").eq("student_id", student.id).order("created_at", { ascending: false }),
+      db.from("student_records").select("*").eq("student_id", student.id).order("date", { ascending: false }),
     ]);
 
     const unreadNotes = (n.data || []).filter((x: any) => x.is_read === false).length;
     const pendingHw = (hw.data || []).filter((h: any) => !hs.data?.some((s: any) => s.homework_id === h.id)).length;
     
     return { 
-      student, group: g.data, attendance: a.data || [], subs: hs.data || [], payments: p.data || [], notes: n.data || [], questions: q.data || [], homework: hw.data || [], certificates: certs.data || [],
+      student, group: g.data, attendance: a.data || [], subs: hs.data || [], payments: p.data || [], notes: n.data || [], records: records.data || [], questions: q.data || [], homework: hw.data || [], certificates: certs.data || [],
       counts: { unreadNotes, pendingHw, certificates: certs.data?.length || 0 }
     };
   });
