@@ -232,8 +232,8 @@ export const finalizeHomeworkUpload = createServerFn({ method: "POST" })
     const { requireStudent } = await import("./student.server");
     const { db, student } = await requireStudent(data.code);
     const { data: existing } = await db.from("homework_submissions").select("id,file_urls").eq("student_id", student.id).eq("homework_id", data.homework_id).maybeSingle();
-    const oldPaths = Array.isArray(existing?.file_urls) ? existing.file_urls : (existing?.file_url ? [existing.file_url] : []);
-    const file_urls = [...oldPaths.filter((p: string) => p !== data.path), data.path];
+    const oldPaths: string[] = Array.isArray(existing?.file_urls) ? (existing.file_urls as string[]) : [];
+    const file_urls = [...oldPaths.filter((p) => p !== data.path), data.path];
     const payload = { file_url: data.path, file_urls, status: "submitted", submitted_at: new Date().toISOString() };
     if (existing) await db.from("homework_submissions").update(payload).eq("id", existing.id);
     else await db.from("homework_submissions").insert({ student_id: student.id, homework_id: data.homework_id, ...payload });
