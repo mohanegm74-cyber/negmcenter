@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { GraduationCap, UserRoundCog, Sparkles, Phone, Code, ExternalLink } from "lucide-react";
+import { GraduationCap, UserRoundCog, Phone, Code } from "lucide-react";
 import { BrandLogo } from "@/components/BrandLogo";
 import { TEACHER_WHATSAPP_DISPLAY } from "@/lib/contact";
 
@@ -36,18 +36,6 @@ function Landing() {
           نظام متكامل لإدارة الطلاب، المجموعات، الحصص، الحضور، الماليات، الواجبات والتقارير.
         </p>
 
-        {/* زر تعلم الإعراب الجديد */}
-        <div className="mt-8">
-          <a 
-            href="https://negmaie3rab.lovable.app" 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-3 rounded-2xl bg-white text-primary px-8 py-4 text-base font-black shadow-2xl hover:scale-105 transition-all animate-bounce"
-          >
-            <ExternalLink className="h-5 w-5 text-secondary" />
-            تعلم الإعراب والنحو ( اضغط هنا )
-          </a>
-        </div>
 
         <div className="mt-10 grid w-full max-w-2xl grid-cols-1 gap-4 sm:grid-cols-2">
           <Link to="/student/portal" className="group rounded-2xl bg-white p-6 text-right shadow-xl transition hover:-translate-y-1">
