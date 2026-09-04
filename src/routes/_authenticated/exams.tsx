@@ -48,6 +48,7 @@ function ExamsPage() {
     question_count: 10, duration_minutes: 20, total_score: 100, difficulty: "medium", adaptive: false,
   });
   const [kinds, setKinds] = useState<string[]>(["اختيار من متعدد", "صح أو خطأ"]);
+  const [optionsText, setOptionsText] = useState<Record<number, string>>({});
 
   async function load() {
     setLoading(true);
@@ -114,6 +115,7 @@ function ExamsPage() {
   }
 
   function startManual() {
+    setOptionsText({});
     setPreviewExam({
       exam: { title: `${form.subject || "اختبار"} — ${form.lesson}`, grade: form.grade, term: form.term, group_id: form.group_id || null, subject: form.subject || null, question_count: 0, duration_minutes: Number(form.duration_minutes), total_score: Number(form.total_score), difficulty: form.difficulty, question_types: kinds, adaptive: form.adaptive, status: "draft", sources: [] },
       questions: [],
@@ -297,7 +299,11 @@ function ExamsPage() {
                 <div className="space-y-3">
                   <textarea className="w-full rounded-xl border-slate-100 p-3 text-sm font-bold bg-slate-50 focus:bg-white outline-none focus:ring-2 focus:ring-primary/10" rows={2} value={q.prompt || ""} onChange={e => updateQ(i, { prompt: e.target.value })} placeholder="اكتب نص السؤال هنا..." />
                   {["اختيار من متعدد", "اختر من القائمة"].includes(q.kind) && (
-                    <input className="w-full rounded-xl border-slate-100 p-3 text-xs bg-slate-50 focus:bg-white outline-none" value={Array.isArray(q.options) ? q.options.join(" | ") : ""} onChange={e => updateQ(i, { options: e.target.value.split("|").map(s => s.trim()).filter(Boolean) })} placeholder="الاختيارات (افصل بينها بـ | )" />
+                     <input className="w-full rounded-xl border-slate-100 p-3 text-xs bg-slate-50 focus:bg-white outline-none" value={optionsText[i] ?? (Array.isArray(q.options) ? q.options.join(" | ") : "")} onChange={e => {
+                       const value = e.target.value;
+                       setOptionsText(prev => ({ ...prev, [i]: value }));
+                       updateQ(i, { options: value.split("|").map(s => s.trim()).filter(Boolean) });
+                     }} placeholder="الاختيارات (افصل بينها بـ | )" />
                   )}
                   <input className="w-full rounded-xl border-emerald-100 p-3 text-xs font-black bg-emerald-50 focus:bg-white outline-none border-2" value={typeof q.correct_answer === "string" ? q.correct_answer : (q.correct_answer ?? "")} onChange={e => updateQ(i, { correct_answer: e.target.value })} placeholder="الإجابة الصحيحة النموذجية" />
                 </div>

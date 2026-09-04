@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { GraduationCap, UserRoundCog, Phone, Code } from "lucide-react";
+import { GraduationCap, UserRoundCog, Phone, Code, Sparkles } from "lucide-react";
 import { BrandLogo } from "@/components/BrandLogo";
 import { TEACHER_WHATSAPP_DISPLAY } from "@/lib/contact";
 

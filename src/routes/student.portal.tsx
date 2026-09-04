@@ -4,10 +4,10 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { 
-  User, BookOpen, Wallet, MessageCircleQuestion, Sparkles, 
+  BookOpen, MessageCircleQuestion, Sparkles,
   Save, Loader2, Award, Calendar, Home, ClipboardList, 
   MessageSquare, UserCircle, CreditCard, ChevronLeft,
-  LogOut, XCircle, CheckCircle2, Send, ImageIcon, FileText, UploadCloud, Trash2, ExternalLink, Code, Phone, ShieldAlert, Info
+  LogOut, CheckCircle2, Send, ImageIcon, FileText, UploadCloud, Trash2, Code, Phone, ShieldAlert
 } from "lucide-react";
 import { BrandLogo } from "@/components/BrandLogo";
 import { ExamsTab } from "@/components/ExamsTab";
@@ -23,6 +23,13 @@ export const Route = createFileRoute("/student/portal")({
 });
 
 type Tab = "info" | "schedule" | "attendance" | "homework" | "ask" | "notes" | "finance" | "exams" | "board";
+
+function homeworkLevel(submission: any, maxScore?: number | null) {
+  if (submission?.level) return submission.level;
+  if (submission?.score == null || !maxScore) return null;
+  const percentage = Number(submission.score) / Number(maxScore) * 100;
+  return percentage >= 90 ? "ممتاز" : percentage >= 75 ? "جيد جداً" : percentage >= 60 ? "جيد" : percentage >= 50 ? "متوسط" : "ضعيف";
+}
 
 function Portal() {
   const [data, setData] = useState<any>(null);
@@ -203,11 +210,12 @@ function Portal() {
     );
   }
 
-  const { student, group, payments, notes, homework, certificates, questions, subs, counts, attendance } = data;
+  const { student, group, payments, notes, records, homework, certificates, questions, subs, counts, attendance } = data;
   const totalPaid = (payments || []).filter((p: any) => p.kind === "payment").reduce((acc: number, p: any) => acc + Number(p.amount), 0);
+  const totalExempt = (payments || []).filter((p: any) => p.kind === "exempt").reduce((acc: number, p: any) => acc + Number(p.amount), 0);
   const totalDues = (payments || []).filter((p: any) => p.kind === "charge").reduce((acc: number, p: any) => acc + Number(p.amount), 0);
   const estimatedDues = totalDues > 0 ? totalDues : (group?.monthly_fee || 0);
-  const balance = estimatedDues - totalPaid;
+  const balance = estimatedDues - totalPaid - totalExempt;
 
   const lastQuestionAt = questions?.[0]?.created_at ? new Date(questions[0].created_at).getTime() : 0;
   const msLeft = lastQuestionAt ? lastQuestionAt + 24 * 60 * 60 * 1000 - Date.now() : 0;
@@ -228,15 +236,6 @@ function Portal() {
               <div className="font-black text-slate-800 leading-tight truncate">{student.full_name}</div>
               <div className="text-[10px] font-bold text-muted-foreground font-mono">{student.code}</div>
             </div>
-            <a 
-              href="https://negmaie3rab.lovable.app" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gold/15 text-gold-foreground text-[10px] font-black border border-gold/20 hover:bg-gold/20 active:opacity-60 transition-all shrink-0 ms-1"
-            >
-              <Sparkles className="h-3 w-3" />
-              تعلم الإعراب
-            </a>
           </div>
           <button onClick={() => {localStorage.removeItem("najm_student_code"); setData(null);}} className="p-2 rounded-xl bg-destructive/10 text-destructive hover:bg-destructive transition-all flex-shrink-0"><LogOut className="h-5 w-5" /></button>
         </div>
@@ -390,6 +389,10 @@ function Portal() {
               <div className="bg-emerald-50 p-5 rounded-2xl border border-emerald-100 text-center"><div className="text-[10px] font-black text-emerald-600">إجمالي المسدد</div><div className="text-2xl font-black">{totalPaid} ج.م</div></div>
               <div className={`p-5 rounded-2xl border text-center ${balance > 0 ? "bg-rose-50" : "bg-emerald-50"}`}><div className="text-[10px] font-black">المتبقي</div><div className="text-2xl font-black">{balance} ج.م</div></div>
             </div>
+            <div className="mt-4 rounded-2xl border border-sky-100 bg-sky-50 p-4 text-center">
+              <div className="text-[10px] font-black text-sky-700">إجمالي الإعفاءات</div>
+              <div className="text-xl font-black text-sky-800">{totalExempt} ج.م</div>
+            </div>
           </section>
         )}
 
@@ -424,6 +427,25 @@ function Portal() {
             {notes.length === 0 ? <EmptyState icon={MessageSquare} text="لا توجد ملاحظات مرسلة" /> : (
               <div className="space-y-4">{notes.map((n: any) => (<div key={n.id} className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 flex gap-4"><div className="h-12 w-12 rounded-2xl bg-secondary/10 flex items-center justify-center text-secondary shrink-0"><MessageSquare className="h-6 w-6" /></div><div><div className="font-black">{n.title}</div><p className="text-sm text-slate-600 mt-1 italic">"{n.body}"</p></div></div>))}</div>
             )}
+            <section className="mt-8">
+              <h3 className="mb-4 text-lg font-black">سجل المتابعة</h3>
+              {!records?.length ? <EmptyState icon={ClipboardList} text="لا توجد سجلات متابعة" /> : (
+                <div className="space-y-3">
+                  {records.map((r: any) => (
+                    <div key={r.id} className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+                      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-xs font-black text-primary">{new Date(r.date + "T00:00:00").toLocaleDateString("ar-EG")}</span>
+                        <div className="flex flex-wrap gap-2 text-xs font-black">
+                          {r.exam_level && <span className="rounded-full bg-primary/10 px-3 py-1 text-primary">الاختبار: {r.exam_level}</span>}
+                          {r.recitation_level && <span className="rounded-full bg-secondary/10 px-3 py-1 text-secondary">التسميع: {r.recitation_level}</span>}
+                        </div>
+                      </div>
+                      {r.note && <p className="text-sm font-bold leading-relaxed text-slate-600">{r.note}</p>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
           </div>
         )}
       </main>
@@ -434,16 +456,21 @@ function Portal() {
 function HomeworkItem({ h, studentCode, submission, onRefresh }: any) {
   const [text, setText] = useState(submission?.answer_text || "");
   const [busy, setBusy] = useState(false);
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [imageUrls, setImageUrls] = useState<string[]>([]);
   const submitText = useServerFn(submitHomeworkText);
   const getUploadUrl = useServerFn(createHomeworkUploadUrl);
   const finalizeUpload = useServerFn(finalizeHomeworkUpload);
   const getSubUrl = useServerFn(getSubmissionUrl);
 
   useEffect(() => {
-    if (submission?.file_url) {
-      getSubUrl({ data: { code: studentCode, path: submission.file_url } }).then(res => setImageUrl(res.url));
-    }
+    let cancelled = false;
+    const paths = Array.isArray(submission?.file_urls) && submission.file_urls.length
+      ? submission.file_urls
+      : submission?.file_url ? [submission.file_url] : [];
+    Promise.all(paths.map((path: string) => getSubUrl({ data: { code: studentCode, path } }).then(res => res.url)))
+      .then(urls => { if (!cancelled) setImageUrls(urls); })
+      .catch(() => { if (!cancelled) setImageUrls([]); });
+    return () => { cancelled = true; };
   }, [submission, studentCode]);
 
   async function handleTextSubmit() {
@@ -458,15 +485,17 @@ function HomeworkItem({ h, studentCode, submission, onRefresh }: any) {
   }
 
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
     setBusy(true);
     const t = toast.loading("جاري رفع صورة الواجب...");
     try {
-      const { path, token } = await getUploadUrl({ data: { code: studentCode, homework_id: h.id, filename: file.name } });
-      const { error } = await supabase.storage.from("submissions").uploadToSignedUrl(path, token, file);
-      if (error) throw error;
-      await finalizeUpload({ data: { code: studentCode, homework_id: h.id, path } });
+      for (const file of files) {
+        const { path, token } = await getUploadUrl({ data: { code: studentCode, homework_id: h.id, filename: file.name } });
+        const { error } = await supabase.storage.from("submissions").uploadToSignedUrl(path, token, file);
+        if (error) throw error;
+        await finalizeUpload({ data: { code: studentCode, homework_id: h.id, path } });
+      }
       toast.success("تم رفع الصورة بنجاح", { id: t });
       onRefresh();
     } catch (err: any) { toast.error(err.message, { id: t }); }
@@ -485,8 +514,8 @@ function HomeworkItem({ h, studentCode, submission, onRefresh }: any) {
         </div>
         {isGraded && (
           <div className="bg-emerald-600 text-white px-5 py-2.5 rounded-2xl text-center shadow-lg animate-in zoom-in-50">
-            <div className="text-[10px] font-black uppercase opacity-80">الدرجة النهائية</div>
-            <div className="text-xl font-black">{submission.score} / {h.max_score}</div>
+            <div className="text-[10px] font-black uppercase opacity-80">مستوى التقييم</div>
+            <div className="text-xl font-black">{homeworkLevel(submission, h.max_score) || "—"}</div>
           </div>
         )}
       </div>
@@ -530,15 +559,18 @@ function HomeworkItem({ h, studentCode, submission, onRefresh }: any) {
         
         <div className="space-y-4">
           <div className="text-[11px] font-black text-slate-500 uppercase ms-2 flex items-center gap-1.5"><ImageIcon className="h-3.5 w-3.5" /> تصوير الكراسة ورفع الصورة:</div>
-          {imageUrl ? (
-            <div className="relative rounded-2xl overflow-hidden border-2 border-slate-100 aspect-video bg-slate-50 flex items-center justify-center shadow-inner group">
-              <img src={imageUrl} className="max-h-full object-contain" alt="submission" />
+          {imageUrls.length ? (
+            <div className="grid grid-cols-2 gap-3 rounded-2xl border-2 border-slate-100 bg-slate-50 p-3 shadow-inner">
+              {imageUrls.map((url, index) => <div key={url} className="relative overflow-hidden rounded-xl bg-white">
+                <img src={url} className="h-40 w-full object-contain" alt={`صورة حل الواجب ${index + 1}`} />
               {!isGraded && (
-                <label className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center cursor-pointer transition-all">
+                <label className="absolute inset-0 flex cursor-pointer flex-col items-center justify-center bg-black/40 opacity-0 transition-all hover:opacity-100">
                   <div className="bg-white text-primary px-5 py-2.5 rounded-2xl text-xs font-black shadow-xl">تغيير الصورة المرفوعة</div>
-                  <input type="file" accept="image/*" className="hidden" onChange={handleFileUpload} />
+                  <input type="file" accept="image/*" multiple className="hidden" onChange={handleFileUpload} />
                 </label>
               )}
+              </div>)}
+              {!isGraded && <label className="col-span-2 flex cursor-pointer items-center justify-center rounded-xl border-2 border-dashed border-slate-200 py-3 text-xs font-black text-primary hover:bg-white">إضافة صور أخرى<input type="file" accept="image/*" multiple className="hidden" onChange={handleFileUpload} /></label>}
             </div>
           ) : (
             <label className={`flex flex-col items-center justify-center gap-4 border-2 border-dashed rounded-3xl aspect-video bg-slate-50 transition-all ${isGraded ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-slate-100 border-slate-300'}`}>
@@ -547,7 +579,7 @@ function HomeworkItem({ h, studentCode, submission, onRefresh }: any) {
                 <span className="text-xs font-black text-slate-400 block">اضغط لاختيار صورة من هاتفك</span>
                 <span className="text-[10px] text-slate-300 font-bold uppercase mt-1">JPG, PNG, PDF</span>
               </div>
-              {!isGraded && <input type="file" accept="image/*" className="hidden" onChange={handleFileUpload} />}
+               {!isGraded && <input type="file" accept="image/*" multiple className="hidden" onChange={handleFileUpload} />}
             </label>
           )}
         </div>

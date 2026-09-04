@@ -22,6 +22,7 @@ function FinancePage() {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
   const [groupFilter, setGroupFilter] = useState("");
+  const [studentSearch, setStudentSearch] = useState("");
   const [month, setMonth] = useState(currentMonth());
   const [addingFor, setAddingFor] = useState<Student | null>(null);
   const [editingPayment, setEditingPayment] = useState<Payment | null>(null);
@@ -55,6 +56,7 @@ function FinancePage() {
   const totals = useMemo(() => {
     const pFiltered = payments.filter(p => !month || p.month === month);
     const paid = pFiltered.filter(p => p.kind === "payment").reduce((a, b) => a + Number(b.amount), 0);
+    const exempt = pFiltered.filter(p => p.kind === "exempt").reduce((a, b) => a + Number(b.amount), 0);
     const charged = pFiltered.filter(p => p.kind === "charge").reduce((a, b) => a + Number(b.amount), 0);
     
     // إذا لم تكن هناك رسوم مسجلة يدوياً، نعتمد على رسوم المجموعات لجميع الطلاب
@@ -65,12 +67,12 @@ function FinancePage() {
       });
     }
 
-    return { paid, dues: estimatedTotal, outstanding: Math.max(0, estimatedTotal - paid) };
+    return { paid, exempt, dues: estimatedTotal, outstanding: Math.max(0, estimatedTotal - paid - exempt) };
   }, [payments, month, students, groupMap]);
 
   const rows = useMemo(() => {
     return students
-      .filter(s => (!groupFilter || s.group_id === groupFilter))
+      .filter(s => (!groupFilter || s.group_id === groupFilter) && (!studentSearch || `${s.full_name} ${s.code}`.toLocaleLowerCase().includes(studentSearch.toLocaleLowerCase())))
       .map(s => {
         const studentPayments = payments.filter(p => p.student_id === s.id && (!month || p.month === month));
         const paid = studentPayments.filter(p => p.kind === "payment").reduce((a, b) => a + Number(b.amount), 0);
@@ -78,11 +80,12 @@ function FinancePage() {
         const fee = s.group_id ? Number(groupMap[s.group_id]?.monthly_fee || 0) : 0;
         
         const totalDue = dues > 0 ? dues : fee; 
-        const balance = totalDue - paid;
+         const exempt = studentPayments.filter(p => p.kind === "exempt").reduce((a, b) => a + Number(b.amount), 0);
+         const balance = totalDue - paid - exempt;
         
-        return { student: s, groupName: s.group_id ? groupMap[s.group_id]?.name : "—", totalDue, paid, balance };
+         return { student: s, groupName: s.group_id ? groupMap[s.group_id]?.name : "—", totalDue, paid, exempt, balance };
       });
-  }, [students, groupMap, payments, month, groupFilter]);
+  }, [students, groupMap, payments, month, groupFilter, studentSearch]);
 
   async function handleAdd(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -143,12 +146,14 @@ function FinancePage() {
             <option value="">كل المجموعات</option>
             {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
           </select>
+          <input value={studentSearch} onChange={e => setStudentSearch(e.target.value)} placeholder="بحث بالاسم أو الكود" className="w-full rounded-lg border bg-white px-3 py-2 text-sm font-bold sm:w-56" />
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <FinanceCard icon={<TrendingUp className="h-5 w-5" />} label="المستحق (الرسوم)" value={totals.dues} tone="primary" />
         <FinanceCard icon={<ArrowDownCircle className="h-5 w-5" />} label="المحصل فعلياً" value={totals.paid} tone="secondary" />
+        <FinanceCard icon={<ArrowUpCircle className="h-5 w-5" />} label="الإعفاءات" value={totals.exempt} tone="primary" />
         <FinanceCard icon={<AlertCircle className="h-5 w-5" />} label="إجمالي المتأخرات" value={totals.outstanding} tone="destructive" />
       </div>
 
@@ -159,7 +164,7 @@ function FinancePage() {
             <button type="button" onClick={() => setAddingFor(null)} className="p-2 hover:bg-muted rounded-full"><X className="h-5 w-5" /></button>
           </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
-            <FinF name="kind" label="النوع" type="select" options={[{v:"payment",l:"سداد"},{v:"charge",l:"مستحق"}]} />
+             <FinF name="kind" label="النوع" type="select" options={[{v:"payment",l:"سداد"},{v:"charge",l:"مستحق"},{v:"exempt",l:"إعفاء"}]} />
             <FinF name="amount" label="المبلغ" type="number" required />
             <FinF name="month" label="الشهر" defaultValue={month} />
             <FinF name="paid_at" label="التاريخ" type="date" defaultValue={new Date().toISOString().slice(0, 10)} />
@@ -177,7 +182,7 @@ function FinancePage() {
             <button type="button" onClick={() => setEditingPayment(null)} className="p-2 hover:bg-muted rounded-full"><X className="h-5 w-5" /></button>
           </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
-            <FinF name="kind" label="النوع" type="select" defaultValue={editingPayment.kind} options={[{v:"payment",l:"سداد"},{v:"charge",l:"مستحق"}]} />
+             <FinF name="kind" label="النوع" type="select" defaultValue={editingPayment.kind} options={[{v:"payment",l:"سداد"},{v:"charge",l:"مستحق"},{v:"exempt",l:"إعفاء"}]} />
             <FinF name="amount" label="المبلغ" type="number" defaultValue={String(editingPayment.amount)} required />
             <FinF name="month" label="الشهر" defaultValue={editingPayment.month || month} />
             <FinF name="paid_at" label="التاريخ" type="date" defaultValue={editingPayment.paid_at} />
@@ -202,7 +207,7 @@ function FinancePage() {
                   {payments.filter(p => p.student_id === viewingHistory.id).map(p => (
                     <tr key={p.id} className="border-t">
                       <td className="p-2">{p.paid_at}</td>
-                      <td className="p-2"><span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${p.kind === "payment" ? "bg-secondary/10 text-secondary" : "bg-gold/20 text-gold-foreground"}`}>{p.kind === "payment" ? "سداد" : "مستحق"}</span></td>
+                       <td className="p-2"><span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${p.kind === "payment" ? "bg-secondary/10 text-secondary" : p.kind === "exempt" ? "bg-sky-100 text-sky-700" : "bg-gold/20 text-gold-foreground"}`}>{p.kind === "payment" ? "سداد" : p.kind === "exempt" ? "إعفاء" : "مستحق"}</span></td>
                       <td className="p-2 text-center font-bold font-mono">{Number(p.amount).toLocaleString("ar-EG")}</td>
                       <td className="p-2">
                         <div className="flex justify-center gap-2">
@@ -228,6 +233,7 @@ function FinancePage() {
                 <th className="p-4">المجموعة</th>
                 <th className="p-4 text-center">المستحق</th>
                 <th className="p-4 text-center">المدفوع</th>
+                <th className="p-4 text-center">المعفى</th>
                 <th className="p-4 text-center">الرصيد</th>
                 <th className="p-4 text-center">إجراءات</th>
               </tr>
@@ -242,6 +248,7 @@ function FinancePage() {
                   <td className="p-4"><span className="rounded bg-muted px-2 py-1 text-[10px] font-bold">{r.groupName}</span></td>
                   <td className="p-4 text-center font-mono font-bold">{r.totalDue.toLocaleString("ar-EG")}</td>
                   <td className="p-4 text-center font-mono font-bold text-secondary">{r.paid.toLocaleString("ar-EG")}</td>
+                  <td className="p-4 text-center font-mono font-bold text-sky-700">{r.exempt.toLocaleString("ar-EG")}</td>
                   <td className={`p-4 text-center font-mono font-black ${r.balance > 0 ? "text-destructive" : "text-secondary"}`}>{r.balance.toLocaleString("ar-EG")}</td>
                   <td className="p-4">
                     <div className="flex justify-center gap-2">

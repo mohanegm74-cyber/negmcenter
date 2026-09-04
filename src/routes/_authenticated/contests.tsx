@@ -79,6 +79,7 @@ function ContestsPage() {
   const [rolling, setRolling] = useState<string>("");
   const [winners, setWinners] = useState<string[]>([]);
   const [teams, setTeams] = useState<{ name: string; members: string[] }[]>([]);
+  const [usedNames, setUsedNames] = useState<string[]>([]);
 
   const timerRef = useRef<any>(null);
   const rollRef = useRef<any>(null);
@@ -114,18 +115,32 @@ function ContestsPage() {
     let list = students;
     if (groupId) list = list.filter((s) => s.group_id === groupId);
     if (grade) list = list.filter((s) => s.grade === grade);
-    return list;
+    const seen = new Set<string>();
+    return list.filter((s) => {
+      const name = s.full_name.trim().replace(/\s+/g, " ");
+      if (seen.has(name)) return false;
+      seen.add(name);
+      return true;
+    });
   }, [students, groupId, grade]);
 
-  function reveal() {
-    const names = shuffle(pool).map((s) => s.full_name);
+  const drawPool = useMemo(() => {
+    if (mode === "teams") return pool;
+    const available = pool.filter((s) => !usedNames.includes(s.full_name.trim().replace(/\s+/g, " ")));
+    return available.length >= (mode === "duo" ? 2 : 1) ? available : pool;
+  }, [pool, mode, usedNames]);
+
+  function reveal(source = pool) {
+    const names = shuffle(source).map((s) => s.full_name);
     if (mode === "single") {
       setWinners(names.slice(0, 1));
+      setUsedNames((prev) => [...prev, names[0].trim().replace(/\s+/g, " ")]);
       setTeams([]);
       beep(880, 400);
       speak(`أهلاً يا بطل ${names[0]}`);
     } else if (mode === "duo") {
       setWinners(names.slice(0, 2));
+      setUsedNames((prev) => [...prev, ...names.slice(0, 2).map((name) => name.trim().replace(/\s+/g, " "))]);
       setTeams([]);
       beep(880, 400);
       speak(`تحدي بين ${names[0]} و ${names[1]}`);
@@ -144,8 +159,8 @@ function ContestsPage() {
   }
 
   function start() {
-    if (pool.length === 0) return toast.error("لا يوجد طلاب في هذا الاختيار");
-    if (mode === "duo" && pool.length < 2) return toast.error("التحدي يحتاج طالبين على الأقل");
+    if (drawPool.length === 0) return toast.error("لا يوجد طلاب في هذا الاختيار");
+    if (mode === "duo" && drawPool.length < 2) return toast.error("التحدي يحتاج طالبين على الأقل");
     clearInterval(timerRef.current);
     clearInterval(rollRef.current);
     setWinners([]);
@@ -156,7 +171,7 @@ function ContestsPage() {
     beep(520, 150);
 
     rollRef.current = setInterval(() => {
-      const r = pool[Math.floor(Math.random() * pool.length)];
+      const r = drawPool[Math.floor(Math.random() * drawPool.length)];
       setRolling(r?.full_name || "");
     }, 90);
 
@@ -170,7 +185,7 @@ function ContestsPage() {
         clearInterval(rollRef.current);
         setCounter(null);
         setRolling("");
-        reveal();
+        reveal(drawPool);
       }
     }, 1000);
   }

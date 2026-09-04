@@ -15,7 +15,14 @@ export const Route = createFileRoute("/_authenticated/homework")({
 type Group = { id: string; name: string; grade: string | null };
 type HW = { id: string; group_id: string | null; title: string; description: string | null; due_date: string | null; max_score: number | null; grade: string | null; model_solution?: string | null; results_released?: boolean; created_at?: string };
 type Student = { id: string; full_name: string; code: string; group_id: string | null; grade?: string | null };
-type Sub = { id: string; homework_id: string; student_id: string; score: number | null; status: string; note: string | null; answer_text: string | null; file_url: string | null };
+type Sub = { id: string; homework_id: string; student_id: string; score: number | null; level: string | null; status: string; note: string | null; answer_text: string | null; file_url: string | null; file_urls?: string[] | null };
+const EVALUATION_LEVELS = ["ممتاز", "جيد جداً", "جيد", "متوسط", "ضعيف"];
+function evaluationLevel(sub?: Pick<Sub, "level" | "score">, maxScore?: number | null) {
+  if (sub?.level) return sub.level;
+  if (sub?.score == null || !maxScore) return null;
+  const percentage = Number(sub.score) / Number(maxScore) * 100;
+  return percentage >= 90 ? "ممتاز" : percentage >= 75 ? "جيد جداً" : percentage >= 60 ? "جيد" : percentage >= 50 ? "متوسط" : "ضعيف";
+}
 
 function HomeworkPage() {
   const [groups, setGroups] = useState<Group[]>([]);
@@ -175,9 +182,9 @@ function HomeworkPage() {
                 const list = students.filter(s => (!h.group_id || s.group_id === h.group_id) && (!h.grade || s.grade === h.grade));
                 const rowsHtml = list.map((s, i) => {
                   const sub = subs.find(x => x.homework_id === h.id && x.student_id === s.id);
-                  return `<tr><td>${i + 1}</td><td>${esc(s.full_name)}</td><td>${esc(s.code)}</td><td>${esc(sub?.status === 'submitted' ? 'تم الحل' : sub?.status === 'graded' ? 'تم التقييم' : 'لم يحل')}</td><td>${sub?.score ?? "—"} / ${h.max_score}</td></tr>`;
+                  return `<tr><td>${i + 1}</td><td>${esc(s.full_name)}</td><td>${esc(s.code)}</td><td>${esc(sub?.status === 'submitted' ? 'تم الحل' : sub?.status === 'graded' ? 'تم التقييم' : 'لم يحل')}</td><td>${esc(evaluationLevel(sub, h.max_score) || "—")}</td></tr>`;
                 }).join("");
-                openPrint(`واجب: ${h.title}`, `<h2>${esc(h.title)} — ${esc(h.grade || "")} — ${esc(groupMap[h.group_id || ""]?.name || "كل المجموعات")}</h2><table><thead><tr><th>#</th><th>الطالب</th><th>الكود</th><th>الحالة</th><th>الدرجة</th></tr></thead><tbody>${rowsHtml}</tbody></table>`);
+                 openPrint(`واجب: ${h.title}`, `<h2>${esc(h.title)} — ${esc(h.grade || "")} — ${esc(groupMap[h.group_id || ""]?.name || "كل المجموعات")}</h2><table><thead><tr><th>#</th><th>الطالب</th><th>الكود</th><th>الحالة</th><th>المستوى</th></tr></thead><tbody>${rowsHtml}</tbody></table>`);
               }} className="inline-flex items-center gap-1.5 rounded-2xl bg-slate-100 px-4 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-200 transition-all"><Printer className="h-4 w-4" /> طباعة</button>
             </div>
           </div>
@@ -210,15 +217,15 @@ function HomeworkPage() {
 
 function StudentSubmissionRow({ student, hw, sub, onUpdate }: { student: Student; hw: HW; sub?: Sub; onUpdate: () => void }) {
   const [isGrading, setIsGrading] = useState(false);
-  const [imgUrl, setImgUrl] = useState<string | null>(null);
-  const [showImg, setShowImg] = useState(false);
+  const [imgUrls, setImgUrls] = useState<string[]>([]);
+  const [showImg, setShowImg] = useState<string | null>(null);
   const upsertFn = useServerFn(upsertHomeworkSubmissionAdmin);
   const getUrl = useServerFn(getHomeworkSubmissionFileUrl);
 
   useEffect(() => {
-    if (sub?.file_url) getUrl({ data: { path: sub.file_url } }).then(res => setImgUrl(res.url));
-    else setImgUrl(null);
-  }, [sub?.file_url]);
+    const paths = Array.isArray(sub?.file_urls) && sub.file_urls.length ? sub.file_urls : sub?.file_url ? [sub.file_url] : [];
+    Promise.all(paths.map(path => getUrl({ data: { path } }).then(res => res.url))).then(setImgUrls);
+  }, [sub?.file_url, sub?.file_urls]);
 
   async function update(patch: any) {
     setIsGrading(true);
@@ -229,7 +236,8 @@ function StudentSubmissionRow({ student, hw, sub, onUpdate }: { student: Student
     finally { setIsGrading(false); }
   }
 
-  const hasSubmission = !!(sub?.answer_text || sub?.file_url);
+  const hasSubmission = !!(sub?.answer_text || sub?.file_url || sub?.file_urls?.length);
+  const level = evaluationLevel(sub, hw.max_score);
 
   return (
     <div className={`p-5 rounded-[2rem] border-2 transition-all ${hasSubmission ? "border-primary/20 bg-primary/[0.01]" : "border-slate-100 bg-white"}`}>
@@ -268,13 +276,15 @@ function StudentSubmissionRow({ student, hw, sub, onUpdate }: { student: Student
           </div>
           <div className="space-y-2">
             <div className="text-[10px] font-black text-secondary uppercase flex items-center gap-1 ms-2"><ImageIcon className="h-3 w-3" /> صورة من الكراسة:</div>
-            {imgUrl ? (
-              <div className="relative group cursor-zoom-in" onClick={() => setShowImg(true)}>
-                <img src={imgUrl} className="h-28 w-full object-cover rounded-2xl border-2 border-secondary/5 hover:opacity-80 transition-opacity shadow-md" alt="homework" />
-                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/20 rounded-2xl">
-                  <Eye className="text-white h-7 w-7 drop-shadow-lg" />
-                </div>
-              </div>
+             {imgUrls.length ? (
+               <div className="grid grid-cols-2 gap-2">
+                 {imgUrls.map((url, index) => <button type="button" key={url} className="relative group cursor-zoom-in" onClick={() => setShowImg(url)}>
+                   <img src={url} className="h-28 w-full object-cover rounded-2xl border-2 border-secondary/5 hover:opacity-80 transition-opacity shadow-md" alt={`homework ${index + 1}`} />
+                   <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/20 rounded-2xl">
+                     <Eye className="text-white h-7 w-7 drop-shadow-lg" />
+                   </div>
+                 </button>)}
+               </div>
             ) : (
               <div className="h-28 w-full rounded-2xl bg-slate-50 border-2 border-dashed border-slate-200 flex items-center justify-center text-[10px] font-bold text-slate-400 italic">لا توجد صور مرفوعة من الطالب</div>
             )}
@@ -284,16 +294,11 @@ function StudentSubmissionRow({ student, hw, sub, onUpdate }: { student: Student
 
       <div className="mt-5 pt-5 border-t border-dashed flex flex-wrap items-center gap-4">
         <div className="flex items-center gap-2">
-          <span className="text-[10px] font-black text-slate-500 uppercase ms-1">رصد الدرجة:</span>
-          <div className="flex items-center gap-2">
-            <input type="number" defaultValue={sub?.score ?? ""} max={hw.max_score ?? undefined} min={0}
-              onBlur={e => {
-                const val = e.target.value;
-                update({ score: val === "" ? null : Number(val), status: val === "" ? (sub?.status || "submitted") : "graded" });
-              }}
-              className="w-16 rounded-xl border-2 border-emerald-100 bg-emerald-50/20 py-2 text-sm font-black text-center text-emerald-700 outline-none focus:border-emerald-500" />
-            <span className="text-xs font-bold text-slate-400">/ {hw.max_score}</span>
-          </div>
+           <span className="text-[10px] font-black text-slate-500 uppercase ms-1">التقييم:</span>
+           <select value={level || ""} onChange={e => update({ level: e.target.value || null, status: e.target.value ? "graded" : (sub?.status || "submitted") })} className="rounded-xl border-2 border-emerald-100 bg-emerald-50/20 px-3 py-2 text-sm font-black text-emerald-700 outline-none focus:border-emerald-500">
+             <option value="">غير مقيم</option>
+             {EVALUATION_LEVELS.map(item => <option key={item} value={item}>{item}</option>)}
+           </select>
         </div>
         <div className="flex-1 relative">
           <input defaultValue={sub?.note ?? ""} placeholder="اكتب ملاحظة أو توجيه للطالب هنا (تظهر له فوراً)..."
@@ -303,10 +308,10 @@ function StudentSubmissionRow({ student, hw, sub, onUpdate }: { student: Student
         {isGrading && <Loader2 className="h-5 w-5 animate-spin text-primary shrink-0" />}
       </div>
 
-      {showImg && imgUrl && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 p-6 animate-in fade-in" onClick={() => setShowImg(false)}>
+       {showImg && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 p-6 animate-in fade-in" onClick={() => setShowImg(null)}>
           <button className="absolute top-6 left-6 text-white p-3 bg-white/10 rounded-full hover:bg-white/20 transition-all"><X className="h-10 w-10" /></button>
-          <img src={imgUrl} className="max-w-full max-h-full object-contain rounded-lg shadow-2xl" alt="homework full view" />
+           <img src={showImg} className="max-w-full max-h-full object-contain rounded-lg shadow-2xl" alt="homework full view" />
         </div>
       )}
     </div>
