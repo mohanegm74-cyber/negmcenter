@@ -552,3 +552,69 @@ export const getHomeworkSubmissionFileUrls = createServerFn({ method: "POST" })
     }));
     return { urls: urls.filter(Boolean) as string[] };
   });
+
+/** مؤشرات الرئيسية: مستويات الطلاب، من سلّم الواجب، الأكثر تفاعلاً */
+export const getDashboardInsightsAdmin = createServerFn({ method: "GET" })
+  .middleware([requireAuthMiddleware])
+  .handler(async () => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const since = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+    const [st, subs, hw, att, qs, recs] = await Promise.all([
+      supabaseAdmin.from("students").select("id,full_name,code,grade,group_id").eq("active", true),
+      supabaseAdmin.from("homework_submissions").select("id,student_id,homework_id,level,status,submitted_at").order("submitted_at", { ascending: false }).limit(400),
+      supabaseAdmin.from("homework").select("id,title"),
+      supabaseAdmin.from("attendance").select("student_id,status,date").gte("date", since),
+      supabaseAdmin.from("questions").select("student_id,created_at").gte("created_at", since),
+      supabaseAdmin.from("student_records").select("student_id,exam_level,recitation_level,date").gte("date", since),
+    ]);
+
+    const students = st.data || [];
+    const nameOf = new Map(students.map((s: any) => [s.id, s]));
+    const hwTitle = new Map((hw.data || []).map((h: any) => [h.id, h.title]));
+
+    // توزيع المستويات
+    const levels: Record<string, number> = {};
+    for (const s of subs.data || []) if (s.level) levels[s.level] = (levels[s.level] || 0) + 1;
+    for (const r of recs.data || []) if (r.exam_level) levels[r.exam_level] = (levels[r.exam_level] || 0) + 1;
+
+    // من سلّم الواجب
+    const submitters = (subs.data || [])
+      .filter((s: any) => s.submitted_at)
+      .slice(0, 12)
+      .map((s: any) => ({
+        id: s.id,
+        student: nameOf.get(s.student_id)?.full_name || "—",
+        grade: nameOf.get(s.student_id)?.grade || "",
+        homework: hwTitle.get(s.homework_id) || "واجب",
+        level: s.level || null,
+        status: s.status,
+        submitted_at: s.submitted_at,
+      }));
+
+    // الأكثر تفاعلاً
+    const score = new Map<string, { present: number; subs: number; questions: number }>();
+    const bump = (id: string, k: "present" | "subs" | "questions") => {
+      if (!id || !nameOf.has(id)) return;
+      const cur = score.get(id) || { present: 0, subs: 0, questions: 0 };
+      cur[k] += 1;
+      score.set(id, cur);
+    };
+    for (const a of att.data || []) if (a.status === "present") bump(a.student_id, "present");
+    for (const s of subs.data || []) if (s.submitted_at) bump(s.student_id, "subs");
+    for (const q of qs.data || []) bump(q.student_id, "questions");
+
+    const topActive = [...score.entries()]
+      .map(([id, v]) => ({
+        id,
+        name: nameOf.get(id)?.full_name || "—",
+        grade: nameOf.get(id)?.grade || "",
+        ...v,
+        total: v.present + v.subs * 2 + v.questions,
+      }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 8);
+
+    const submittedCount = new Set((subs.data || []).filter((s: any) => s.submitted_at).map((s: any) => s.student_id)).size;
+
+    return { levels, submitters, topActive, submittedCount, totalStudents: students.length };
+  });
