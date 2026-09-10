@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { BrandLogo } from "@/components/BrandLogo";
 import { ExamsTab } from "@/components/ExamsTab";
-import { getBoardImagesPortal, getStudentPortal, updateStudentProfile, askTeacher, deleteStudentQuestionPortal, submitHomeworkText, createHomeworkUploadUrl, finalizeHomeworkUpload, getSubmissionUrl, markNotesAsRead, deleteCertificatePortal } from "@/lib/student.functions";
+import { getBoardImagesPortal, getStudentPortal, updateStudentProfile, askTeacher, deleteStudentQuestionPortal, submitHomeworkText, createHomeworkUploadUrl, finalizeHomeworkUpload, getSubmissionUrl, markNotesAsRead, deleteCertificatePortal, deleteHomeworkImage } from "@/lib/student.functions";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { GRADES } from "@/lib/exam-constants";
@@ -456,22 +456,36 @@ function Portal() {
 function HomeworkItem({ h, studentCode, submission, onRefresh }: any) {
   const [text, setText] = useState(submission?.answer_text || "");
   const [busy, setBusy] = useState(false);
-  const [imageUrls, setImageUrls] = useState<string[]>([]);
+  const [images, setImages] = useState<{ path: string; url: string }[]>([]);
   const submitText = useServerFn(submitHomeworkText);
   const getUploadUrl = useServerFn(createHomeworkUploadUrl);
   const finalizeUpload = useServerFn(finalizeHomeworkUpload);
   const getSubUrl = useServerFn(getSubmissionUrl);
+  const deleteImage = useServerFn(deleteHomeworkImage);
 
   useEffect(() => {
     let cancelled = false;
-    const paths = Array.isArray(submission?.file_urls) && submission.file_urls.length
+    const paths: string[] = Array.isArray(submission?.file_urls) && submission.file_urls.length
       ? submission.file_urls
       : submission?.file_url ? [submission.file_url] : [];
-    Promise.all(paths.map((path: string) => getSubUrl({ data: { code: studentCode, path } }).then(res => res.url)))
-      .then(urls => { if (!cancelled) setImageUrls(urls); })
-      .catch(() => { if (!cancelled) setImageUrls([]); });
+    Promise.all(paths.map((path: string) => getSubUrl({ data: { code: studentCode, path } }).then(res => ({ path, url: res.url }))))
+      .then(list => { if (!cancelled) setImages(list); })
+      .catch(() => { if (!cancelled) setImages([]); });
     return () => { cancelled = true; };
   }, [submission, studentCode]);
+
+  async function handleDeleteImage(path: string) {
+    if (!confirm("هل تريد حذف هذه الصورة من حل الواجب؟")) return;
+    setBusy(true);
+    const t = toast.loading("جاري حذف الصورة...");
+    try {
+      await deleteImage({ data: { code: studentCode, homework_id: h.id, path } });
+      setImages(list => list.filter(i => i.path !== path));
+      toast.success("تم حذف الصورة", { id: t });
+      onRefresh();
+    } catch (err: any) { toast.error(err.message, { id: t }); }
+    finally { setBusy(false); }
+  }
 
   async function handleTextSubmit() {
     if (!text.trim()) return;
