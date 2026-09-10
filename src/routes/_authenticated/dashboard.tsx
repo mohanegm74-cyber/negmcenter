@@ -1,8 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Users, Boxes, ClipboardCheck, CalendarX, Wallet, TrendingUp, AlertCircle, Loader2, Sparkles, ArrowUpRight, RefreshCw, ArrowDownCircle, ArrowUpCircle } from "lucide-react";
+import { Users, Boxes, ClipboardCheck, CalendarX, TrendingUp, Loader2, Sparkles, RefreshCw, BookOpen, Flame, BarChart3 } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
-import { getDashboardStatsAdmin } from "@/lib/admin.functions";
+import { getDashboardStatsAdmin, getDashboardInsightsAdmin } from "@/lib/admin.functions";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({ meta: [{ title: "لوحة التحكم — الأستاذ" }, { name: "description", content: "إحصائيات السنتر العامة والموقف المالي." }] }),
