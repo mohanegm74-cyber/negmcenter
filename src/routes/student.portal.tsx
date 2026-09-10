@@ -7,11 +7,11 @@ import {
   BookOpen, MessageCircleQuestion, Sparkles,
   Save, Loader2, Award, Calendar, Home, ClipboardList, 
   MessageSquare, UserCircle, CreditCard, ChevronLeft,
-  LogOut, CheckCircle2, Send, ImageIcon, FileText, UploadCloud, Trash2, Code, Phone, ShieldAlert
+  LogOut, CheckCircle2, Send, ImageIcon, FileText, UploadCloud, Trash2, Code, Phone, ShieldAlert, X
 } from "lucide-react";
 import { BrandLogo } from "@/components/BrandLogo";
 import { ExamsTab } from "@/components/ExamsTab";
-import { getBoardImagesPortal, getStudentPortal, updateStudentProfile, askTeacher, deleteStudentQuestionPortal, submitHomeworkText, createHomeworkUploadUrl, finalizeHomeworkUpload, getSubmissionUrl, markNotesAsRead, deleteCertificatePortal } from "@/lib/student.functions";
+import { getBoardImagesPortal, getStudentPortal, updateStudentProfile, askTeacher, deleteStudentQuestionPortal, submitHomeworkText, createHomeworkUploadUrl, finalizeHomeworkUpload, getSubmissionUrl, markNotesAsRead, deleteCertificatePortal, deleteHomeworkImage } from "@/lib/student.functions";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { GRADES } from "@/lib/exam-constants";
@@ -456,22 +456,36 @@ function Portal() {
 function HomeworkItem({ h, studentCode, submission, onRefresh }: any) {
   const [text, setText] = useState(submission?.answer_text || "");
   const [busy, setBusy] = useState(false);
-  const [imageUrls, setImageUrls] = useState<string[]>([]);
+  const [images, setImages] = useState<{ path: string; url: string }[]>([]);
   const submitText = useServerFn(submitHomeworkText);
   const getUploadUrl = useServerFn(createHomeworkUploadUrl);
   const finalizeUpload = useServerFn(finalizeHomeworkUpload);
   const getSubUrl = useServerFn(getSubmissionUrl);
+  const deleteImage = useServerFn(deleteHomeworkImage);
 
   useEffect(() => {
     let cancelled = false;
-    const paths = Array.isArray(submission?.file_urls) && submission.file_urls.length
+    const paths: string[] = Array.isArray(submission?.file_urls) && submission.file_urls.length
       ? submission.file_urls
       : submission?.file_url ? [submission.file_url] : [];
-    Promise.all(paths.map((path: string) => getSubUrl({ data: { code: studentCode, path } }).then(res => res.url)))
-      .then(urls => { if (!cancelled) setImageUrls(urls); })
-      .catch(() => { if (!cancelled) setImageUrls([]); });
+    Promise.all(paths.map((path: string) => getSubUrl({ data: { code: studentCode, path } }).then(res => ({ path, url: res.url }))))
+      .then(list => { if (!cancelled) setImages(list); })
+      .catch(() => { if (!cancelled) setImages([]); });
     return () => { cancelled = true; };
   }, [submission, studentCode]);
+
+  async function handleDeleteImage(path: string) {
+    if (!confirm("هل تريد حذف هذه الصورة من حل الواجب؟")) return;
+    setBusy(true);
+    const t = toast.loading("جاري حذف الصورة...");
+    try {
+      await deleteImage({ data: { code: studentCode, homework_id: h.id, path } });
+      setImages(list => list.filter(i => i.path !== path));
+      toast.success("تم حذف الصورة", { id: t });
+      onRefresh();
+    } catch (err: any) { toast.error(err.message, { id: t }); }
+    finally { setBusy(false); }
+  }
 
   async function handleTextSubmit() {
     if (!text.trim()) return;
@@ -559,15 +573,23 @@ function HomeworkItem({ h, studentCode, submission, onRefresh }: any) {
         
         <div className="space-y-4">
           <div className="text-[11px] font-black text-slate-500 uppercase ms-2 flex items-center gap-1.5"><ImageIcon className="h-3.5 w-3.5" /> تصوير الكراسة ورفع الصورة:</div>
-          {imageUrls.length ? (
+          {images.length ? (
             <div className="grid grid-cols-2 gap-3 rounded-2xl border-2 border-slate-100 bg-slate-50 p-3 shadow-inner">
-              {imageUrls.map((url, index) => <div key={url} className="relative overflow-hidden rounded-xl bg-white">
-                <img src={url} className="h-40 w-full object-contain" alt={`صورة حل الواجب ${index + 1}`} />
+              {images.map((img, index) => <div key={img.path} className="relative overflow-hidden rounded-xl bg-white">
+                <img src={img.url} className="h-40 w-full object-contain" alt={`صورة حل الواجب ${index + 1}`} />
               {!isGraded && (
-                <label className="absolute inset-0 flex cursor-pointer flex-col items-center justify-center bg-black/40 opacity-0 transition-all hover:opacity-100">
-                  <div className="bg-white text-primary px-5 py-2.5 rounded-2xl text-xs font-black shadow-xl">تغيير الصورة المرفوعة</div>
-                  <input type="file" accept="image/*" multiple className="hidden" onChange={handleFileUpload} />
-                </label>
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/40 opacity-0 transition-all hover:opacity-100">
+                  <label className="cursor-pointer rounded-2xl bg-white px-5 py-2.5 text-xs font-black text-primary shadow-xl">
+                    تغيير الصورة
+                    <input type="file" accept="image/*" multiple className="hidden" onChange={handleFileUpload} />
+                  </label>
+                  <button type="button" disabled={busy} onClick={() => handleDeleteImage(img.path)} className="rounded-2xl bg-rose-600 px-5 py-2.5 text-xs font-black text-white shadow-xl disabled:opacity-50">حذف الصورة</button>
+                </div>
+              )}
+              {!isGraded && (
+                <button type="button" disabled={busy} onClick={() => handleDeleteImage(img.path)} aria-label="حذف الصورة" className="absolute top-2 left-2 flex h-8 w-8 items-center justify-center rounded-full bg-rose-600 text-white shadow-lg disabled:opacity-50">
+                  <X className="h-4 w-4" />
+                </button>
               )}
               </div>)}
               {!isGraded && <label className="col-span-2 flex cursor-pointer items-center justify-center rounded-xl border-2 border-dashed border-slate-200 py-3 text-xs font-black text-primary hover:bg-white">إضافة صور أخرى<input type="file" accept="image/*" multiple className="hidden" onChange={handleFileUpload} /></label>}

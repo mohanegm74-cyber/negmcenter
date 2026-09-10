@@ -300,3 +300,19 @@ export const getBoardImagesPortal = createServerFn({ method: "POST" })
     }));
     return { posts };
   });
+
+/** حذف صورة واجب رفعها الطالب (تراجع) */
+export const deleteHomeworkImage = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) => d as { code: string; homework_id: string; path: string })
+  .handler(async ({ data }) => {
+    const { requireStudent } = await import("./student.server");
+    const { db, student } = await requireStudent(data.code);
+    const { data: existing } = await db.from("homework_submissions").select("id,file_urls,file_url,status").eq("student_id", student.id).eq("homework_id", data.homework_id).maybeSingle();
+    if (!existing) throw new Error("لا يوجد تسليم لهذا الواجب");
+    if (existing.status === "graded") throw new Error("لا يمكن التعديل بعد التقييم");
+    const oldPaths: string[] = Array.isArray(existing.file_urls) ? (existing.file_urls as string[]) : existing.file_url ? [existing.file_url] : [];
+    const file_urls = oldPaths.filter((p) => p !== data.path);
+    await db.storage.from("submissions").remove([data.path]);
+    await db.from("homework_submissions").update({ file_urls, file_url: file_urls[file_urls.length - 1] || null }).eq("id", existing.id);
+    return { ok: true };
+  });
