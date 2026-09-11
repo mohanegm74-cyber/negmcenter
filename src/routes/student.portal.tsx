@@ -462,6 +462,9 @@ function HomeworkItem({ h, studentCode, submission, onRefresh }: any) {
   const finalizeUpload = useServerFn(finalizeHomeworkUpload);
   const getSubUrl = useServerFn(getSubmissionUrl);
   const deleteImage = useServerFn(deleteHomeworkImage);
+  const hasSavedText = Boolean(submission?.answer_text);
+
+  useEffect(() => { setText(submission?.answer_text || ""); }, [submission?.answer_text]);
 
   useEffect(() => {
     let cancelled = false;
