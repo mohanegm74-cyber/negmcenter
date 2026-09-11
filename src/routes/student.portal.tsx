@@ -582,8 +582,14 @@ function HomeworkItem({ h, studentCode, submission, onRefresh }: any) {
             className="w-full rounded-2xl border-2 border-slate-100 p-4 text-sm font-bold outline-none focus:border-primary focus:bg-slate-50 transition-all" 
           />
           {!isGraded && (
-            <button onClick={handleTextSubmit} disabled={busy} className="w-full sm:w-auto rounded-xl bg-primary px-8 py-3 text-sm font-black text-white shadow-lg shadow-primary/20 hover:scale-105 transition-all">حفظ الحل المكتوب</button>
+            <div className="flex flex-wrap gap-3">
+              <button onClick={handleTextSubmit} disabled={busy} className="rounded-xl bg-primary px-8 py-3 text-sm font-black text-white shadow-lg shadow-primary/20 hover:scale-105 transition-all disabled:opacity-50">{hasSavedText ? "حفظ التعديل" : "حفظ الحل المكتوب"}</button>
+              {hasSavedText && (
+                <button onClick={handleTextClear} disabled={busy} className="rounded-xl border-2 border-rose-200 bg-white px-6 py-3 text-sm font-black text-rose-600 hover:bg-rose-50 transition-all disabled:opacity-50">حذف الحل المكتوب</button>
+              )}
+            </div>
           )}
+          {isGraded && <div className="text-[11px] font-black text-emerald-700">تم تقييم الواجب، لا يمكن التعديل بعد التقييم.</div>}
         </div>
         
         <div className="space-y-4">
