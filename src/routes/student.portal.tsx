@@ -488,11 +488,23 @@ function HomeworkItem({ h, studentCode, submission, onRefresh }: any) {
   }
 
   async function handleTextSubmit() {
-    if (!text.trim()) return;
+    if (!text.trim()) { toast.error("اكتب حل الواجب أولاً"); return; }
     setBusy(true);
     try {
       await submitText({ data: { code: studentCode, homework_id: h.id, answer_text: text } });
-      toast.success("تم حفظ إجابتك النصية بنجاح");
+      toast.success(hasSavedText ? "تم تعديل حل الواجب وحفظه" : "تم حفظ إجابتك النصية بنجاح");
+      onRefresh();
+    } catch (e: any) { toast.error(e.message); }
+    finally { setBusy(false); }
+  }
+
+  async function handleTextClear() {
+    if (!confirm("هل تريد حذف الحل المكتوب؟")) return;
+    setBusy(true);
+    try {
+      await submitText({ data: { code: studentCode, homework_id: h.id, answer_text: "" } });
+      setText("");
+      toast.success("تم حذف الحل المكتوب");
       onRefresh();
     } catch (e: any) { toast.error(e.message); }
     finally { setBusy(false); }
