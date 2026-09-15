@@ -47,6 +47,9 @@ function Portal() {
   const boardFn = useServerFn(getBoardImagesPortal);
   const [boardPosts, setBoardPosts] = useState<any[]>([]);
   const [boardLoading, setBoardLoading] = useState(false);
+  const lessonsFn = useServerFn(getLessonsPortal);
+  const [lessons, setLessons] = useState<any[]>([]);
+  const [lessonsLoading, setLessonsLoading] = useState(false);
 
   useEffect(() => {
     const c = localStorage.getItem("najm_student_code");
