@@ -58,6 +58,7 @@ function TeacherShell() {
     { to: "/finance", label: "الماليات", icon: Wallet },
     { to: "/homework", label: "الواجبات", icon: BookOpen },
     { to: "/board", label: "صورة السبورة", icon: Image },
+    { to: "/lessons", label: "شرح الدروس", icon: GraduationCap },
      { to: "/exams", label: "الاختبارات الذكية", icon: FileQuestion },
      { to: "/contests", label: "مسابقات نجمية", icon: Trophy },
      { to: "/records", label: "الملاحظات والدرجات", icon: ClipboardPenLine },
