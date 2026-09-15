@@ -22,7 +22,7 @@ export const Route = createFileRoute("/student/portal")({
   component: Portal,
 });
 
-type Tab = "info" | "schedule" | "attendance" | "homework" | "ask" | "notes" | "finance" | "exams" | "board";
+type Tab = "info" | "schedule" | "attendance" | "homework" | "ask" | "notes" | "finance" | "exams" | "board" | "lessons";
 
 function homeworkLevel(submission: any, maxScore?: number | null) {
   if (submission?.level) return submission.level;
