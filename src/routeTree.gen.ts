@@ -24,6 +24,7 @@ import { Route as AuthenticatedFinanceRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedGroupListsRouteImport } from './routes/_authenticated/group-lists'
 import { Route as AuthenticatedGroupsRouteImport } from './routes/_authenticated/groups'
 import { Route as AuthenticatedHomeworkRouteImport } from './routes/_authenticated/homework'
+import { Route as AuthenticatedLessonsRouteImport } from './routes/_authenticated/lessons'
 import { Route as AuthenticatedQuestionsRouteImport } from './routes/_authenticated/questions'
 import { Route as AuthenticatedRecordsRouteImport } from './routes/_authenticated/records'
 import { Route as AuthenticatedReportsRouteImport } from './routes/_authenticated/reports'
@@ -108,6 +109,11 @@ const AuthenticatedHomeworkRoute = AuthenticatedHomeworkRouteImport.update({
   path: '/homework',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedLessonsRoute = AuthenticatedLessonsRouteImport.update({
+  id: '/lessons',
+  path: '/lessons',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedQuestionsRoute = AuthenticatedQuestionsRouteImport.update({
   id: '/questions',
   path: '/questions',
@@ -164,6 +170,7 @@ export interface FileRoutesByFullPath {
   '/group-lists': typeof AuthenticatedGroupListsRoute
   '/groups': typeof AuthenticatedGroupsRoute
   '/homework': typeof AuthenticatedHomeworkRoute
+  '/lessons': typeof AuthenticatedLessonsRoute
   '/questions': typeof AuthenticatedQuestionsRoute
   '/records': typeof AuthenticatedRecordsRoute
   '/reports': typeof AuthenticatedReportsRoute
@@ -188,6 +195,7 @@ export interface FileRoutesByTo {
   '/group-lists': typeof AuthenticatedGroupListsRoute
   '/groups': typeof AuthenticatedGroupsRoute
   '/homework': typeof AuthenticatedHomeworkRoute
+  '/lessons': typeof AuthenticatedLessonsRoute
   '/questions': typeof AuthenticatedQuestionsRoute
   '/records': typeof AuthenticatedRecordsRoute
   '/reports': typeof AuthenticatedReportsRoute
@@ -214,6 +222,7 @@ export interface FileRoutesById {
   '/_authenticated/group-lists': typeof AuthenticatedGroupListsRoute
   '/_authenticated/groups': typeof AuthenticatedGroupsRoute
   '/_authenticated/homework': typeof AuthenticatedHomeworkRoute
+  '/_authenticated/lessons': typeof AuthenticatedLessonsRoute
   '/_authenticated/questions': typeof AuthenticatedQuestionsRoute
   '/_authenticated/records': typeof AuthenticatedRecordsRoute
   '/_authenticated/reports': typeof AuthenticatedReportsRoute
@@ -240,6 +249,7 @@ export interface FileRouteTypes {
     | '/group-lists'
     | '/groups'
     | '/homework'
+    | '/lessons'
     | '/questions'
     | '/records'
     | '/reports'
@@ -264,6 +274,7 @@ export interface FileRouteTypes {
     | '/group-lists'
     | '/groups'
     | '/homework'
+    | '/lessons'
     | '/questions'
     | '/records'
     | '/reports'
@@ -289,6 +300,7 @@ export interface FileRouteTypes {
     | '/_authenticated/group-lists'
     | '/_authenticated/groups'
     | '/_authenticated/homework'
+    | '/_authenticated/lessons'
     | '/_authenticated/questions'
     | '/_authenticated/records'
     | '/_authenticated/reports'
@@ -414,6 +426,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedHomeworkRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/lessons': {
+      id: '/_authenticated/lessons'
+      path: '/lessons'
+      fullPath: '/lessons'
+      preLoaderRoute: typeof AuthenticatedLessonsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/questions': {
       id: '/_authenticated/questions'
       path: '/questions'
@@ -486,6 +505,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedGroupListsRoute: typeof AuthenticatedGroupListsRoute
   AuthenticatedGroupsRoute: typeof AuthenticatedGroupsRoute
   AuthenticatedHomeworkRoute: typeof AuthenticatedHomeworkRoute
+  AuthenticatedLessonsRoute: typeof AuthenticatedLessonsRoute
   AuthenticatedQuestionsRoute: typeof AuthenticatedQuestionsRoute
   AuthenticatedRecordsRoute: typeof AuthenticatedRecordsRoute
   AuthenticatedReportsRoute: typeof AuthenticatedReportsRoute
@@ -507,6 +527,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedGroupListsRoute: AuthenticatedGroupListsRoute,
   AuthenticatedGroupsRoute: AuthenticatedGroupsRoute,
   AuthenticatedHomeworkRoute: AuthenticatedHomeworkRoute,
+  AuthenticatedLessonsRoute: AuthenticatedLessonsRoute,
   AuthenticatedQuestionsRoute: AuthenticatedQuestionsRoute,
   AuthenticatedRecordsRoute: AuthenticatedRecordsRoute,
   AuthenticatedReportsRoute: AuthenticatedReportsRoute,

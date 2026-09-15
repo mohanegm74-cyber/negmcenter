@@ -7,11 +7,11 @@ import {
   BookOpen, MessageCircleQuestion, Sparkles,
   Save, Loader2, Award, Calendar, Home, ClipboardList, 
   MessageSquare, UserCircle, CreditCard, ChevronLeft,
-  LogOut, CheckCircle2, Send, ImageIcon, FileText, UploadCloud, Trash2, Code, Phone, ShieldAlert, X
+  LogOut, CheckCircle2, Send, ImageIcon, FileText, UploadCloud, Trash2, Code, Phone, ShieldAlert, X, GraduationCap
 } from "lucide-react";
 import { BrandLogo } from "@/components/BrandLogo";
 import { ExamsTab } from "@/components/ExamsTab";
-import { getBoardImagesPortal, getStudentPortal, updateStudentProfile, askTeacher, deleteStudentQuestionPortal, submitHomeworkText, createHomeworkUploadUrl, finalizeHomeworkUpload, getSubmissionUrl, markNotesAsRead, deleteCertificatePortal, deleteHomeworkImage } from "@/lib/student.functions";
+import { getLessonsPortal, getBoardImagesPortal, getStudentPortal, updateStudentProfile, askTeacher, deleteStudentQuestionPortal, submitHomeworkText, createHomeworkUploadUrl, finalizeHomeworkUpload, getSubmissionUrl, markNotesAsRead, deleteCertificatePortal, deleteHomeworkImage } from "@/lib/student.functions";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { GRADES } from "@/lib/exam-constants";
@@ -22,7 +22,7 @@ export const Route = createFileRoute("/student/portal")({
   component: Portal,
 });
 
-type Tab = "info" | "schedule" | "attendance" | "homework" | "ask" | "notes" | "finance" | "exams" | "board";
+type Tab = "info" | "schedule" | "attendance" | "homework" | "ask" | "notes" | "finance" | "exams" | "board" | "lessons";
 
 function homeworkLevel(submission: any, maxScore?: number | null) {
   if (submission?.level) return submission.level;
@@ -47,6 +47,9 @@ function Portal() {
   const boardFn = useServerFn(getBoardImagesPortal);
   const [boardPosts, setBoardPosts] = useState<any[]>([]);
   const [boardLoading, setBoardLoading] = useState(false);
+  const lessonsFn = useServerFn(getLessonsPortal);
+  const [lessons, setLessons] = useState<any[]>([]);
+  const [lessonsLoading, setLessonsLoading] = useState(false);
 
   useEffect(() => {
     const c = localStorage.getItem("najm_student_code");
@@ -75,6 +78,16 @@ function Portal() {
         .then((r: any) => setBoardPosts(r.posts || []))
         .catch(() => toast.error("فشل تحميل صور السبورة"))
         .finally(() => setBoardLoading(false));
+    }
+  }, [tab]);
+
+  useEffect(() => {
+    if (tab === "lessons" && data?.student?.code && !data.pending) {
+      setLessonsLoading(true);
+      lessonsFn({ data: { code: data.student.code } })
+        .then((r: any) => setLessons(r.lessons || []))
+        .catch(() => toast.error("فشل تحميل شرح الدروس"))
+        .finally(() => setLessonsLoading(false));
     }
   }, [tab]);
 
@@ -245,6 +258,7 @@ function Portal() {
           <TabBtn label="الحضور والغياب" icon={ClipboardList} active={tab === "attendance"} onClick={() => setTab("attendance")} />
           <TabBtn label="الواجبات والشهادات" icon={BookOpen} active={tab === "homework"} badge={counts?.pendingHw > 0 || counts?.certificates > 0 ? "!" : null} onClick={() => setTab("homework")} />
           <TabBtn label="صورة السبورة" icon={ImageIcon} active={tab === "board"} onClick={() => setTab("board")} />
+          <TabBtn label="شرح الدروس" icon={GraduationCap} active={tab === "lessons"} onClick={() => setTab("lessons")} />
           <TabBtn label="الاختبارات" icon={Sparkles} active={tab === "exams"} onClick={() => setTab("exams")} />
           <TabBtn label="الموقف المالي" icon={CreditCard} active={tab === "finance"} onClick={() => setTab("finance")} />
           <TabBtn label="اسأل معلمك" icon={MessageCircleQuestion} active={tab === "ask"} onClick={() => setTab("ask")} />

@@ -316,3 +316,32 @@ export const deleteHomeworkImage = createServerFn({ method: "POST" })
     await db.from("homework_submissions").update({ file_urls, file_url: file_urls[file_urls.length - 1] || null }).eq("id", existing.id);
     return { ok: true };
   });
+
+/** شرح الدروس المنشورة للطالب */
+export const getLessonsPortal = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) => d as { code: string })
+  .handler(async ({ data }) => {
+    const { requireStudent } = await import("./student.server");
+    const { gradeMatches } = await import("./exam-constants");
+    const { db, student } = await requireStudent(data.code);
+    const { data: rows } = await db.from("lessons").select("*").eq("published", true).order("date", { ascending: false }).order("created_at", { ascending: false });
+    const filtered = (rows || []).filter((r: any) => {
+      if (r.group_id) return r.group_id === student.group_id;
+      if (r.grade) return student.grade ? gradeMatches(r.grade, student.grade) : false;
+      return true;
+    });
+    const lessons = await Promise.all(filtered.map(async (p: any) => {
+      const paths: string[] = Array.isArray(p.paths) ? p.paths : [];
+      const urls = await Promise.all(paths.map(async (path) => {
+        const { data: s } = await db.storage.from("lesson-files").createSignedUrl(path, 3600);
+        return s?.signedUrl || null;
+      }));
+      return {
+        id: p.id, title: p.title, subject: p.subject, grade: p.grade, date: p.date,
+        explanation: p.explanation, vocabulary: p.vocabulary, qa: p.qa, beauty: p.beauty,
+        rhetoric: p.rhetoric, grammar: p.grammar, exercises: p.exercises,
+        urls: urls.filter(Boolean) as string[],
+      };
+    }));
+    return { lessons };
+  });

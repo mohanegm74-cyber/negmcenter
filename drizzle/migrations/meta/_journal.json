@@ -8,6 +8,13 @@
       "when": 1788289199431,
       "tag": "0000_add_levels_multi_files_and_records",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1789498928786,
+      "tag": "0001_create_lessons",
+      "breakpoints": true
     }
   ]
 }

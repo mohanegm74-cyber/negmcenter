@@ -552,6 +552,80 @@ export type Database = {
           },
         ]
       }
+      lessons: {
+        Row: {
+          ai_raw: Json | null
+          ai_status: string
+          beauty: string | null
+          created_at: string
+          date: string
+          exercises: string | null
+          explanation: string | null
+          grade: string | null
+          grammar: string | null
+          group_id: string | null
+          id: string
+          paths: Json
+          published: boolean
+          qa: string | null
+          rhetoric: string | null
+          subject: string | null
+          title: string
+          updated_at: string
+          vocabulary: string | null
+        }
+        Insert: {
+          ai_raw?: Json | null
+          ai_status?: string
+          beauty?: string | null
+          created_at?: string
+          date?: string
+          exercises?: string | null
+          explanation?: string | null
+          grade?: string | null
+          grammar?: string | null
+          group_id?: string | null
+          id?: string
+          paths?: Json
+          published?: boolean
+          qa?: string | null
+          rhetoric?: string | null
+          subject?: string | null
+          title: string
+          updated_at?: string
+          vocabulary?: string | null
+        }
+        Update: {
+          ai_raw?: Json | null
+          ai_status?: string
+          beauty?: string | null
+          created_at?: string
+          date?: string
+          exercises?: string | null
+          explanation?: string | null
+          grade?: string | null
+          grammar?: string | null
+          group_id?: string | null
+          id?: string
+          paths?: Json
+          published?: boolean
+          qa?: string | null
+          rhetoric?: string | null
+          subject?: string | null
+          title?: string
+          updated_at?: string
+          vocabulary?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lessons_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       payments: {
         Row: {
           amount: number
