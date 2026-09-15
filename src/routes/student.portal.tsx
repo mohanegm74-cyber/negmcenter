@@ -7,7 +7,7 @@ import {
   BookOpen, MessageCircleQuestion, Sparkles,
   Save, Loader2, Award, Calendar, Home, ClipboardList, 
   MessageSquare, UserCircle, CreditCard, ChevronLeft,
-  LogOut, CheckCircle2, Send, ImageIcon, FileText, UploadCloud, Trash2, Code, Phone, ShieldAlert, X
+  LogOut, CheckCircle2, Send, ImageIcon, FileText, UploadCloud, Trash2, Code, Phone, ShieldAlert, X, GraduationCap
 } from "lucide-react";
 import { BrandLogo } from "@/components/BrandLogo";
 import { ExamsTab } from "@/components/ExamsTab";
