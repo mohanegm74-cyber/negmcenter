@@ -618,3 +618,87 @@ export const getDashboardInsightsAdmin = createServerFn({ method: "GET" })
 
     return { levels, submitters, topActive, submittedCount, totalStudents: students.length };
   });
+
+/* ===== شرح الدروس ===== */
+
+export const getLessonsAdmin = createServerFn({ method: "GET" })
+  .middleware([requireAuthMiddleware])
+  .handler(async () => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const [g, l] = await Promise.all([
+      supabaseAdmin.from("groups").select("id, name, grade").order("name"),
+      supabaseAdmin.from("lessons").select("*").order("date", { ascending: false }).order("created_at", { ascending: false }),
+    ]);
+    const lessons = await Promise.all((l.data || []).map(async (p: any) => {
+      const paths: string[] = Array.isArray(p.paths) ? p.paths : [];
+      const files = await Promise.all(paths.map(async (path) => {
+        const { data } = await supabaseAdmin.storage.from("lesson-files").createSignedUrl(path, 3600);
+        return data?.signedUrl ? { path, url: data.signedUrl } : null;
+      }));
+      return { ...p, paths, files: files.filter(Boolean) as { path: string; url: string }[] };
+    }));
+    return { groups: g.data || [], lessons };
+  });
+
+export const createLessonUploadUrlAdmin = createServerFn({ method: "POST" })
+  .middleware([requireAuthMiddleware])
+  .inputValidator((d: unknown) => d as { filename: string })
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const safe = String(data.filename || "lesson.pdf").replace(/[^\w.\-]/g, "_").slice(-60);
+    const path = `${new Date().toISOString().slice(0, 10)}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${safe}`;
+    const { data: res, error } = await supabaseAdmin.storage.from("lesson-files").createSignedUploadUrl(path);
+    if (error) throw new Error(error.message);
+    return { path, token: res.token };
+  });
+
+export const saveLessonAdmin = createServerFn({ method: "POST" })
+  .middleware([requireAuthMiddleware])
+  .inputValidator((d: unknown) => d as { id?: string; payload: Record<string, any> })
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const payload = { ...data.payload, updated_at: new Date().toISOString() } as any;
+    if (!payload.title) throw new Error("عنوان الدرس مطلوب");
+    if (data.id) {
+      const { error } = await supabaseAdmin.from("lessons").update(payload).eq("id", data.id);
+      if (error) throw new Error(error.message);
+      return { ok: true, id: data.id };
+    }
+    const { data: row, error } = await supabaseAdmin.from("lessons").insert(payload).select("id").single();
+    if (error) throw new Error(error.message);
+    return { ok: true, id: row.id };
+  });
+
+export const publishLessonAdmin = createServerFn({ method: "POST" })
+  .middleware([requireAuthMiddleware])
+  .inputValidator((d: unknown) => d as { id: string; published: boolean })
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await supabaseAdmin.from("lessons").update({ published: data.published, updated_at: new Date().toISOString() }).eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const deleteLessonAdmin = createServerFn({ method: "POST" })
+  .middleware([requireAuthMiddleware])
+  .inputValidator((d: unknown) => d as { id: string })
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: row } = await supabaseAdmin.from("lessons").select("paths").eq("id", data.id).maybeSingle();
+    const paths: string[] = Array.isArray(row?.paths) ? (row!.paths as any) : [];
+    if (paths.length) await supabaseAdmin.storage.from("lesson-files").remove(paths);
+    const { error } = await supabaseAdmin.from("lessons").delete().eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+/**
+ * مُجهَّز للربط بخدمة ذكاء اصطناعي خارجية لاحقًا (لا يستهلك أي رصيد حاليًا).
+ * عند توفر مفتاح خارجي يمكن تنفيذ الاستدعاء داخل هذه الدالة وإرجاع المسودة.
+ */
+export const generateLessonDraftAdmin = createServerFn({ method: "POST" })
+  .middleware([requireAuthMiddleware])
+  .inputValidator((d: unknown) => d as { id: string })
+  .handler(async () => {
+    return { ok: false, configured: false, message: "خدمة الذكاء الاصطناعي الخارجية غير مُفعّلة بعد. يمكنك كتابة الشرح والأسئلة يدويًا الآن." };
+  });
