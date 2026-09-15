@@ -258,6 +258,7 @@ function Portal() {
           <TabBtn label="الحضور والغياب" icon={ClipboardList} active={tab === "attendance"} onClick={() => setTab("attendance")} />
           <TabBtn label="الواجبات والشهادات" icon={BookOpen} active={tab === "homework"} badge={counts?.pendingHw > 0 || counts?.certificates > 0 ? "!" : null} onClick={() => setTab("homework")} />
           <TabBtn label="صورة السبورة" icon={ImageIcon} active={tab === "board"} onClick={() => setTab("board")} />
+          <TabBtn label="شرح الدروس" icon={GraduationCap} active={tab === "lessons"} onClick={() => setTab("lessons")} />
           <TabBtn label="الاختبارات" icon={Sparkles} active={tab === "exams"} onClick={() => setTab("exams")} />
           <TabBtn label="الموقف المالي" icon={CreditCard} active={tab === "finance"} onClick={() => setTab("finance")} />
           <TabBtn label="اسأل معلمك" icon={MessageCircleQuestion} active={tab === "ask"} onClick={() => setTab("ask")} />
