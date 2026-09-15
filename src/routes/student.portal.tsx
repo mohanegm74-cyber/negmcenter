@@ -81,6 +81,16 @@ function Portal() {
     }
   }, [tab]);
 
+  useEffect(() => {
+    if (tab === "lessons" && data?.student?.code && !data.pending) {
+      setLessonsLoading(true);
+      lessonsFn({ data: { code: data.student.code } })
+        .then((r: any) => setLessons(r.lessons || []))
+        .catch(() => toast.error("فشل تحميل شرح الدروس"))
+        .finally(() => setLessonsLoading(false));
+    }
+  }, [tab]);
+
   async function loadData(c: string) {
     try {
       const res = await loadPortal({ data: { code: c } });
