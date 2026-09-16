@@ -157,23 +157,6 @@ function FinancePage() {
         <FinanceCard icon={<AlertCircle className="h-5 w-5" />} label="إجمالي المتأخرات" value={totals.outstanding} tone="destructive" />
       </div>
 
-      {addingFor && (
-        <form onSubmit={handleAdd} className="rounded-2xl bg-white p-6 shadow-xl border-2 border-primary">
-          <div className="mb-4 flex items-center justify-between">
-            <h3 className="text-lg font-black text-primary">تسجيل حركة لـ: {addingFor.full_name}</h3>
-            <button type="button" onClick={() => setAddingFor(null)} className="p-2 hover:bg-muted rounded-full"><X className="h-5 w-5" /></button>
-          </div>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
-             <FinF name="kind" label="النوع" type="select" options={[{v:"payment",l:"سداد"},{v:"charge",l:"مستحق"},{v:"exempt",l:"إعفاء"}]} />
-            <FinF name="amount" label="المبلغ" type="number" required />
-            <FinF name="month" label="الشهر" defaultValue={month} />
-            <FinF name="paid_at" label="التاريخ" type="date" defaultValue={new Date().toISOString().slice(0, 10)} />
-            <div className="flex items-end">
-              <button type="submit" disabled={busy} className="w-full rounded-lg bg-primary py-2.5 text-sm font-black text-white">{busy ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : "حفظ الحركة"}</button>
-            </div>
-          </div>
-        </form>
-      )}
 
       {editingPayment && (
         <form onSubmit={handleUpdate} className="rounded-2xl bg-white p-6 shadow-xl border-2 border-secondary animate-in zoom-in-95">
