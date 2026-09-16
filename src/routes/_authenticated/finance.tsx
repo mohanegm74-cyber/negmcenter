@@ -157,23 +157,6 @@ function FinancePage() {
         <FinanceCard icon={<AlertCircle className="h-5 w-5" />} label="إجمالي المتأخرات" value={totals.outstanding} tone="destructive" />
       </div>
 
-      {addingFor && (
-        <form onSubmit={handleAdd} className="rounded-2xl bg-white p-6 shadow-xl border-2 border-primary">
-          <div className="mb-4 flex items-center justify-between">
-            <h3 className="text-lg font-black text-primary">تسجيل حركة لـ: {addingFor.full_name}</h3>
-            <button type="button" onClick={() => setAddingFor(null)} className="p-2 hover:bg-muted rounded-full"><X className="h-5 w-5" /></button>
-          </div>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
-             <FinF name="kind" label="النوع" type="select" options={[{v:"payment",l:"سداد"},{v:"charge",l:"مستحق"},{v:"exempt",l:"إعفاء"}]} />
-            <FinF name="amount" label="المبلغ" type="number" required />
-            <FinF name="month" label="الشهر" defaultValue={month} />
-            <FinF name="paid_at" label="التاريخ" type="date" defaultValue={new Date().toISOString().slice(0, 10)} />
-            <div className="flex items-end">
-              <button type="submit" disabled={busy} className="w-full rounded-lg bg-primary py-2.5 text-sm font-black text-white">{busy ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : "حفظ الحركة"}</button>
-            </div>
-          </div>
-        </form>
-      )}
 
       {editingPayment && (
         <form onSubmit={handleUpdate} className="rounded-2xl bg-white p-6 shadow-xl border-2 border-secondary animate-in zoom-in-95">
@@ -240,23 +223,46 @@ function FinancePage() {
             </thead>
             <tbody>
               {rows.map((r) => (
-                <tr key={r.student.id} className="border-t hover:bg-muted/30">
-                  <td className="p-4">
-                    <div className="font-bold">{r.student.full_name}</div>
-                    <div className="text-[10px] text-muted-foreground font-mono">{r.student.code}</div>
-                  </td>
-                  <td className="p-4"><span className="rounded bg-muted px-2 py-1 text-[10px] font-bold">{r.groupName}</span></td>
-                  <td className="p-4 text-center font-mono font-bold">{r.totalDue.toLocaleString("ar-EG")}</td>
-                  <td className="p-4 text-center font-mono font-bold text-secondary">{r.paid.toLocaleString("ar-EG")}</td>
-                  <td className="p-4 text-center font-mono font-bold text-sky-700">{r.exempt.toLocaleString("ar-EG")}</td>
-                  <td className={`p-4 text-center font-mono font-black ${r.balance > 0 ? "text-destructive" : "text-secondary"}`}>{r.balance.toLocaleString("ar-EG")}</td>
-                  <td className="p-4">
-                    <div className="flex justify-center gap-2">
-                      <button onClick={() => setAddingFor(r.student)} className="rounded-lg bg-primary/10 px-3 py-1.5 text-[10px] font-bold text-primary">تسجيل مبلغ</button>
-                      <button onClick={() => setViewingHistory(r.student)} className="rounded-lg bg-muted px-3 py-1.5 text-[10px] font-bold">السجل</button>
-                    </div>
-                  </td>
-                </tr>
+                <>
+                  <tr key={r.student.id} className="border-t hover:bg-muted/30">
+                    <td className="p-4">
+                      <div className="font-bold">{r.student.full_name}</div>
+                      <div className="text-[10px] text-muted-foreground font-mono">{r.student.code}</div>
+                    </td>
+                    <td className="p-4"><span className="rounded bg-muted px-2 py-1 text-[10px] font-bold">{r.groupName}</span></td>
+                    <td className="p-4 text-center font-mono font-bold">{r.totalDue.toLocaleString("ar-EG")}</td>
+                    <td className="p-4 text-center font-mono font-bold text-secondary">{r.paid.toLocaleString("ar-EG")}</td>
+                    <td className="p-4 text-center font-mono font-bold text-sky-700">{r.exempt.toLocaleString("ar-EG")}</td>
+                    <td className={`p-4 text-center font-mono font-black ${r.balance > 0 ? "text-destructive" : "text-secondary"}`}>{r.balance.toLocaleString("ar-EG")}</td>
+                    <td className="p-4">
+                      <div className="flex justify-center gap-2">
+                        <button onClick={() => setAddingFor(r.student)} className="rounded-lg bg-primary/10 px-3 py-1.5 text-[10px] font-bold text-primary">تسجيل مبلغ</button>
+                        <button onClick={() => setViewingHistory(r.student)} className="rounded-lg bg-muted px-3 py-1.5 text-[10px] font-bold">السجل</button>
+                      </div>
+                    </td>
+                  </tr>
+                  {addingFor?.id === r.student.id && (
+                    <tr key={r.student.id + "-form"} className="border-t">
+                      <td colSpan={7} className="bg-primary/5 p-4">
+                        <form onSubmit={handleAdd} className="rounded-2xl bg-white p-5 shadow-xl border-2 border-primary">
+                          <div className="mb-4 flex items-center justify-between">
+                            <h3 className="text-lg font-black text-primary">تسجيل حركة لـ: {addingFor.full_name}</h3>
+                            <button type="button" onClick={() => setAddingFor(null)} className="p-2 hover:bg-muted rounded-full"><X className="h-5 w-5" /></button>
+                          </div>
+                          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+                            <FinF name="kind" label="النوع" type="select" options={[{v:"payment",l:"سداد"},{v:"charge",l:"مستحق"},{v:"exempt",l:"إعفاء"}]} />
+                            <FinF name="amount" label="المبلغ" type="number" required />
+                            <FinF name="month" label="الشهر" defaultValue={month} />
+                            <FinF name="paid_at" label="التاريخ" type="date" defaultValue={new Date().toISOString().slice(0, 10)} />
+                            <div className="flex items-end">
+                              <button type="submit" disabled={busy} className="w-full rounded-lg bg-primary py-2.5 text-sm font-black text-white">{busy ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : "حفظ الحركة"}</button>
+                            </div>
+                          </div>
+                        </form>
+                      </td>
+                    </tr>
+                  )}
+                </>
               ))}
             </tbody>
           </table>

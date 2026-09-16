@@ -29,6 +29,8 @@ function CertsPage() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [previewing, setPreviewing] = useState(false);
+  const [certSearch, setCertSearch] = useState("");
+  const [certGroupFilter, setCertGroupFilter] = useState("");
 
   const loadFn = useServerFn(getAdminDataSummary);
   const sendFn = useServerFn(sendCertificateToPortal);
@@ -37,6 +39,10 @@ function CertsPage() {
 
   const groupMap = useMemo(() => Object.fromEntries(groups.map(g => [g.id, g.name])), [groups]);
   const activeTemplate = useMemo(() => TEMPLATES.find(t => t.id === templateId) || TEMPLATES[0], [templateId]);
+  const visibleStudents = useMemo(() => students.filter(s => s.active
+    && (!certGroupFilter || s.group_id === certGroupFilter)
+    && (!certSearch || `${s.full_name} ${s.code}`.toLocaleLowerCase().includes(certSearch.toLocaleLowerCase()))
+  ), [students, certSearch, certGroupFilter]);
 
   async function handleSendToPortal() {
     if (selected.size === 0) { toast.error("اختر طالباً واحداً على الأقل"); return; }
@@ -53,8 +59,8 @@ function CertsPage() {
 
   function toggle(id: string) { const n = new Set(selected); n.has(id) ? n.delete(id) : n.add(id); setSelected(n); }
   function toggleAll() {
-    if (selected.size === students.filter(s => s.active).length) setSelected(new Set());
-    else setSelected(new Set(students.filter(s => s.active).map(s => s.id)));
+    if (selected.size === visibleStudents.length && visibleStudents.length > 0) setSelected(new Set());
+    else setSelected(new Set(visibleStudents.map(s => s.id)));
   }
 
   if (loading) return <div className="p-20 text-center"><Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" /></div>;
@@ -65,6 +71,21 @@ function CertsPage() {
         <h1 className="text-2xl font-black flex items-center gap-2"><Award className="h-6 w-6 text-gold" /> شهادات التقدير والامتياز</h1>
         <button onClick={() => setPreviewing(true)} className="inline-flex items-center gap-2 rounded-xl border-2 border-primary/20 bg-white px-4 py-2 text-sm font-bold text-primary hover:bg-primary hover:text-white transition-all"><Eye className="h-4 w-4" /> معاينة النموذج</button>
       </div>
+
+      <div className="grid grid-cols-1 gap-3 rounded-2xl bg-white p-4 shadow-sm border border-slate-100 sm:grid-cols-2">
+        <div>
+          <label className="mb-1.5 block text-[10px] font-black text-muted-foreground uppercase">تصفية بالاسم أو الكود</label>
+          <input value={certSearch} onChange={e => setCertSearch(e.target.value)} placeholder="اكتب اسم الطالب..." className="w-full rounded-xl border bg-muted/20 px-4 py-2.5 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20" />
+        </div>
+        <div>
+          <label className="mb-1.5 block text-[10px] font-black text-muted-foreground uppercase">تصفية بالمجموعة</label>
+          <select value={certGroupFilter} onChange={e => setCertGroupFilter(e.target.value)} className="w-full rounded-xl border bg-muted/20 px-4 py-2.5 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20">
+            <option value="">كل المجموعات</option>
+            {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+          </select>
+        </div>
+      </div>
+
       
       <div className="grid grid-cols-1 gap-6 rounded-[2rem] bg-white p-6 shadow-sm border border-slate-100 md:grid-cols-2">
         <div className="space-y-4">
@@ -96,13 +117,13 @@ function CertsPage() {
       <div className="overflow-hidden rounded-[2rem] border bg-white shadow-sm">
         <div className="p-4 border-b bg-slate-50 flex justify-between items-center">
           <h3 className="font-black text-slate-800">اختر الطلاب المتميزين</h3>
-          <button onClick={toggleAll} className="text-xs font-bold text-primary hover:underline">{selected.size === students.filter(s => s.active).length ? "إلغاء تحديد الكل" : "تحديد كل الطلاب"}</button>
+          <button onClick={toggleAll} className="text-xs font-bold text-primary hover:underline">{visibleStudents.length > 0 && selected.size === visibleStudents.length ? "إلغاء تحديد الكل" : "تحديد كل الطلاب"}</button>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-right text-sm">
             <thead className="bg-primary text-white"><tr><th className="p-4 w-12"></th><th className="p-4">الطالب</th><th className="p-4">الصف الدراسي</th><th className="p-4">المجموعة</th><th className="p-4">الموقف</th></tr></thead>
             <tbody className="divide-y">
-              {students.filter(s => s.active).map(s => (
+              {visibleStudents.map(s => (
                 <tr key={s.id} className="hover:bg-primary/5 transition-colors cursor-pointer" onClick={() => toggle(s.id)}>
                   <td className="p-4" onClick={e => e.stopPropagation()}><input type="checkbox" className="h-4 w-4" checked={selected.has(s.id)} onChange={() => toggle(s.id)} /></td>
                   <td className="p-4 font-bold text-slate-800">{s.full_name}</td>
