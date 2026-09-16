@@ -39,6 +39,10 @@ function CertsPage() {
 
   const groupMap = useMemo(() => Object.fromEntries(groups.map(g => [g.id, g.name])), [groups]);
   const activeTemplate = useMemo(() => TEMPLATES.find(t => t.id === templateId) || TEMPLATES[0], [templateId]);
+  const visibleStudents = useMemo(() => students.filter(s => s.active
+    && (!certGroupFilter || s.group_id === certGroupFilter)
+    && (!certSearch || `${s.full_name} ${s.code}`.toLocaleLowerCase().includes(certSearch.toLocaleLowerCase()))
+  ), [students, certSearch, certGroupFilter]);
 
   async function handleSendToPortal() {
     if (selected.size === 0) { toast.error("اختر طالباً واحداً على الأقل"); return; }
@@ -55,8 +59,8 @@ function CertsPage() {
 
   function toggle(id: string) { const n = new Set(selected); n.has(id) ? n.delete(id) : n.add(id); setSelected(n); }
   function toggleAll() {
-    if (selected.size === students.filter(s => s.active).length) setSelected(new Set());
-    else setSelected(new Set(students.filter(s => s.active).map(s => s.id)));
+    if (selected.size === visibleStudents.length && visibleStudents.length > 0) setSelected(new Set());
+    else setSelected(new Set(visibleStudents.map(s => s.id)));
   }
 
   if (loading) return <div className="p-20 text-center"><Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" /></div>;
