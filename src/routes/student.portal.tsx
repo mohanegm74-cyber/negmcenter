@@ -376,6 +376,56 @@ function Portal() {
           </div>
         )}
 
+        {tab === "lessons" && (
+          <div className="animate-in fade-in slide-in-from-bottom-4 space-y-6">
+            <h2 className="text-2xl font-black flex items-center gap-2"><GraduationCap className="h-6 w-6 text-primary" /> شرح الدروس</h2>
+            {lessonsLoading ? (
+              <div className="flex justify-center p-12"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
+            ) : lessons.length === 0 ? (
+              <EmptyState icon={GraduationCap} text="لا توجد دروس منشورة بعد" />
+            ) : (
+              <div className="space-y-5">
+                {lessons.map((l: any) => (
+                  <section key={l.id} className="bg-white rounded-[2rem] shadow-sm border border-slate-100 p-5">
+                    <div className="mb-3 flex items-center justify-between gap-2">
+                      <div>
+                        <div className="font-black">{l.title}</div>
+                        {l.subject && <div className="text-[11px] font-bold text-slate-500">{l.subject}</div>}
+                      </div>
+                      <div className="text-[11px] font-bold text-slate-500 flex items-center gap-1"><Calendar className="h-3.5 w-3.5" /> {new Date(l.date + "T00:00:00").toLocaleDateString("ar-EG", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}</div>
+                    </div>
+                    {l.urls?.length > 0 && (
+                      <div className="mb-4 flex flex-wrap gap-2">
+                        {l.urls.map((u: string, i: number) => (
+                          <a key={i} href={u} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-[11px] font-bold hover:bg-accent"><FileText className="h-3.5 w-3.5" /> ملف {i + 1}</a>
+                        ))}
+                      </div>
+                    )}
+                    <div className="space-y-3">
+                      {[
+                        { k: "explanation", t: "الشرح" },
+                        { k: "vocabulary", t: "معاني الكلمات" },
+                        { k: "qa", t: "أسئلة وإجابات" },
+                        { k: "beauty", t: "مواطن الجمال" },
+                        { k: "rhetoric", t: "البلاغة" },
+                        { k: "grammar", t: "النحو والإعراب" },
+                        { k: "exercises", t: "التدريبات" },
+                      ].filter((s) => l[s.k]).map((s) => (
+                        <div key={s.k} className="rounded-xl bg-slate-50 p-3">
+                          <div className="mb-1 text-xs font-black text-primary">{s.t}</div>
+                          <div className="whitespace-pre-wrap text-sm leading-relaxed text-slate-700">{l[s.k]}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+
+
         {tab === "homework" && (
           <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4">
             <section>
