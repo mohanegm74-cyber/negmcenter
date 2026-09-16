@@ -29,6 +29,8 @@ function CertsPage() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [previewing, setPreviewing] = useState(false);
+  const [certSearch, setCertSearch] = useState("");
+  const [certGroupFilter, setCertGroupFilter] = useState("");
 
   const loadFn = useServerFn(getAdminDataSummary);
   const sendFn = useServerFn(sendCertificateToPortal);
