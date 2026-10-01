@@ -7,6 +7,7 @@ import { generateExam } from "@/lib/exams.functions";
 import { updateExamStatusAdmin, getExamsDataAdmin, saveExamFullAdmin, deleteExamAdmin, setExamAnswersReleasedAdmin } from "@/lib/admin.functions";
 import { QUESTION_KINDS, TERMS, GRADES, DIFFICULTIES } from "@/lib/exam-constants";
 import { supabase } from "@/integrations/supabase/client";
+import { PaperExamButtons } from "@/components/PaperExamTools";
 
 export const Route = createFileRoute("/_authenticated/exams")({
   head: () => ({
@@ -195,7 +196,8 @@ function ExamsPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-black flex items-center gap-2"><FileQuestion className="h-7 w-7 text-primary" /> الاختبارات الذكية</h1>
-        <div className="flex gap-2 w-full sm:w-auto">
+        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+          <PaperExamButtons />
           <button onClick={() => { setCreateMode("ai"); setPreviewExam(null); }} className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 rounded-xl bg-gold px-5 py-2.5 text-sm font-bold text-gold-foreground shadow-lg shadow-gold/20 transition-all hover:scale-105 active:scale-95"><BrainCircuit className="h-5 w-5" /> ذكاء اصطناعي</button>
           <button onClick={() => { setCreateMode("manual"); setPreviewExam(null); }} className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-primary/20 transition-all hover:scale-105 active:scale-95"><Plus className="h-5 w-5" /> إنشاء يدوي</button>
         </div>
