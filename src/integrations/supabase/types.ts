@@ -326,6 +326,48 @@ export type Database = {
           },
         ]
       }
+      exam_sources: {
+        Row: {
+          created_at: string
+          error: string | null
+          extracted_text: string | null
+          grade: string | null
+          id: string
+          lesson: string | null
+          mime: string | null
+          path: string
+          status: string
+          subject: string | null
+          title: string
+        }
+        Insert: {
+          created_at?: string
+          error?: string | null
+          extracted_text?: string | null
+          grade?: string | null
+          id?: string
+          lesson?: string | null
+          mime?: string | null
+          path: string
+          status?: string
+          subject?: string | null
+          title: string
+        }
+        Update: {
+          created_at?: string
+          error?: string | null
+          extracted_text?: string | null
+          grade?: string | null
+          id?: string
+          lesson?: string | null
+          mime?: string | null
+          path?: string
+          status?: string
+          subject?: string | null
+          title?: string
+        }
+        Relationships: []
+      }
       exams: {
         Row: {
           adaptive: boolean
