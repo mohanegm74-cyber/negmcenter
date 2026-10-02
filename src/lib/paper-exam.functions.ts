@@ -59,11 +59,11 @@ export const indexSource = createServerFn({ method: "POST" })
 
 export const listSources = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => d as { grade?: string; subject?: string; q?: string })
+  .inputValidator((d: unknown) => d as { grade?: string; subject?: string; q?: string; kind?: "source" | "spec" })
   .handler(async ({ data, context }) => {
     await assertTeacher(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    let q = supabaseAdmin.from("exam_sources").select("id,title,grade,subject,lesson,mime,status,error,created_at,extracted_text").order("created_at", { ascending: false }).limit(200);
+    let q = supabaseAdmin.from("exam_sources").select("id,title,grade,subject,lesson,mime,status,error,created_at,extracted_text,kind,spec").eq("kind", data.kind || "source").order("created_at", { ascending: false }).limit(200);
     if (data.grade) q = q.eq("grade", data.grade);
     if (data.subject) q = q.ilike("subject", `%${data.subject}%`);
     const term = (data.q || "").trim().replace(/[%,()]/g, " ");
@@ -172,4 +172,20 @@ ${sourceText ? `اعتمد في صياغة الأسئلة على المصادر 
     });
     const missing = spec.sections.reduce((a, s, i) => a + Math.max(0, s.count - ((gen[i]?.questions?.length) || 0)), 0);
     return { spec, sections, warnings: missing ? [`لم يولّد الذكاء الاصطناعي ${missing} بند/بنود، أُضيفت فارغة لتكملها يدوياً.`] : [] };
+  });
+
+export const saveSpec = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => d as { grade: string; subject: string; spec: ExamSpec; path?: string })
+  .handler(async ({ data, context }) => {
+    await assertTeacher(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const spec = normalizeSpec(data.spec);
+    const { error } = await supabaseAdmin.from("exam_sources").insert({
+      kind: "spec", title: spec.title, grade: data.grade || null, subject: data.subject || null,
+      path: data.path || "", status: "indexed", spec: spec as any,
+      extracted_text: spec.sections.map((s) => `${s.title} ${s.kind} ${s.count}×${s.score_each}`).join("\n"),
+    });
+    if (error) throw new Error(error.message);
+    return { ok: true };
   });
