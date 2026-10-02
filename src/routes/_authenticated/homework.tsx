@@ -1,3 +1,4 @@
+import { GradeGroupFilter, filterByGradeGroup } from "@/components/GradeGroupFilter";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -26,6 +27,7 @@ function evaluationLevel(sub?: Pick<Sub, "level" | "score">, maxScore?: number |
 
 function HomeworkPage() {
   const [groups, setGroups] = useState<Group[]>([]);
+  const [gf, setGf] = useState({ grade: "", group: "" });
   const [items, setItems] = useState<HW[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [subs, setSubs] = useState<Sub[]>([]);
@@ -140,7 +142,7 @@ function HomeworkPage() {
       )}
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {items.map(h => (
+        {filterByGradeGroup(items, gf).map(h => (
           <div key={h.id} className="rounded-[2rem] bg-white p-6 shadow-sm border border-slate-100 hover:border-primary/20 transition-all group">
             <div className="flex items-start justify-between gap-2">
               <div className="flex-1">

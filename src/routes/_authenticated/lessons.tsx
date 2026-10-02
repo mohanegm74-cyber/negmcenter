@@ -1,3 +1,4 @@
+import { GradeGroupFilter, filterByGradeGroup } from "@/components/GradeGroupFilter";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -42,6 +43,7 @@ const SECTIONS: { key: keyof Lesson; label: string; ph: string }[] = [
 
 function LessonsPage() {
   const [groups, setGroups] = useState<Group[]>([]);
+  const [gf, setGf] = useState({ grade: "", group: "" });
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
@@ -128,13 +130,15 @@ function LessonsPage() {
         </button>
       </div>
 
+<GradeGroupFilter items={lessons} groups={groups} value={gf} onChange={setGf} />
+
       {loading ? (
         <div className="flex justify-center p-12"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
       ) : lessons.length === 0 ? (
         <div className="rounded-2xl border border-dashed bg-white p-12 text-center text-sm text-muted-foreground">لا توجد دروس بعد</div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
-          {lessons.map((l) => (
+          {filterByGradeGroup(lessons, gf).map((l) => (
             <div key={l.id} className="rounded-2xl border bg-white p-4 shadow-sm">
               <div className="mb-3 flex items-start justify-between gap-2">
                 <div>
