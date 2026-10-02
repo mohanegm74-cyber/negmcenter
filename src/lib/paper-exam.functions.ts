@@ -38,7 +38,7 @@ async function download(path: string) {
 
 export const indexSource = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => d as { path: string; filename: string; mime: string; title: string; grade: string; subject: string; lesson: string })
+  .inputValidator((d: unknown) => d as { path: string; filename: string; mime: string; title: string; grade: string; subject: string; lesson: string; text?: string; size?: number })
   .handler(async ({ data, context }) => {
     await assertTeacher(context);
     if (!data.path.startsWith("sources/")) throw new Error("مسار غير صالح");
@@ -46,7 +46,9 @@ export const indexSource = createServerFn({ method: "POST" })
     const { extractText } = await import("./paper-exam.server");
     let text = "", status = "indexed", err: string | null = null;
     try {
-      text = await extractText(await download(data.path), data.mime || "", data.filename);
+      if (data.text && data.text.trim()) text = data.text.trim().slice(0, 1_500_000);
+      else if ((data.size || 0) > 18 * 1024 * 1024) throw new Error("الملف كبير ويحتاج قراءة ضوئية (ممسوح ضوئياً). قسّمه لملفات أصغر من 18 ميجا أو ارفع نسخة نصية.");
+      else text = await extractText(await download(data.path), data.mime || "", data.filename);
       if (!text) { status = "failed"; err = "لم يتم العثور على نص"; }
     } catch (e: any) { status = "failed"; err = e?.message || "فشل الاستخراج"; }
     const { data: row, error } = await supabaseAdmin.from("exam_sources").insert({
