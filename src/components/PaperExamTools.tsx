@@ -37,6 +37,26 @@ function useUpload() {
   };
 }
 
+/** Extract text on the device to avoid server memory limits for large files. */
+async function extractInBrowser(f: File): Promise<string> {
+  const name = f.name.toLowerCase();
+  try {
+    if (name.endsWith(".pdf")) {
+      const { extractText, getDocumentProxy } = await import("unpdf");
+      const pdf = await getDocumentProxy(new Uint8Array(await f.arrayBuffer()));
+      const res = await extractText(pdf, { mergePages: true });
+      const t = String(res.text || "").trim();
+      return t.replace(/\s/g, "").length >= 80 ? t : "";
+    }
+    if (name.endsWith(".docx")) {
+      const mammoth: any = await import("mammoth/mammoth.browser");
+      const res = await (mammoth.default || mammoth).extractRawText({ arrayBuffer: await f.arrayBuffer() });
+      return String(res.value || "").trim();
+    }
+  } catch (e) { console.error("browser extract failed", e); }
+  return "";
+}
+
 /* ---------------- Sources ---------------- */
 function SourcesManager({ onClose }: { onClose: () => void }) {
   const upload = useUpload();
@@ -62,7 +82,9 @@ function SourcesManager({ onClose }: { onClose: () => void }) {
       const t = toast.loading(`جاري رفع وفهرسة ${f.name}...`);
       try {
         const path = await upload(f, "source");
-        const r = await indexFn({ data: { path, filename: f.name, mime: f.type, title: meta.title || f.name, grade: meta.grade, subject: meta.subject, lesson: meta.lesson } });
+        toast.loading(`جاري استخراج النص من ${f.name}...`, { id: t });
+        const text = await extractInBrowser(f);
+        const r = await indexFn({ data: { path, text, size: f.size, filename: f.name, mime: f.type, title: meta.title || f.name, grade: meta.grade, subject: meta.subject, lesson: meta.lesson } });
         if (r.status === "indexed") toast.success(`تمت فهرسة ${f.name} (${r.chars} حرف)`, { id: t });
         else toast.error(`حُفظ ${f.name} لكن فشل الاستخراج: ${r.error}`, { id: t });
       } catch (e: any) { toast.error(e.message, { id: t }); }
