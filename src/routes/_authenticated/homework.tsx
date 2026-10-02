@@ -141,6 +141,8 @@ function HomeworkPage() {
         </form>
       )}
 
+      <GradeGroupFilter items={items} groups={groups} value={gf} onChange={setGf} />
+
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
         {filterByGradeGroup(items, gf).map(h => (
           <div key={h.id} className="rounded-[2rem] bg-white p-6 shadow-sm border border-slate-100 hover:border-primary/20 transition-all group">
