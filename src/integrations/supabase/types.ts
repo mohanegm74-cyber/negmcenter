@@ -333,9 +333,11 @@ export type Database = {
           extracted_text: string | null
           grade: string | null
           id: string
+          kind: string
           lesson: string | null
           mime: string | null
           path: string
+          spec: Json | null
           status: string
           subject: string | null
           title: string
@@ -346,9 +348,11 @@ export type Database = {
           extracted_text?: string | null
           grade?: string | null
           id?: string
+          kind?: string
           lesson?: string | null
           mime?: string | null
           path: string
+          spec?: Json | null
           status?: string
           subject?: string | null
           title: string
@@ -359,9 +363,11 @@ export type Database = {
           extracted_text?: string | null
           grade?: string | null
           id?: string
+          kind?: string
           lesson?: string | null
           mime?: string | null
           path?: string
+          spec?: Json | null
           status?: string
           subject?: string | null
           title?: string
