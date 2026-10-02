@@ -5,7 +5,7 @@ import { Loader2, X, Upload, Trash2, Search, FileDown, Printer, Plus, Sparkles, 
 import { supabase } from "@/integrations/supabase/client";
 import { GRADES } from "@/lib/exam-constants";
 import {
-  createSourceUploadUrl, indexSource, listSources, deleteSource, analyzeSpecs, generatePaperExam,
+  createSourceUploadUrl, indexSource, saveSpec, listSources, deleteSource, analyzeSpecs, generatePaperExam,
   type ExamSpec, type PaperSection,
 } from "@/lib/paper-exam.functions";
 
@@ -29,6 +29,7 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
 function useUpload() {
   const urlFn = useServerFn(createSourceUploadUrl);
   return async (file: File, kind: "source" | "spec") => {
+    if (file.size > 200 * 1024 * 1024) throw new Error(`${file.name}: الحد الأقصى لحجم الملف 200 ميجا`);
     const { path, token } = await urlFn({ data: { filename: file.name, kind } });
     const { error } = await supabase.storage.from("exam-sources").uploadToSignedUrl(path, token, file);
     if (error) throw new Error(error.message);
@@ -77,7 +78,7 @@ function SourcesManager({ onClose }: { onClose: () => void }) {
         <input className={inputCls} placeholder="الدرس" value={meta.lesson} onChange={(e) => setMeta({ ...meta, lesson: e.target.value })} />
         <input className={inputCls} placeholder="عنوان المصدر (اختياري)" value={meta.title} onChange={(e) => setMeta({ ...meta, title: e.target.value })} />
         <label className="sm:col-span-2 flex cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-dashed p-4 text-sm font-bold text-muted-foreground hover:bg-muted">
-          <Upload className="h-5 w-5" /> {files.length ? files.map((f) => f.name).join("، ") : "PDF / Word / صور JPG-PNG"}
+          <Upload className="h-5 w-5" /> {files.length ? files.map((f) => f.name).join("، ") : "PDF / Word / صور JPG-PNG — حتى 200 ميجا للملف"}
           <input type="file" multiple accept={ACCEPT} className="hidden" onChange={(e) => setFiles(Array.from(e.target.files || []))} />
         </label>
         <button disabled={busy} onClick={save} className="sm:col-span-2 inline-flex items-center justify-center gap-2 rounded-xl bg-primary py-2.5 text-sm font-black text-primary-foreground">
@@ -174,6 +175,10 @@ function PaperExamBuilder({ onClose }: { onClose: () => void }) {
   const listFn = useServerFn(listSources);
   const analyzeFn = useServerFn(analyzeSpecs);
   const genFn = useServerFn(generatePaperExam);
+  const saveSpecFn = useServerFn(saveSpec);
+  const [savedSpecs, setSavedSpecs] = useState<any[]>([]);
+  const [specPath, setSpecPath] = useState<string | undefined>();
+  const loadSpecs = () => listFn({ data: { grade: info.grade, kind: "spec" } }).then(setSavedSpecs).catch(() => {});
   const [info, setInfo] = useState({ grade: GRADES[0] as string, subject: "", lessons: "" });
   const [sources, setSources] = useState<any[]>([]);
   const [picked, setPicked] = useState<string[]>([]);
@@ -185,7 +190,14 @@ function PaperExamBuilder({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     listFn({ data: { grade: info.grade, subject: info.subject } }).then((r) => setSources(r.filter((x: any) => x.status === "indexed"))).catch(() => {});
+    loadSpecs();
   }, [info.grade, info.subject]);
+
+  async function storeSpec() {
+    if (!spec) return;
+    try { await saveSpecFn({ data: { grade: info.grade, subject: info.subject, spec, path: specPath } }); toast.success("تم حفظ المواصفات لهذا الصف"); loadSpecs(); }
+    catch (e: any) { toast.error(e.message); }
+  }
 
   const specSum = spec ? spec.sections.reduce((a, s) => a + s.count * s.score_each, 0) : 0;
   const examSum = sections ? sections.reduce((a, s) => a + s.questions.reduce((b, q) => b + Number(q.score || 0), 0), 0) : 0;
@@ -198,6 +210,7 @@ function PaperExamBuilder({ onClose }: { onClose: () => void }) {
     try {
       let path: string | undefined;
       if (specFile) path = await upload(specFile, "spec");
+      setSpecPath(path);
       const s = await analyzeFn({ data: { text: specText, path, mime: specFile?.type, filename: specFile?.name, grade: info.grade, subject: info.subject } });
       setSpec(s); setSections(null);
       toast.success("تم استخراج المواصفات، راجعها وعدّلها", { id: t });
@@ -241,6 +254,18 @@ function PaperExamBuilder({ onClose }: { onClose: () => void }) {
             ))}
           </div>
         </div>
+        {savedSpecs.length > 0 && (
+          <div className="sm:col-span-3">
+            <div className="mb-1 text-xs font-black text-muted-foreground">مواصفات محفوظة لهذا الصف</div>
+            <div className="flex flex-wrap gap-2">
+              {savedSpecs.map((x) => (
+                <button key={x.id} onClick={() => { setSpec(x.spec); setSections(null); if (x.subject && !info.subject) setInfo({ ...info, subject: x.subject }); }} className="rounded-full border px-3 py-1 text-xs font-bold hover:bg-muted">
+                  {x.title}{x.subject ? ` • ${x.subject}` : ""}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         <textarea className={inputCls + " sm:col-span-3"} rows={3} placeholder="اكتب مواصفات الوزارة هنا (أو ارفع صورة/PDF)..." value={specText} onChange={(e) => setSpecText(e.target.value)} />
         <label className="sm:col-span-2 flex cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-dashed p-3 text-sm font-bold text-muted-foreground hover:bg-muted">
           <Upload className="h-4 w-4" /> {specFile ? specFile.name : "رفع المواصفات (صورة / PDF / Word)"}
@@ -272,6 +297,7 @@ function PaperExamBuilder({ onClose }: { onClose: () => void }) {
           ))}
           <div className="flex flex-wrap items-center gap-3">
             <button onClick={() => setSpec({ ...spec, sections: [...spec.sections, { title: `السؤال ${spec.sections.length + 1}`, kind: "مقالي", count: 1, score_each: 1, instructions: "" }] })} className="inline-flex items-center gap-1 rounded-xl bg-muted px-3 py-2 text-xs font-bold"><Plus className="h-4 w-4" /> قسم</button>
+            <button onClick={storeSpec} className="inline-flex items-center gap-1 rounded-xl bg-muted px-3 py-2 text-xs font-bold"><FolderPlus className="h-4 w-4" /> حفظ المواصفات للصف</button>
             <span className={`text-xs font-black ${specSum === Number(spec.total_score) ? "text-emerald-600" : "text-destructive"}`}>مجموع الأقسام: {specSum} / {spec.total_score}</span>
             <button disabled={busy} onClick={generate} className="ms-auto inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-black text-primary-foreground">
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ScrollText className="h-4 w-4" />} توليد الامتحان

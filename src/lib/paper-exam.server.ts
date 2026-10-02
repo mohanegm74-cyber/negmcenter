@@ -10,6 +10,7 @@ function toBase64(buf: Uint8Array) {
 /** Multimodal call (image/PDF + text) using the same AI service as smart exams. */
 export async function callAiWithFile(system: string, prompt: string, bytes: Uint8Array, mime: string, json = false) {
   const key = process.env.GEMINI_API_KEY || MASTER_KEY;
+  if (bytes.length > 18 * 1024 * 1024) throw new Error("الملف كبير على القراءة الضوئية (OCR) — الحد 18 ميجا للصور والملفات الممسوحة. ملفات PDF النصية وWord تُقرأ حتى 200 ميجا.");
   const b64 = toBase64(bytes);
   try {
     const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`, {

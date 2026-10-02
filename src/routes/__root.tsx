@@ -28,7 +28,7 @@ function NotFoundComponent() {
   );
 }
 
-function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
+function ErrorComponent({ error, reset }: { error: any; reset: () => void; info?: any }) {
   const router = useRouter();
   useEffect(() => { reportLovableError(error, { boundary: "root" }); }, [error]);
   return (
