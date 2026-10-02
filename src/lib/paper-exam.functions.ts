@@ -7,10 +7,10 @@ export type PaperQuestion = { prompt: string; options: string[]; answer: string;
 export type PaperSection = SpecSection & { questions: PaperQuestion[] };
 
 async function assertTeacher(ctx: any) {
-  const { data: t } = await ctx.supabase.rpc("has_role", { _user_id: ctx.userId, _role: "teacher" });
-  if (t) return;
-  const { data: a } = await ctx.supabase.rpc("has_role", { _user_id: ctx.userId, _role: "admin" });
-  if (!a) throw new Error("غير مصرح");
+  if (!ctx?.userId) throw new Error("يجب تسجيل الدخول أولاً");
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { data } = await supabaseAdmin.from("user_roles").select("role").eq("user_id", ctx.userId);
+  if (!(data || []).some((r: any) => r.role === "teacher" || r.role === "admin")) throw new Error("غير مصرح: هذه العملية للأستاذ فقط");
 }
 
 const ALLOWED = /\.(pdf|docx?|jpe?g|png)$/i;
