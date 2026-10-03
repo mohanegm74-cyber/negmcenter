@@ -7,7 +7,7 @@ import { generateExam } from "@/lib/exams.functions";
 import { updateExamStatusAdmin, getExamsDataAdmin, saveExamFullAdmin, deleteExamAdmin, setExamAnswersReleasedAdmin } from "@/lib/admin.functions";
 import { QUESTION_KINDS, TERMS, GRADES, DIFFICULTIES } from "@/lib/exam-constants";
 import { supabase } from "@/integrations/supabase/client";
-import { PaperExamButtons } from "@/components/PaperExamTools";
+import { PaperExamButtons, SourcePicker } from "@/components/PaperExamTools";
 
 export const Route = createFileRoute("/_authenticated/exams")({
   head: () => ({
@@ -48,6 +48,7 @@ function ExamsPage() {
     grade: GRADES[0], term: TERMS[0], group_id: "", subject: "", lesson: "",
     question_count: 10, duration_minutes: 20, total_score: 100, difficulty: "medium", adaptive: false,
   });
+  const [aiSources, setAiSources] = useState<string[]>([]);
   const [kinds, setKinds] = useState<string[]>(["اختيار من متعدد", "صح أو خطأ"]);
   const [optionsText, setOptionsText] = useState<Record<number, string>>({});
 
@@ -98,7 +99,7 @@ function ExamsPage() {
     const t = toast.loading("جاري التوليد بالذكاء الاصطناعي...");
     try {
       const res = await gen({
-        data: { grade: form.grade, term: form.term, subject: form.subject || "—", unit: "—", lesson: form.lesson, questionCount: Number(form.question_count), totalScore: Number(form.total_score), difficulty: form.difficulty, kinds },
+        data: { grade: form.grade, term: form.term, subject: form.subject || "—", unit: "—", lesson: form.lesson, questionCount: Number(form.question_count), totalScore: Number(form.total_score), difficulty: form.difficulty, kinds, sourceIds: aiSources },
       });
       const qs = res.questions.map((q: any, i: number) => ({
         position: i + 1, kind: q.kind || "اختيار من متعدد", prompt: q.prompt, passage: q.passage || null,
@@ -256,6 +257,9 @@ function ExamsPage() {
             </div>
           </div>
 
+          {createMode === "ai" && !previewExam && (
+            <SourcePicker grade={form.grade} value={aiSources} onChange={setAiSources} />
+          )}
           {createMode === "ai" && !previewExam && (
             <button onClick={startAiBuild} disabled={busy} className="mt-8 w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-2xl bg-gold px-10 py-4 text-sm font-black text-gold-foreground shadow-xl shadow-gold/20 hover:scale-[1.02] active:scale-95 transition-all">
               {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <BrainCircuit className="h-5 w-5" />} بدء التوليد الذكي الآن

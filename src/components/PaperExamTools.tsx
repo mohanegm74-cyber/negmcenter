@@ -363,6 +363,31 @@ function PaperExamBuilder({ onClose }: { onClose: () => void }) {
   );
 }
 
+export function SourcePicker({ grade, value, onChange }: { grade: string; value: string[]; onChange: (v: string[]) => void }) {
+  const listFn = useServerFn(listSources);
+  const [rows, setRows] = useState<any[]>([]);
+  const [open, setOpen] = useState(false);
+  useEffect(() => { listFn({ data: { grade } }).then((r) => setRows(r.filter((x: any) => x.status === "indexed"))).catch(() => setRows([])); }, [grade]);
+  return (
+    <div className="mt-6 rounded-2xl border bg-card p-4" dir="rtl">
+      <button type="button" onClick={() => setOpen(!open)} className="inline-flex items-center gap-2 rounded-xl border-2 border-primary/30 px-4 py-2 text-sm font-black text-primary">
+        <FolderPlus className="h-4 w-4" /> اختيار المصدر ({value.length})
+      </button>
+      {open && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {rows.length === 0 && <span className="text-xs font-bold text-muted-foreground">لا توجد مصادر محفوظة لهذا الصف — أضفها من زر «إضافة مصدر».</span>}
+          {rows.map((s) => (
+            <button type="button" key={s.id} onClick={() => onChange(value.includes(s.id) ? value.filter((x) => x !== s.id) : [...value, s.id])}
+              className={`rounded-full border px-3 py-1 text-xs font-bold ${value.includes(s.id) ? "border-primary bg-primary/10 text-primary" : ""}`}>
+              {s.title}{s.lesson ? ` • ${s.lesson}` : ""}{s.subject ? ` • ${s.subject}` : ""}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function PaperExamButtons() {
   const [open, setOpen] = useState<"sources" | "paper" | null>(null);
   return (

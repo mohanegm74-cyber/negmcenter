@@ -1,11 +1,13 @@
 import { createServerFn } from "@tanstack/react-start";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 export type GenExamInput = {
   grade: string; term: string; subject: string; unit: string; lesson: string;
-  questionCount: number; totalScore: number; difficulty: string; kinds: string[];
+  questionCount: number; totalScore: number; difficulty: string; kinds: string[]; sourceIds?: string[];
 };
 
 export const generateExam = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => d as GenExamInput)
   .handler(async ({ data }) => {
     const { callAi, parseJson } = await import("./ai.server");
@@ -41,7 +43,14 @@ export const generateExam = createServerFn({ method: "POST" })
 وأضف أيضاً مفتاح sources: مصفوفة بأسماء المصادر المصرية المعتمدة التي بُني عليها الاختبار.
 تأكد أن الأسئلة مطابقة لأفكار امتحانات المحافظات ونماذج الوزارة والكتب الخارجية الشهيرة والمناهج المصرية الرسمية الحديثة.`;
 
-    const raw = await callAi(system, prompt, true);
+    let sourceText = "";
+    if (data.sourceIds?.length) {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const { data: rows } = await supabaseAdmin.from("exam_sources").select("title,lesson,extracted_text").in("id", data.sourceIds.slice(0, 20));
+      const per = Math.floor(40000 / Math.max(1, rows?.length || 1));
+      sourceText = (rows || []).map((r: any) => `### المصدر: ${r.title}${r.lesson ? ` (${r.lesson})` : ""}\n${String(r.extracted_text || "").slice(0, per)}`).join("\n\n");
+    }
+    const raw = await callAi(system, sourceText ? `${prompt}\n\nمهم: اعتمد في صياغة الأسئلة على نصوص المصادر التالية التي رفعها المعلم:\n${sourceText}` : prompt, true);
     const out = parseJson(raw);
     return { questions: out?.questions || [], sources: out?.sources || [] };
   });
