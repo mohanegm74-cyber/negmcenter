@@ -23,16 +23,20 @@ function createSupabaseFetch(supabaseKey: string): typeof fetch {
   };
 }
 
-function createSupabaseClient() {
-  // استخدام فحص آمن لـ import.meta.env و process
-  const env = typeof window !== 'undefined' ? (import.meta as any).env : process.env;
-  
-  const SUPABASE_URL = env.VITE_SUPABASE_URL || env.SUPABASE_URL;
-  const SUPABASE_PUBLISHABLE_KEY = env.VITE_SUPABASE_PUBLISHABLE_KEY || env.SUPABASE_PUBLISHABLE_KEY;
+// قيم عامة (publishable) احتياطية في حال غياب متغيرات البيئة أثناء النشر
+const FALLBACK_SUPABASE_URL = 'https://spjpgivhstizdovkiapv.supabase.co';
+const FALLBACK_SUPABASE_PUBLISHABLE_KEY =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNwanBnaXZoc3RpemRvdmtpYXB2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ2ODc2MDAsImV4cCI6MjEwMDI2MzYwMH0.u10MFX9rzetEZBguUky0HpsOVbsB7mMQlOi3QiXLWGU';
 
-  if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
-    return createClient<Database>('https://placeholder.supabase.co', 'placeholder', { auth: { persistSession: false } });
-  }
+function createSupabaseClient() {
+  const viteEnv: Record<string, string | undefined> = (import.meta as any).env ?? {};
+  const nodeEnv: Record<string, string | undefined> =
+    typeof process !== 'undefined' && process.env ? (process.env as any) : {};
+
+  const SUPABASE_URL =
+    import.meta.env.VITE_SUPABASE_URL || viteEnv.VITE_SUPABASE_URL || nodeEnv.SUPABASE_URL || nodeEnv.VITE_SUPABASE_URL || FALLBACK_SUPABASE_URL;
+  const SUPABASE_PUBLISHABLE_KEY =
+    import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || viteEnv.VITE_SUPABASE_PUBLISHABLE_KEY || nodeEnv.SUPABASE_PUBLISHABLE_KEY || nodeEnv.VITE_SUPABASE_PUBLISHABLE_KEY || FALLBACK_SUPABASE_PUBLISHABLE_KEY;
 
   return createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
     global: {
