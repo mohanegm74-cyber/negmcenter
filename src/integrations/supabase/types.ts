@@ -326,6 +326,41 @@ export type Database = {
           },
         ]
       }
+      exam_source_pages: {
+        Row: {
+          created_at: string
+          id: string
+          ocr: boolean
+          page_no: number
+          source_id: string
+          text: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          ocr?: boolean
+          page_no: number
+          source_id: string
+          text?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          ocr?: boolean
+          page_no?: number
+          source_id?: string
+          text?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exam_source_pages_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "exam_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       exam_sources: {
         Row: {
           created_at: string
@@ -336,7 +371,10 @@ export type Database = {
           kind: string
           lesson: string | null
           mime: string | null
+          page_count: number
+          parts: Json
           path: string
+          size_bytes: number | null
           spec: Json | null
           status: string
           subject: string | null
@@ -351,7 +389,10 @@ export type Database = {
           kind?: string
           lesson?: string | null
           mime?: string | null
+          page_count?: number
+          parts?: Json
           path: string
+          size_bytes?: number | null
           spec?: Json | null
           status?: string
           subject?: string | null
@@ -366,7 +407,10 @@ export type Database = {
           kind?: string
           lesson?: string | null
           mime?: string | null
+          page_count?: number
+          parts?: Json
           path?: string
+          size_bytes?: number | null
           spec?: Json | null
           status?: string
           subject?: string | null
