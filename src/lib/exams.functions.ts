@@ -45,10 +45,8 @@ export const generateExam = createServerFn({ method: "POST" })
 
     let sourceText = "";
     if (data.sourceIds?.length) {
-      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-      const { data: rows } = await supabaseAdmin.from("exam_sources").select("title,lesson,extracted_text").in("id", data.sourceIds.slice(0, 20));
-      const per = Math.floor(40000 / Math.max(1, rows?.length || 1));
-      sourceText = (rows || []).map((r: any) => `### المصدر: ${r.title}${r.lesson ? ` (${r.lesson})` : ""}\n${String(r.extracted_text || "").slice(0, per)}`).join("\n\n");
+      const { retrieveSourceText } = await import("./sources.server");
+      sourceText = await retrieveSourceText(data.sourceIds, `${data.lesson} ${data.unit}`);
     }
     const raw = await callAi(system, sourceText ? `${prompt}\n\nمهم: اعتمد في صياغة الأسئلة على نصوص المصادر التالية التي رفعها المعلم:\n${sourceText}` : prompt, true);
     const out = parseJson(raw);

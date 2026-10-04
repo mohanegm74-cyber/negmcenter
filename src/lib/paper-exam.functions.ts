@@ -87,11 +87,117 @@ export const deleteSource = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertTeacher(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: row } = await supabaseAdmin.from("exam_sources").select("path").eq("id", data.id).single();
-    if (row?.path) await supabaseAdmin.storage.from("exam-sources").remove([row.path]);
+    const { data: row } = await supabaseAdmin.from("exam_sources").select("path,parts").eq("id", data.id).single();
+    const paths = [row?.path, ...((Array.isArray(row?.parts) ? row!.parts : []) as string[])].filter(Boolean) as string[];
+    if (paths.length) await supabaseAdmin.storage.from("exam-sources").remove(Array.from(new Set(paths)));
     const { error } = await supabaseAdmin.from("exam_sources").delete().eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true };
+  });
+
+/* ---------- Permanent library: chunked uploads, per-page index, OCR, edit/open ---------- */
+
+export const createSourceRecord = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => d as { parts: string[]; filename: string; mime: string; size: number; title: string; grade: string; subject: string; lesson: string })
+  .handler(async ({ data, context }) => {
+    await assertTeacher(context);
+    if (!data.parts?.length || data.parts.some((p) => !p.startsWith("sources/"))) throw new Error("مسار غير صالح");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: row, error } = await supabaseAdmin.from("exam_sources").insert({
+      title: data.title || data.filename, grade: data.grade || null, subject: data.subject || null, lesson: data.lesson || null,
+      path: data.parts[0], parts: data.parts as any, mime: data.mime, size_bytes: data.size, status: "processing",
+    }).select("id").single();
+    if (error) throw new Error(error.message);
+    return { id: row.id as string };
+  });
+
+export const saveSourcePages = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => d as { sourceId: string; pages: { page_no: number; text: string; ocr?: boolean }[] })
+  .handler(async ({ data, context }) => {
+    await assertTeacher(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const rows = (data.pages || []).slice(0, 100).map((p) => ({ source_id: data.sourceId, page_no: p.page_no, text: String(p.text || "").slice(0, 50000), ocr: !!p.ocr }));
+    if (!rows.length) return { ok: true };
+    const { error } = await supabaseAdmin.from("exam_source_pages").upsert(rows, { onConflict: "source_id,page_no" });
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const finalizeSource = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => d as { sourceId: string; error?: string })
+  .handler(async ({ data, context }) => {
+    await assertTeacher(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: pages } = await supabaseAdmin.from("exam_source_pages").select("page_no,text").eq("source_id", data.sourceId).order("page_no").limit(5000);
+    const all = (pages || []).map((p: any) => p.text).join("\n");
+    const ok = all.replace(/\s/g, "").length > 20;
+    const { error } = await supabaseAdmin.from("exam_sources").update({
+      page_count: pages?.length || 0, extracted_text: all.slice(0, 1_500_000) || null,
+      status: ok ? "indexed" : "failed", error: ok ? null : (data.error || "لم يتم العثور على نص"),
+    }).eq("id", data.sourceId);
+    if (error) throw new Error(error.message);
+    return { status: ok ? "indexed" : "failed", pages: pages?.length || 0, chars: all.length };
+  });
+
+/** Arabic OCR for one rendered page / image (small JPEG sent from the browser). */
+export const ocrPageImage = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => d as { base64: string; mime?: string })
+  .handler(async ({ data, context }) => {
+    await assertTeacher(context);
+    if (!data.base64 || data.base64.length > 12_000_000) throw new Error("صورة الصفحة غير صالحة");
+    const { callAiWithFile } = await import("./paper-exam.server");
+    const bytes = new Uint8Array(Buffer.from(data.base64, "base64"));
+    const t = await callAiWithFile(
+      "أنت أداة OCR دقيقة للنصوص العربية التعليمية. انسخ النص الموجود في الصورة حرفياً كما هو بدون شرح أو إضافات، مع الحفاظ على ترتيب الفقرات والأسئلة والتشكيل.",
+      "استخرج كل النص من صورة الصفحة المرفقة.", bytes, data.mime || "image/jpeg");
+    return { text: String(t || "").trim() };
+  });
+
+export const updateSource = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => d as { id: string; title: string; grade: string; subject: string; lesson: string })
+  .handler(async ({ data, context }) => {
+    await assertTeacher(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await supabaseAdmin.from("exam_sources").update({
+      title: data.title, grade: data.grade || null, subject: data.subject || null, lesson: data.lesson || null,
+    }).eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const getSourceFiles = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => d as { id: string })
+  .handler(async ({ data, context }) => {
+    await assertTeacher(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: row } = await supabaseAdmin.from("exam_sources").select("path,parts,mime,title").eq("id", data.id).single();
+    const parts = ((Array.isArray(row?.parts) && row!.parts.length ? row!.parts : [row?.path]) as string[]).filter(Boolean);
+    const urls: string[] = [];
+    for (const p of parts) {
+      const { data: s } = await supabaseAdmin.storage.from("exam-sources").createSignedUrl(p, 3600);
+      if (s?.signedUrl) urls.push(s.signedUrl);
+    }
+    return { urls, mime: row?.mime || "", title: row?.title || "" };
+  });
+
+export const getSourcePages = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => d as { id: string; q?: string })
+  .handler(async ({ data, context }) => {
+    await assertTeacher(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    let q = supabaseAdmin.from("exam_source_pages").select("page_no,text,ocr").eq("source_id", data.id).order("page_no").limit(60);
+    const term = (data.q || "").trim().replace(/[%,()]/g, " ");
+    if (term) q = q.ilike("text", `%${term}%`);
+    const { data: rows, error } = await q;
+    if (error) throw new Error(error.message);
+    return (rows || []).map((r: any) => ({ ...r, text: String(r.text).slice(0, 1500) }));
   });
 
 function normalizeSpec(s: any): ExamSpec {
@@ -147,11 +253,11 @@ export const generatePaperExam = createServerFn({ method: "POST" })
     const { callAi } = await import("./paper-exam.server");
     const { parseJson } = await import("./ai.server");
     const spec = normalizeSpec(data.spec);
+    void supabaseAdmin;
     let sourceText = "";
     if (data.sourceIds?.length) {
-      const { data: rows } = await supabaseAdmin.from("exam_sources").select("title,lesson,extracted_text").in("id", data.sourceIds.slice(0, 20));
-      const per = Math.floor(40000 / Math.max(1, rows?.length || 1));
-      sourceText = (rows || []).map((r: any) => `### المصدر: ${r.title}${r.lesson ? ` (${r.lesson})` : ""}\n${String(r.extracted_text || "").slice(0, per)}`).join("\n\n");
+      const { retrieveSourceText } = await import("./sources.server");
+      sourceText = await retrieveSourceText(data.sourceIds, data.lessons || "");
     }
     const prompt = `أنشئ امتحاناً ورقياً مصرياً مطابقاً للمواصفات التالية بدقة.
 الصف: ${data.grade} | المادة: ${data.subject} | الدروس: ${data.lessons || "حسب المصادر"}
