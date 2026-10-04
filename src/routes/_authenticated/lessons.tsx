@@ -252,10 +252,10 @@ function LessonsPage() {
                 </div>
               </div>
               <div>
-                <label className="mb-1 block text-xs font-bold">ملفات الدرس (PDF أو صور)</label>
+                <label className="mb-1 block text-xs font-bold">ملفات الدرس (PDF أو صور أو عرض باوربوينت)</label>
                 <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed p-4 text-sm text-muted-foreground hover:bg-accent">
                   <UploadCloud className="h-5 w-5" /> اختر ملفًا أو أكثر
-                  <input type="file" accept="application/pdf,image/*" multiple className="hidden" onChange={(e) => { if (e.target.files) setFiles(prev => [...prev, ...Array.from(e.target.files!)]); }} />
+                  <input type="file" accept="application/pdf,image/*,.ppt,.pptx,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation" multiple className="hidden" onChange={(e) => { if (e.target.files) setFiles(prev => [...prev, ...Array.from(e.target.files!)]); }} />
                 </label>
                 {files.length > 0 && (
                   <ul className="mt-2 space-y-1 text-[11px] text-muted-foreground">
