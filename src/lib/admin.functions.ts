@@ -692,13 +692,27 @@ export const deleteLessonAdmin = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-/**
- * مُجهَّز للربط بخدمة ذكاء اصطناعي خارجية لاحقًا (لا يستهلك أي رصيد حاليًا).
- * عند توفر مفتاح خارجي يمكن تنفيذ الاستدعاء داخل هذه الدالة وإرجاع المسودة.
- */
+/** توليد مسودة شرح وأسئلة للدرس بالذكاء الاصطناعي (تُحفظ كمسودة للمراجعة، لا تُنشر تلقائيًا). */
 export const generateLessonDraftAdmin = createServerFn({ method: "POST" })
   .middleware([requireAuthMiddleware])
-  .inputValidator((d: unknown) => d as { id: string })
-  .handler(async () => {
-    return { ok: false, configured: false, message: "خدمة الذكاء الاصطناعي الخارجية غير مُفعّلة بعد. يمكنك كتابة الشرح والأسئلة يدويًا الآن." };
+  .inputValidator((d: unknown) => d as { id: string; text?: string })
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { callAi, parseJson } = await import("@/lib/ai.server");
+    const { data: l, error } = await supabaseAdmin.from("lessons").select("*").eq("id", data.id).maybeSingle();
+    if (error || !l) throw new Error("الدرس غير موجود");
+    const content = String(data.text || "").slice(0, 60000);
+    const system = "أنت معلم لغة عربية خبير في المناهج المصرية. أعد JSON فقط بالمفاتيح: explanation, vocabulary, qa, beauty, rhetoric, grammar, exercises. كل قيمة نص عربي منسق بأسطر جديدة.";
+    const prompt = `الصف: ${l.grade || "غير محدد"}\nالمادة: ${l.subject || "اللغة العربية"}\nعنوان الدرس: ${l.title}\n\nمحتوى ملفات الدرس:\n${content || "(لا يوجد نص مستخرج — اعتمد على عنوان الدرس والمنهج المصري)"}\n\nاكتب: شرحًا وافيًا، معاني الكلمات (الكلمة : المعنى)، أسئلة وإجابات (س: / ج:)، مواطن الجمال، البلاغة، النحو والإعراب، وتدريبات.`;
+    const raw = await callAi(system, prompt, true);
+    const j = parseJson(raw);
+    const keys = ["explanation", "vocabulary", "qa", "beauty", "rhetoric", "grammar", "exercises"] as const;
+    const upd: Record<string, any> = { ai_status: "draft", ai_raw: j, updated_at: new Date().toISOString() };
+    for (const k of keys) {
+      const v = j?.[k];
+      if (v) upd[k] = Array.isArray(v) ? v.join("\n") : typeof v === "string" ? v : JSON.stringify(v, null, 2);
+    }
+    const { error: e2 } = await supabaseAdmin.from("lessons").update(upd as any).eq("id", data.id);
+    if (e2) throw new Error(e2.message);
+    return { ok: true, configured: true, message: "تم إنشاء المسودة — راجعها وعدّلها قبل النشر" };
   });

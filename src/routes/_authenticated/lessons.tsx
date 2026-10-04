@@ -41,6 +41,32 @@ const SECTIONS: { key: keyof Lesson; label: string; ph: string }[] = [
   { key: "exercises", label: "التدريبات", ph: "تدريبات على الدرس..." },
 ];
 
+/** استخراج نص الملف على جهاز المستخدم (PDF / PowerPoint PPTX). */
+async function extractLessonText(path: string, buf: ArrayBuffer): Promise<string> {
+  if (path.endsWith(".pdf")) {
+    const { extractText, getDocumentProxy } = await import("unpdf");
+    const pdf = await getDocumentProxy(new Uint8Array(buf));
+    const res = await extractText(pdf, { mergePages: true });
+    return String(res.text || "");
+  }
+  if (path.endsWith(".pptx")) {
+    const JSZip = (await import("jszip")).default;
+    const zip = await JSZip.loadAsync(buf);
+    const slides = Object.keys(zip.files)
+      .filter(n => /^ppt\/slides\/slide\d+\.xml$/.test(n))
+      .sort((a, b) => Number(a.match(/\d+/g)!.pop()) - Number(b.match(/\d+/g)!.pop()));
+    const out: string[] = [];
+    for (const s of slides) {
+      const xml = await zip.files[s].async("string");
+      const parts = Array.from(xml.matchAll(/<a:t>([^<]*)<\/a:t>/g)).map(m => m[1]);
+      out.push(parts.join(" ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"'));
+    }
+    return out.join("\n");
+  }
+  return "";
+}
+
+
 function LessonsPage() {
   const [groups, setGroups] = useState<Group[]>([]);
   const [gf, setGf] = useState({ grade: "", group: "" });
@@ -111,11 +137,27 @@ function LessonsPage() {
     catch (e: any) { toast.error(e.message); }
   }
 
-  async function aiDraft(id: string) {
+  const [aiBusy, setAiBusy] = useState<string | null>(null);
+  async function aiDraft(l: Lesson) {
+    const hasContent = SECTIONS.some(s => (l[s.key] as string)?.trim());
+    if (hasContent && !confirm("سيتم استبدال الشرح والأسئلة الحالية بمسودة AI. متابعة؟")) return;
+    setAiBusy(l.id);
+    const t = toast.loading("جاري قراءة الملفات وإنشاء المسودة...");
     try {
-      const res: any = await aiFn({ data: { id } });
-      toast.info(res?.message || "غير متاح حاليًا");
-    } catch (e: any) { toast.error(e.message); }
+      let text = "";
+      for (let i = 0; i < (l.files || []).length; i++) {
+        const path = (l.paths?.[i] || l.files[i].path || "").toLowerCase();
+        try {
+          const buf = await (await fetch(l.files[i].url)).arrayBuffer();
+          text += "\n\n" + (await extractLessonText(path, buf));
+        } catch (e) { console.error("extract failed", e); }
+        if (text.length > 60000) break;
+      }
+      const res: any = await aiFn({ data: { id: l.id, text: text.trim() } });
+      toast.success(res?.message || "تم إنشاء المسودة", { id: t });
+      load();
+    } catch (e: any) { toast.error(e.message || "فشل إنشاء المسودة", { id: t }); }
+    finally { setAiBusy(null); }
   }
 
   return (
@@ -161,7 +203,7 @@ function LessonsPage() {
               )}
               <div className="flex flex-wrap gap-2">
                 <button onClick={() => openEdit(l)} className="rounded-lg border px-3 py-1.5 text-xs font-bold hover:bg-accent">تعديل الشرح والأسئلة</button>
-                <button onClick={() => aiDraft(l.id)} className="inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs font-bold hover:bg-accent"><Sparkles className="h-3.5 w-3.5" /> مسودة AI</button>
+                <button disabled={aiBusy === l.id} onClick={() => aiDraft(l)} className="inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs font-bold hover:bg-accent disabled:opacity-60">{aiBusy === l.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />} مسودة AI</button>
                 <button onClick={() => togglePublish(l)} className={`inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-black ${l.published ? "bg-amber-100 text-amber-700" : "bg-primary text-primary-foreground"}`}>
                   <Send className="h-3.5 w-3.5" /> {l.published ? "إلغاء النشر" : "نشر للطلاب"}
                 </button>
