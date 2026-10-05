@@ -65,7 +65,7 @@ export const listSources = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertTeacher(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    let q = supabaseAdmin.from("exam_sources").select("id,title,grade,subject,lesson,mime,status,error,created_at,extracted_text,kind,spec").eq("kind", data.kind || "source").order("created_at", { ascending: false }).limit(200);
+    let q = supabaseAdmin.from("exam_sources").select("id,title,grade,subject,lesson,mime,status,error,created_at,extracted_text,kind,spec,parts,page_count").eq("kind", data.kind || "source").order("created_at", { ascending: false }).limit(200);
     if (data.grade) q = q.eq("grade", data.grade);
     if (data.subject) q = q.ilike("subject", `%${data.subject}%`);
     const term = (data.q || "").trim().replace(/[%,()]/g, " ");
