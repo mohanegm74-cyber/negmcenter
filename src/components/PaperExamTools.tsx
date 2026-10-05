@@ -107,7 +107,7 @@ function SourcesManager({ onClose }: { onClose: () => void }) {
   const [viewing, setViewing] = useState<{ row: any; q: string; pages: any[] } | null>(null);
 
   async function load() {
-    try { setRows(await listFn({ data: filter })); } catch (e: any) { toast.error(e.message); }
+    try { const r: any = await listFn({ data: filter }); setRows(Array.isArray(r) ? r : []); } catch (e: any) { toast.error(e.message); }
   }
   useEffect(() => { load(); }, []);
 
@@ -382,7 +382,7 @@ function PaperExamBuilder({ onClose }: { onClose: () => void }) {
   const saveSpecFn = useServerFn(saveSpec);
   const [savedSpecs, setSavedSpecs] = useState<any[]>([]);
   const [specPath, setSpecPath] = useState<string | undefined>();
-  const loadSpecs = () => listFn({ data: { grade: info.grade, kind: "spec" } }).then(setSavedSpecs).catch(() => {});
+  const loadSpecs = () => listFn({ data: { grade: info.grade, kind: "spec" } }).then((r: any) => setSavedSpecs(Array.isArray(r) ? r : [])).catch(() => setSavedSpecs([]));
   const [info, setInfo] = useState({ grade: GRADES[0] as string, subject: "", lessons: "" });
   const [sources, setSources] = useState<any[]>([]);
   const [picked, setPicked] = useState<string[]>([]);
@@ -393,7 +393,7 @@ function PaperExamBuilder({ onClose }: { onClose: () => void }) {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    listFn({ data: { grade: info.grade, subject: info.subject } }).then((r) => setSources(r.filter((x: any) => x.status === "indexed"))).catch(() => {});
+    listFn({ data: { grade: info.grade, subject: info.subject } }).then((r: any) => setSources(Array.isArray(r) ? r.filter((x: any) => x.status === "indexed") : [])).catch(() => setSources([]));
     loadSpecs();
   }, [info.grade, info.subject]);
 
@@ -404,8 +404,8 @@ function PaperExamBuilder({ onClose }: { onClose: () => void }) {
   }
 
   const specSum = spec ? spec.sections.reduce((a, s) => a + s.count * s.score_each, 0) : 0;
-  const examSum = sections ? sections.reduce((a, s) => a + s.questions.reduce((b, q) => b + Number(q.score || 0), 0), 0) : 0;
-  const countIssues = sections && spec ? sections.filter((s, i) => s.questions.length !== spec.sections[i]?.count).map((s) => s.title) : [];
+  const examSum = sections ? sections.reduce((a, s) => a + (s.questions || []).reduce((b, q) => b + Number(q.score || 0), 0), 0) : 0;
+  const countIssues = sections && spec ? sections.filter((s, i) => (s.questions?.length || 0) !== spec.sections?.[i]?.count).map((s) => s.title) : [];
 
   async function analyze() {
     if (!info.subject) return toast.error("حدد المادة");
@@ -549,7 +549,7 @@ export function SourcePicker({ grade, value, onChange }: { grade: string; value:
   const listFn = useServerFn(listSources);
   const [rows, setRows] = useState<any[]>([]);
   const [open, setOpen] = useState(false);
-  useEffect(() => { listFn({ data: { grade } }).then((r) => setRows(r.filter((x: any) => x.status === "indexed"))).catch(() => setRows([])); }, [grade]);
+  useEffect(() => { listFn({ data: { grade } }).then((r: any) => setRows(Array.isArray(r) ? r.filter((x: any) => x.status === "indexed") : [])).catch(() => setRows([])); }, [grade]);
   return (
     <div className="mt-6 rounded-2xl border bg-card p-4" dir="rtl">
       <button type="button" onClick={() => setOpen(!open)} className="inline-flex items-center gap-2 rounded-xl border-2 border-primary/30 px-4 py-2 text-sm font-black text-primary">
