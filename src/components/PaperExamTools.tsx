@@ -5,7 +5,7 @@ import { Loader2, X, Upload, Trash2, Search, FileDown, Printer, Plus, Sparkles, 
 import { supabase } from "@/integrations/supabase/client";
 import { GRADES } from "@/lib/exam-constants";
 import {
-  createSourceUploadUrl, indexSource, saveSpec, listSources, deleteSource, analyzeSpecs, generatePaperExam,
+  createSourceUploadUrl, indexSource, saveSpec, createSourceRecord, saveSourcePages, finalizeSource, ocrPageImage, updateSource, getSourceFiles, getSourcePages, listSources, deleteSource, analyzeSpecs, generatePaperExam,
   type ExamSpec, type PaperSection,
 } from "@/lib/paper-exam.functions";
 
@@ -57,54 +57,194 @@ async function extractInBrowser(f: File): Promise<string> {
   return "";
 }
 
-/* ---------------- Sources ---------------- */
+/* ---------------- Sources (permanent library) ---------------- */
+const PART_SIZE = 180 * 1024 * 1024; // auto-split above this, parts kept in order
+
+async function blobToBase64(b: Blob): Promise<string> {
+  const buf = new Uint8Array(await b.arrayBuffer());
+  let bin = "";
+  for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+
+async function canvasToJpeg(c: HTMLCanvasElement): Promise<Blob> {
+  return new Promise((res, rej) => c.toBlob((b) => (b ? res(b) : rej(new Error("render failed"))), "image/jpeg", 0.8));
+}
+
+async function imageFileToJpeg(f: File): Promise<Blob> {
+  const url = URL.createObjectURL(f);
+  try {
+    const img = await new Promise<HTMLImageElement>((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
+    const scale = Math.min(1, 2000 / Math.max(img.width, img.height));
+    const c = document.createElement("canvas");
+    c.width = Math.round(img.width * scale); c.height = Math.round(img.height * scale);
+    c.getContext("2d")!.drawImage(img, 0, 0, c.width, c.height);
+    return await canvasToJpeg(c);
+  } finally { URL.revokeObjectURL(url); }
+}
+
+type PageOut = { page_no: number; text: string; ocr?: boolean };
+
 function SourcesManager({ onClose }: { onClose: () => void }) {
-  const upload = useUpload();
-  const indexFn = useServerFn(indexSource);
+  const urlFn = useServerFn(createSourceUploadUrl);
+  const createFn = useServerFn(createSourceRecord);
+  const pagesFn = useServerFn(saveSourcePages);
+  const finFn = useServerFn(finalizeSource);
+  const ocrFn = useServerFn(ocrPageImage);
+  const legacyIndexFn = useServerFn(indexSource);
   const listFn = useServerFn(listSources);
   const delFn = useServerFn(deleteSource);
+  const updFn = useServerFn(updateSource);
+  const filesFn = useServerFn(getSourceFiles);
+  const viewFn = useServerFn(getSourcePages);
   const [meta, setMeta] = useState({ grade: GRADES[0] as string, subject: "", lesson: "", title: "" });
   const [files, setFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState("");
   const [rows, setRows] = useState<any[]>([]);
   const [filter, setFilter] = useState({ grade: "", subject: "", q: "" });
+  const [editing, setEditing] = useState<any | null>(null);
+  const [viewing, setViewing] = useState<{ row: any; q: string; pages: any[] } | null>(null);
 
   async function load() {
     try { setRows(await listFn({ data: filter })); } catch (e: any) { toast.error(e.message); }
   }
   useEffect(() => { load(); }, []);
 
+  async function uploadParts(f: File): Promise<string[]> {
+    const n = Math.max(1, Math.ceil(f.size / PART_SIZE));
+    const parts: string[] = [];
+    for (let i = 0; i < n; i++) {
+      setProgress(`رفع ${f.name}${n > 1 ? ` — الجزء ${i + 1} من ${n}` : ""}...`);
+      const chunk = f.slice(i * PART_SIZE, Math.min(f.size, (i + 1) * PART_SIZE));
+      const { path, token } = await urlFn({ data: { filename: f.name, kind: "source" } });
+      const { error } = await supabase.storage.from("exam-sources").uploadToSignedUrl(path, token, chunk);
+      if (error) throw new Error(error.message);
+      parts.push(path);
+    }
+    return parts;
+  }
+
+  async function ocr(blob: Blob): Promise<string> {
+    const r = await ocrFn({ data: { base64: await blobToBase64(blob), mime: "image/jpeg" } });
+    return r.text;
+  }
+
+  async function processPdf(f: File, sourceId: string) {
+    const { getDocumentProxy } = await import("unpdf");
+    const pdf: any = await getDocumentProxy(new Uint8Array(await f.arrayBuffer()));
+    const total = pdf.numPages as number;
+    let batch: PageOut[] = [];
+    let ocrFails = 0;
+    for (let p = 1; p <= total; p++) {
+      setProgress(`معالجة ${f.name}: صفحة ${p} من ${total}`);
+      const page = await pdf.getPage(p);
+      let text = "";
+      try {
+        const tc = await page.getTextContent();
+        text = tc.items.map((it: any) => it.str).join(" ").replace(/\s+/g, " ").trim();
+      } catch { /* ignore */ }
+      let isOcr = false;
+      if (text.replace(/\s/g, "").length < 40) {
+        try {
+          const vp = page.getViewport({ scale: 1.6 });
+          const c = document.createElement("canvas");
+          c.width = Math.round(vp.width); c.height = Math.round(vp.height);
+          await page.render({ canvasContext: c.getContext("2d")!, viewport: vp }).promise;
+          setProgress(`قراءة ضوئية عربية: ${f.name} — صفحة ${p} من ${total}`);
+          text = await ocr(await canvasToJpeg(c));
+          isOcr = true;
+        } catch (e) { ocrFails++; console.error("ocr page failed", p, e); }
+      }
+      page.cleanup?.();
+      batch.push({ page_no: p, text, ocr: isOcr });
+      if (batch.length >= 20) { await pagesFn({ data: { sourceId, pages: batch } }); batch = []; }
+    }
+    if (batch.length) await pagesFn({ data: { sourceId, pages: batch } });
+    return ocrFails ? `تعذرت قراءة ${ocrFails} صفحة` : undefined;
+  }
+
+  async function processDocx(f: File, sourceId: string) {
+    const mammoth: any = await import("mammoth/mammoth.browser");
+    const res = await (mammoth.default || mammoth).extractRawText({ arrayBuffer: await f.arrayBuffer() });
+    const text = String(res.value || "");
+    const pages: PageOut[] = [];
+    for (let i = 0, n = 1; i < text.length; i += 3000, n++) pages.push({ page_no: n, text: text.slice(i, i + 3000) });
+    for (let i = 0; i < pages.length; i += 50) await pagesFn({ data: { sourceId, pages: pages.slice(i, i + 50) } });
+  }
+
   async function save() {
     if (!files.length) return toast.error("اختر ملفاً واحداً على الأقل");
-    if (!meta.subject || !meta.lesson) return toast.error("حدد المادة والدرس");
+    if (!meta.subject) return toast.error("حدد المادة");
     setBusy(true);
     for (const f of files) {
-      const t = toast.loading(`جاري رفع وفهرسة ${f.name}...`);
+      const lower = f.name.toLowerCase();
+      const t = toast.loading(`جاري معالجة ${f.name}...`);
       try {
-        const path = await upload(f, "source");
-        toast.loading(`جاري استخراج النص من ${f.name}...`, { id: t });
-        const text = await extractInBrowser(f);
-        const r = await indexFn({ data: { path, text, size: f.size, filename: f.name, mime: f.type, title: meta.title || f.name, grade: meta.grade, subject: meta.subject, lesson: meta.lesson } });
-        if (r.status === "indexed") toast.success(`تمت فهرسة ${f.name} (${r.chars} حرف)`, { id: t });
-        else toast.error(`حُفظ ${f.name} لكن فشل الاستخراج: ${r.error}`, { id: t });
-      } catch (e: any) { toast.error(e.message, { id: t }); }
+        if (lower.endsWith(".doc")) {
+          // Legacy .doc: server-side reader (single file).
+          if (f.size > PART_SIZE) throw new Error("ملف DOC القديم كبير جداً");
+          const [path] = await uploadParts(f);
+          const r = await legacyIndexFn({ data: { path, size: f.size, filename: f.name, mime: f.type, title: meta.title || f.name, grade: meta.grade, subject: meta.subject, lesson: meta.lesson } });
+          if (r.status === "indexed") toast.success(`تمت فهرسة ${f.name}`, { id: t }); else toast.error(`${f.name}: ${r.error}`, { id: t });
+          continue;
+        }
+        const parts = await uploadParts(f);
+        const { id } = await createFn({ data: { parts, filename: f.name, mime: f.type, size: f.size, title: meta.title || f.name, grade: meta.grade, subject: meta.subject, lesson: meta.lesson } });
+        let warn: string | undefined;
+        if (lower.endsWith(".pdf")) warn = await processPdf(f, id);
+        else if (lower.endsWith(".docx")) await processDocx(f, id);
+        else {
+          setProgress(`قراءة ضوئية عربية: ${f.name}`);
+          await pagesFn({ data: { sourceId: id, pages: [{ page_no: 1, text: await ocr(await imageFileToJpeg(f)), ocr: true }] } });
+        }
+        const r = await finFn({ data: { sourceId: id, error: warn } });
+        if (r.status === "indexed") toast.success(`تم حفظ ${f.name} في المكتبة (${r.pages} صفحة${parts.length > 1 ? `، ${parts.length} أجزاء` : ""})${warn ? ` — ${warn}` : ""}`, { id: t });
+        else toast.error(`حُفظ ${f.name} لكن لم يُستخرج نص`, { id: t });
+      } catch (e: any) { toast.error(`${f.name}: ${e.message}`, { id: t }); }
     }
-    setFiles([]); setBusy(false); load();
+    setFiles([]); setBusy(false); setProgress(""); load();
+  }
+
+  async function openSource(r: any) {
+    const t = toast.loading("جاري فتح المصدر...");
+    try {
+      const { urls, mime } = await filesFn({ data: { id: r.id } });
+      if (!urls.length) throw new Error("الملف غير موجود");
+      if (urls.length === 1) { window.open(urls[0], "_blank"); toast.dismiss(t); return; }
+      // Reassemble split parts in order into the original file.
+      const blobs: Blob[] = [];
+      for (let i = 0; i < urls.length; i++) {
+        toast.loading(`تجميع الجزء ${i + 1} من ${urls.length}...`, { id: t });
+        blobs.push(await (await fetch(urls[i])).blob());
+      }
+      window.open(URL.createObjectURL(new Blob(blobs, { type: mime || "application/pdf" })), "_blank");
+      toast.dismiss(t);
+    } catch (e: any) { toast.error(e.message, { id: t }); }
+  }
+
+  async function showPages(row: any, q = "") {
+    try { setViewing({ row, q, pages: await viewFn({ data: { id: row.id, q } }) }); } catch (e: any) { toast.error(e.message); }
+  }
+
+  async function saveEdit() {
+    try { await updFn({ data: editing }); toast.success("تم حفظ التعديل"); setEditing(null); load(); } catch (e: any) { toast.error(e.message); }
   }
 
   return (
-    <Modal title="إضافة مصدر" onClose={onClose}>
+    <Modal title="مكتبة المصادر" onClose={onClose}>
       <div className="grid gap-3 rounded-2xl border p-4 sm:grid-cols-2">
         <select className={inputCls} value={meta.grade} onChange={(e) => setMeta({ ...meta, grade: e.target.value })}>{GRADES.map((g) => <option key={g}>{g}</option>)}</select>
         <input className={inputCls} placeholder="المادة" value={meta.subject} onChange={(e) => setMeta({ ...meta, subject: e.target.value })} />
-        <input className={inputCls} placeholder="الدرس" value={meta.lesson} onChange={(e) => setMeta({ ...meta, lesson: e.target.value })} />
+        <input className={inputCls} placeholder="الدرس / الوحدة (اختياري للكتاب كامل)" value={meta.lesson} onChange={(e) => setMeta({ ...meta, lesson: e.target.value })} />
         <input className={inputCls} placeholder="عنوان المصدر (اختياري)" value={meta.title} onChange={(e) => setMeta({ ...meta, title: e.target.value })} />
         <label className="sm:col-span-2 flex cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-dashed p-4 text-sm font-bold text-muted-foreground hover:bg-muted">
-          <Upload className="h-5 w-5" /> {files.length ? files.map((f) => f.name).join("، ") : "PDF / Word / صور JPG-PNG — حتى 200 ميجا للملف"}
+          <Upload className="h-5 w-5" /> {files.length ? files.map((f) => f.name).join("، ") : "PDF / Word / صور — أي حجم (يُقسَّم تلقائياً)"}
           <input type="file" multiple accept={ACCEPT} className="hidden" onChange={(e) => setFiles(Array.from(e.target.files || []))} />
         </label>
+        {progress && <div className="sm:col-span-2 rounded-xl bg-muted px-3 py-2 text-xs font-bold">{progress} — لا تغلق النافذة</div>}
         <button disabled={busy} onClick={save} className="sm:col-span-2 inline-flex items-center justify-center gap-2 rounded-xl bg-primary py-2.5 text-sm font-black text-primary-foreground">
-          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <FolderPlus className="h-4 w-4" />} حفظ وفهرسة
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <FolderPlus className="h-4 w-4" />} حفظ في المكتبة
         </button>
       </div>
 
@@ -117,16 +257,58 @@ function SourcesManager({ onClose }: { onClose: () => void }) {
       <div className="mt-3 max-h-[45vh] space-y-2 overflow-y-auto">
         {rows.length === 0 && <div className="p-6 text-center text-sm font-bold text-muted-foreground">لا توجد مصادر</div>}
         {rows.map((r) => (
-          <div key={r.id} className="flex items-start justify-between gap-3 rounded-2xl border p-3">
-            <div className="min-w-0">
-              <div className="font-black text-sm">{r.title}</div>
-              <div className="text-[11px] font-bold text-muted-foreground">{[r.grade, r.subject, r.lesson].filter(Boolean).join(" • ")} • {r.status === "indexed" ? `${r.chars} حرف` : `فشل: ${r.error}`}</div>
-              {r.snippet && <div className="mt-1 line-clamp-2 text-xs text-muted-foreground">{r.snippet}</div>}
-            </div>
-            <button onClick={async () => { if (!confirm("حذف المصدر؟")) return; await delFn({ data: { id: r.id } }); load(); }} className="rounded-lg p-2 text-destructive hover:bg-destructive/10"><Trash2 className="h-4 w-4" /></button>
+          <div key={r.id} className="rounded-2xl border p-3">
+            {editing?.id === r.id ? (
+              <div className="grid gap-2 sm:grid-cols-4">
+                <input className={inputCls} value={editing.title} onChange={(e) => setEditing({ ...editing, title: e.target.value })} />
+                <select className={inputCls} value={editing.grade} onChange={(e) => setEditing({ ...editing, grade: e.target.value })}>{GRADES.map((g) => <option key={g}>{g}</option>)}</select>
+                <input className={inputCls} placeholder="المادة" value={editing.subject} onChange={(e) => setEditing({ ...editing, subject: e.target.value })} />
+                <input className={inputCls} placeholder="الدرس" value={editing.lesson} onChange={(e) => setEditing({ ...editing, lesson: e.target.value })} />
+                <div className="sm:col-span-4 flex gap-2">
+                  <button onClick={saveEdit} className="rounded-xl bg-primary px-4 py-1.5 text-xs font-black text-primary-foreground">حفظ</button>
+                  <button onClick={() => setEditing(null)} className="rounded-xl bg-muted px-4 py-1.5 text-xs font-bold">إلغاء</button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="font-black text-sm">{r.title}</div>
+                  <div className="text-[11px] font-bold text-muted-foreground">
+                    {[r.grade, r.subject, r.lesson].filter(Boolean).join(" • ")} • {r.status === "indexed" ? `${r.page_count ? `${r.page_count} صفحة • ` : ""}${r.chars} حرف` : r.status === "processing" ? "قيد المعالجة" : `فشل: ${r.error}`}
+                    {Array.isArray(r.parts) && r.parts.length > 1 ? ` • ${r.parts.length} أجزاء` : ""}
+                  </div>
+                  {r.snippet && <div className="mt-1 line-clamp-2 text-xs text-muted-foreground">{r.snippet}</div>}
+                </div>
+                <div className="flex shrink-0 gap-1">
+                  <button onClick={() => openSource(r)} className="rounded-lg border px-2 py-1 text-[11px] font-bold hover:bg-muted">فتح</button>
+                  <button onClick={() => showPages(r, filter.q)} className="rounded-lg border px-2 py-1 text-[11px] font-bold hover:bg-muted">الصفحات</button>
+                  <button onClick={() => setEditing({ id: r.id, title: r.title || "", grade: r.grade || GRADES[0], subject: r.subject || "", lesson: r.lesson || "" })} className="rounded-lg border px-2 py-1 text-[11px] font-bold hover:bg-muted">تعديل</button>
+                  <button onClick={async () => { if (!confirm("حذف المصدر بكل أجزائه؟")) return; await delFn({ data: { id: r.id } }); load(); }} className="rounded-lg p-1.5 text-destructive hover:bg-destructive/10"><Trash2 className="h-4 w-4" /></button>
+                </div>
+              </div>
+            )}
           </div>
         ))}
       </div>
+
+      {viewing && (
+        <div className="mt-4 rounded-2xl border p-3">
+          <div className="mb-2 flex items-center gap-2">
+            <div className="flex-1 text-sm font-black">صفحات: {viewing.row.title}</div>
+            <input className={inputCls + " w-48"} placeholder="بحث في الصفحات" value={viewing.q} onChange={(e) => setViewing({ ...viewing, q: e.target.value })} onKeyDown={(e) => e.key === "Enter" && showPages(viewing.row, viewing.q)} />
+            <button onClick={() => setViewing(null)} className="rounded-full p-1 hover:bg-muted"><X className="h-4 w-4" /></button>
+          </div>
+          <div className="max-h-[40vh] space-y-2 overflow-y-auto">
+            {viewing.pages.length === 0 && <div className="p-4 text-center text-xs text-muted-foreground">لا توجد نتائج</div>}
+            {viewing.pages.map((p) => (
+              <div key={p.page_no} className="rounded-xl bg-muted/50 p-2 text-xs">
+                <div className="mb-1 font-black">صفحة {p.page_no}{p.ocr ? " • قراءة ضوئية" : ""}</div>
+                <div className="whitespace-pre-wrap leading-6">{p.text}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </Modal>
   );
 }
