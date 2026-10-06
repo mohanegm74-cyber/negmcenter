@@ -217,6 +217,11 @@ function ExamsPage() {
                 {GRADES.map(g => <option key={g} value={g}>{g}</option>)}
               </select>
             </label>
+            <label className="block text-xs font-black text-muted-foreground uppercase">الفصل الدراسي
+              <select className="w-full rounded-xl border-slate-200 p-3 mt-1 font-bold text-sm bg-slate-50 focus:bg-white outline-none focus:ring-2 focus:ring-primary/20 transition-all" value={form.term} onChange={e => setForm({ ...form, term: e.target.value })}>
+                {TERMS.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </label>
             <label className="block text-xs font-black text-muted-foreground uppercase">المجموعة المستهدفة
               <select className="w-full rounded-xl border-slate-200 p-3 mt-1 font-bold text-sm bg-slate-50 focus:bg-white outline-none focus:ring-2 focus:ring-primary/20 transition-all" value={form.group_id} onChange={e => setForm({ ...form, group_id: e.target.value })}>
                 <option value="">كل المجموعات (حسب الصف)</option>
@@ -258,7 +263,7 @@ function ExamsPage() {
           </div>
 
           {createMode === "ai" && !previewExam && (
-            <SourcePicker grade={form.grade} value={aiSources} onChange={setAiSources} />
+            <SourcePicker grade={form.grade} term={form.term} value={aiSources} onChange={setAiSources} />
           )}
           {createMode === "ai" && !previewExam && (
             <button onClick={startAiBuild} disabled={busy} className="mt-8 w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-2xl bg-gold px-10 py-4 text-sm font-black text-gold-foreground shadow-xl shadow-gold/20 hover:scale-[1.02] active:scale-95 transition-all">

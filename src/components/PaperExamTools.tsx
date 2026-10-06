@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { Loader2, X, Upload, Trash2, Search, FileDown, Printer, Plus, Sparkles, FolderPlus, ScrollText, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { GRADES } from "@/lib/exam-constants";
+import { TERMS, GRADES } from "@/lib/exam-constants";
 import {
   createSourceUploadUrl, indexSource, saveSpec, createSourceRecord, saveSourcePages, finalizeSource, ocrPageImage, updateSource, getSourceFiles, getSourcePages, listSources, deleteSource, analyzeSpecs, generatePaperExam,
   type ExamSpec, type PaperSection,
@@ -97,7 +97,7 @@ function SourcesManager({ onClose }: { onClose: () => void }) {
   const updFn = useServerFn(updateSource);
   const filesFn = useServerFn(getSourceFiles);
   const viewFn = useServerFn(getSourcePages);
-  const [meta, setMeta] = useState({ grade: GRADES[0] as string, subject: "", lesson: "", title: "" });
+  const [meta, setMeta] = useState({ grade: GRADES[0] as string, term: "", subject: "", lesson: "", title: "" });
   const [files, setFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState("");
@@ -185,12 +185,12 @@ function SourcesManager({ onClose }: { onClose: () => void }) {
           // Legacy .doc: server-side reader (single file).
           if (f.size > PART_SIZE) throw new Error("ملف DOC القديم كبير جداً");
           const [path] = await uploadParts(f);
-          const r = await legacyIndexFn({ data: { path, size: f.size, filename: f.name, mime: f.type, title: meta.title || f.name, grade: meta.grade, subject: meta.subject, lesson: meta.lesson } });
+          const r = await legacyIndexFn({ data: { path, size: f.size, filename: f.name, mime: f.type, title: meta.title || f.name, grade: meta.grade, subject: meta.subject, lesson: meta.lesson, term: meta.term } });
           if (r.status === "indexed") toast.success(`تمت فهرسة ${f.name}`, { id: t }); else toast.error(`${f.name}: ${r.error}`, { id: t });
           continue;
         }
         const parts = await uploadParts(f);
-        const { id } = await createFn({ data: { parts, filename: f.name, mime: f.type, size: f.size, title: meta.title || f.name, grade: meta.grade, subject: meta.subject, lesson: meta.lesson } });
+        const { id } = await createFn({ data: { parts, filename: f.name, mime: f.type, size: f.size, title: meta.title || f.name, grade: meta.grade, subject: meta.subject, lesson: meta.lesson, term: meta.term } });
         let warn: string | undefined;
         if (lower.endsWith(".pdf")) warn = await processPdf(f, id);
         else if (lower.endsWith(".docx")) await processDocx(f, id);
@@ -235,6 +235,7 @@ function SourcesManager({ onClose }: { onClose: () => void }) {
     <Modal title="مكتبة المصادر" onClose={onClose}>
       <div className="grid gap-3 rounded-2xl border p-4 sm:grid-cols-2">
         <select className={inputCls} value={meta.grade} onChange={(e) => setMeta({ ...meta, grade: e.target.value })}>{GRADES.map((g) => <option key={g}>{g}</option>)}</select>
+        <select className={inputCls} value={meta.term || ""} onChange={(e) => setMeta({ ...meta, term: e.target.value })}><option value="">الفصل الدراسي (الكل)</option>{TERMS.map((t) => <option key={t}>{t}</option>)}</select>
         <input className={inputCls} placeholder="المادة" value={meta.subject} onChange={(e) => setMeta({ ...meta, subject: e.target.value })} />
         <input className={inputCls} placeholder="الدرس / الوحدة (اختياري للكتاب كامل)" value={meta.lesson} onChange={(e) => setMeta({ ...meta, lesson: e.target.value })} />
         <input className={inputCls} placeholder="عنوان المصدر (اختياري)" value={meta.title} onChange={(e) => setMeta({ ...meta, title: e.target.value })} />
@@ -262,6 +263,7 @@ function SourcesManager({ onClose }: { onClose: () => void }) {
               <div className="grid gap-2 sm:grid-cols-4">
                 <input className={inputCls} value={editing.title} onChange={(e) => setEditing({ ...editing, title: e.target.value })} />
                 <select className={inputCls} value={editing.grade} onChange={(e) => setEditing({ ...editing, grade: e.target.value })}>{GRADES.map((g) => <option key={g}>{g}</option>)}</select>
+                <select className={inputCls} value={editing.term || ""} onChange={(e) => setEditing({ ...editing, term: e.target.value })}><option value="">الفصل الدراسي (الكل)</option>{TERMS.map((t) => <option key={t}>{t}</option>)}</select>
                 <input className={inputCls} placeholder="المادة" value={editing.subject} onChange={(e) => setEditing({ ...editing, subject: e.target.value })} />
                 <input className={inputCls} placeholder="الدرس" value={editing.lesson} onChange={(e) => setEditing({ ...editing, lesson: e.target.value })} />
                 <div className="sm:col-span-4 flex gap-2">
@@ -282,7 +284,7 @@ function SourcesManager({ onClose }: { onClose: () => void }) {
                 <div className="flex shrink-0 gap-1">
                   <button onClick={() => openSource(r)} className="rounded-lg border px-2 py-1 text-[11px] font-bold hover:bg-muted">فتح</button>
                   <button onClick={() => showPages(r, filter.q)} className="rounded-lg border px-2 py-1 text-[11px] font-bold hover:bg-muted">الصفحات</button>
-                  <button onClick={() => setEditing({ id: r.id, title: r.title || "", grade: r.grade || GRADES[0], subject: r.subject || "", lesson: r.lesson || "" })} className="rounded-lg border px-2 py-1 text-[11px] font-bold hover:bg-muted">تعديل</button>
+                  <button onClick={() => setEditing({ id: r.id, title: r.title || "", grade: r.grade || GRADES[0], subject: r.subject || "", lesson: r.lesson || "", term: r.term || "" })} className="rounded-lg border px-2 py-1 text-[11px] font-bold hover:bg-muted">تعديل</button>
                   <button onClick={async () => { if (!confirm("حذف المصدر بكل أجزائه؟")) return; await delFn({ data: { id: r.id } }); load(); }} className="rounded-lg p-1.5 text-destructive hover:bg-destructive/10"><Trash2 className="h-4 w-4" /></button>
                 </div>
               </div>
@@ -382,8 +384,8 @@ function PaperExamBuilder({ onClose }: { onClose: () => void }) {
   const saveSpecFn = useServerFn(saveSpec);
   const [savedSpecs, setSavedSpecs] = useState<any[]>([]);
   const [specPath, setSpecPath] = useState<string | undefined>();
-  const loadSpecs = () => listFn({ data: { grade: info.grade, kind: "spec" } }).then((r: any) => setSavedSpecs(Array.isArray(r) ? r : [])).catch(() => setSavedSpecs([]));
-  const [info, setInfo] = useState({ grade: GRADES[0] as string, subject: "", lessons: "" });
+  const loadSpecs = () => listFn({ data: { grade: info.grade, term: info.term, kind: "spec" } }).then((r: any) => setSavedSpecs(Array.isArray(r) ? r : [])).catch(() => setSavedSpecs([]));
+  const [info, setInfo] = useState({ grade: GRADES[0] as string, term: "", subject: "", lessons: "" });
   const [sources, setSources] = useState<any[]>([]);
   const [picked, setPicked] = useState<string[]>([]);
   const [specText, setSpecText] = useState("");
@@ -393,13 +395,13 @@ function PaperExamBuilder({ onClose }: { onClose: () => void }) {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    listFn({ data: { grade: info.grade, subject: info.subject } }).then((r: any) => setSources(Array.isArray(r) ? r.filter((x: any) => x.status === "indexed") : [])).catch(() => setSources([]));
+    listFn({ data: { grade: info.grade, term: info.term, subject: info.subject } }).then((r: any) => setSources(Array.isArray(r) ? r.filter((x: any) => x.status === "indexed") : [])).catch(() => setSources([]));
     loadSpecs();
-  }, [info.grade, info.subject]);
+  }, [info.grade, info.term, info.subject]);
 
   async function storeSpec() {
     if (!spec) return;
-    try { await saveSpecFn({ data: { grade: info.grade, subject: info.subject, spec, path: specPath } }); toast.success("تم حفظ المواصفات لهذا الصف"); loadSpecs(); }
+    try { await saveSpecFn({ data: { grade: info.grade, term: info.term, subject: info.subject, spec, path: specPath } }); toast.success("تم حفظ المواصفات لهذا الصف"); loadSpecs(); }
     catch (e: any) { toast.error(e.message); }
   }
 
@@ -428,7 +430,7 @@ function PaperExamBuilder({ onClose }: { onClose: () => void }) {
     setBusy(true);
     const t = toast.loading("جاري توليد الامتحان من المصادر...");
     try {
-      const r = await genFn({ data: { grade: info.grade, subject: info.subject, lessons: info.lessons, sourceIds: picked, spec } });
+      const r = await genFn({ data: { grade: info.grade, term: info.term, subject: info.subject, lessons: info.lessons, sourceIds: picked, spec } });
       setSections(r.sections);
       r.warnings.forEach((w: string) => toast.warning(w));
       toast.success("تم توليد الامتحان", { id: t });
@@ -444,6 +446,7 @@ function PaperExamBuilder({ onClose }: { onClose: () => void }) {
       {/* Step 1 */}
       <div className="grid gap-3 rounded-2xl border p-4 sm:grid-cols-3">
         <select className={inputCls} value={info.grade} onChange={(e) => setInfo({ ...info, grade: e.target.value })}>{GRADES.map((g) => <option key={g}>{g}</option>)}</select>
+        <select className={inputCls} value={info.term || ""} onChange={(e) => setInfo({ ...info, term: e.target.value })}><option value="">الفصل الدراسي (الكل)</option>{TERMS.map((t) => <option key={t}>{t}</option>)}</select>
         <input className={inputCls} placeholder="المادة" value={info.subject} onChange={(e) => setInfo({ ...info, subject: e.target.value })} />
         <input className={inputCls} placeholder="الدروس (مفصولة بفواصل)" value={info.lessons} onChange={(e) => setInfo({ ...info, lessons: e.target.value })} />
         <div className="sm:col-span-3">
@@ -545,11 +548,11 @@ function PaperExamBuilder({ onClose }: { onClose: () => void }) {
   );
 }
 
-export function SourcePicker({ grade, value, onChange }: { grade: string; value: string[]; onChange: (v: string[]) => void }) {
+export function SourcePicker({ grade, term, value, onChange }: { grade: string; term?: string; value: string[]; onChange: (v: string[]) => void }) {
   const listFn = useServerFn(listSources);
   const [rows, setRows] = useState<any[]>([]);
   const [open, setOpen] = useState(false);
-  useEffect(() => { listFn({ data: { grade } }).then((r: any) => setRows(Array.isArray(r) ? r.filter((x: any) => x.status === "indexed") : [])).catch(() => setRows([])); }, [grade]);
+  useEffect(() => { listFn({ data: { grade, term } }).then((r: any) => setRows(Array.isArray(r) ? r.filter((x: any) => x.status === "indexed") : [])).catch(() => setRows([])); }, [grade, term]);
   return (
     <div className="mt-6 rounded-2xl border bg-card p-4" dir="rtl">
       <button type="button" onClick={() => setOpen(!open)} className="inline-flex items-center gap-2 rounded-xl border-2 border-primary/30 px-4 py-2 text-sm font-black text-primary">

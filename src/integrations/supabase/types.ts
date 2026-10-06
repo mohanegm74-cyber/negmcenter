@@ -378,6 +378,7 @@ export type Database = {
           spec: Json | null
           status: string
           subject: string | null
+          term: string | null
           title: string
         }
         Insert: {
@@ -396,6 +397,7 @@ export type Database = {
           spec?: Json | null
           status?: string
           subject?: string | null
+          term?: string | null
           title: string
         }
         Update: {
@@ -414,6 +416,7 @@ export type Database = {
           spec?: Json | null
           status?: string
           subject?: string | null
+          term?: string | null
           title?: string
         }
         Relationships: []

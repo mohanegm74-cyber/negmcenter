@@ -1,29 +1,58 @@
-/** منطق السيرفر للاتصال بالذكاء الاصطناعي مع دعم مفاتيح خارجية */
-export async function callAi(system: string, prompt: string, json = false) {
-  // المفتاح الذي زودتنا به أستاذ محمد
-  const MASTER_KEY = "AQ.Ab8RN6KVID_i1yTCmhnBbwq1-Eo2ARbVDckm4VDWMgn_H07GlA";
-  const customKey = process.env.GEMINI_API_KEY || MASTER_KEY;
+/** الاتصال بالذكاء الاصطناعي: Gemini الخارجي أولاً، ثم Lovable AI كخيار احتياطي */
+const GEMINI_MODEL = "gemini-2.5-flash";
 
-  // الاعتماد على خدمة Gemini الخارجية فقط — بدون استهلاك نقاط Lovable
-  if (!customKey) throw new Error("مفتاح الذكاء الاصطناعي الخارجي غير مضبوط.");
+type Part = { text: string } | { inline_data: { mime_type: string; data: string } };
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${customKey}`;
-  const r = await fetch(url, {
+async function geminiCall(parts: Part[], json: boolean): Promise<string> {
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) throw new Error("no gemini key");
+  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${key}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      contents: [{ role: "user", parts: [{ text: `${system}\n\n${prompt}` }] }],
-      generationConfig: json ? { responseMimeType: "application/json" } : {}
-    }),
+    body: JSON.stringify({ contents: [{ role: "user", parts }], generationConfig: json ? { responseMimeType: "application/json" } : {} }),
   });
-
-  if (r.status === 429) throw new Error("تم تجاوز حد استخدام مفتاح الذكاء الاصطناعي، حاول بعد قليل.");
-  if (!r.ok) throw new Error("تعذر الاتصال بخدمة الذكاء الاصطناعي الخارجية. تحقق من صلاحية المفتاح.");
-
+  if (!r.ok) throw new Error(`gemini ${r.status}`);
   const j = await r.json();
-  const text = j?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) throw new Error("لم تُرجع خدمة الذكاء الاصطناعي نتيجة، حاول مرة أخرى.");
-  return text;
+  const t = j?.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!t) throw new Error("gemini empty");
+  return String(t);
+}
+
+async function lovableCall(parts: Part[], json: boolean): Promise<string> {
+  const key = process.env.LOVABLE_API_KEY;
+  if (!key) throw new Error("مفتاح الذكاء الاصطناعي غير مضبوط.");
+  const content = parts.map((p) =>
+    "text" in p
+      ? { type: "text", text: p.text }
+      : p.inline_data.mime_type === "application/pdf"
+        ? { type: "file", file: { filename: "file.pdf", file_data: `data:application/pdf;base64,${p.inline_data.data}` } }
+        : { type: "image_url", image_url: { url: `data:${p.inline_data.mime_type};base64,${p.inline_data.data}` } },
+  );
+  const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
+    body: JSON.stringify({ model: "google/gemini-2.5-flash", messages: [{ role: "user", content }], ...(json ? { response_format: { type: "json_object" } } : {}) }),
+  });
+  if (r.status === 429) throw new Error("تم تجاوز حد الاستخدام، حاول بعد قليل.");
+  if (r.status === 402) throw new Error("نفد رصيد الذكاء الاصطناعي في Lovable، ومفتاح Gemini الخارجي لا يعمل.");
+  if (!r.ok) throw new Error("تعذر الاتصال بخدمة الذكاء الاصطناعي، حاول مرة أخرى.");
+  const j = await r.json();
+  const t = j?.choices?.[0]?.message?.content;
+  if (!t) throw new Error("لم تُرجع خدمة الذكاء الاصطناعي نتيجة، حاول مرة أخرى.");
+  return String(t);
+}
+
+export async function callAiParts(parts: Part[], json = false): Promise<string> {
+  try {
+    return await geminiCall(parts, json);
+  } catch (e) {
+    console.warn("[ai] Gemini failed, falling back to Lovable AI:", (e as Error).message);
+    return lovableCall(parts, json);
+  }
+}
+
+export async function callAi(system: string, prompt: string, json = false) {
+  return callAiParts([{ text: `${system}\n\n${prompt}` }], json);
 }
 
 export function parseJson(text: string): any {

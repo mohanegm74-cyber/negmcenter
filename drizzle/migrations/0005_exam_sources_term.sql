@@ -1,0 +1,1 @@
+ALTER TABLE public.exam_sources ADD COLUMN IF NOT EXISTS term text;
