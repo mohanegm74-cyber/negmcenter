@@ -548,11 +548,11 @@ function PaperExamBuilder({ onClose }: { onClose: () => void }) {
   );
 }
 
-export function SourcePicker({ grade, value, onChange }: { grade: string; value: string[]; onChange: (v: string[]) => void }) {
+export function SourcePicker({ grade, term, value, onChange }: { grade: string; term?: string; value: string[]; onChange: (v: string[]) => void }) {
   const listFn = useServerFn(listSources);
   const [rows, setRows] = useState<any[]>([]);
   const [open, setOpen] = useState(false);
-  useEffect(() => { listFn({ data: { grade } }).then((r: any) => setRows(Array.isArray(r) ? r.filter((x: any) => x.status === "indexed") : [])).catch(() => setRows([])); }, [grade]);
+  useEffect(() => { listFn({ data: { grade, term } }).then((r: any) => setRows(Array.isArray(r) ? r.filter((x: any) => x.status === "indexed") : [])).catch(() => setRows([])); }, [grade, term]);
   return (
     <div className="mt-6 rounded-2xl border bg-card p-4" dir="rtl">
       <button type="button" onClick={() => setOpen(!open)} className="inline-flex items-center gap-2 rounded-xl border-2 border-primary/30 px-4 py-2 text-sm font-black text-primary">
