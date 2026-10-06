@@ -1,33 +1,11 @@
 /** Server-only helpers: source text extraction (PDF/DOCX/OCR) and multimodal AI calls. */
-import { callAi } from "./ai.server";
+import { callAi, callAiParts } from "./ai.server";
 
-const MASTER_KEY = "AQ.Ab8RN6KVID_i1yTCmhnBbwq1-Eo2ARbVDckm4VDWMgn_H07GlA";
-
-function toBase64(buf: Uint8Array) {
-  return Buffer.from(buf).toString("base64");
-}
-
-/** Multimodal call (image/PDF + text) using the same AI service as smart exams. */
+/** Multimodal call (image/PDF + text): Gemini first, Lovable AI fallback. */
 export async function callAiWithFile(system: string, prompt: string, bytes: Uint8Array, mime: string, json = false) {
-  const key = process.env.GEMINI_API_KEY || MASTER_KEY;
-  if (!key) throw new Error("مفتاح الذكاء الاصطناعي الخارجي غير مضبوط.");
   if (bytes.length > 18 * 1024 * 1024) throw new Error("الملف كبير على القراءة الضوئية (OCR) — الحد 18 ميجا للصور والملفات الممسوحة. ملفات PDF النصية وWord تُقرأ حتى 200 ميجا.");
-  const b64 = toBase64(bytes);
-  // الاعتماد على خدمة Gemini الخارجية فقط — بدون استهلاك نقاط Lovable
-  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      contents: [{ role: "user", parts: [{ text: `${system}\n\n${prompt}` }, { inline_data: { mime_type: mime, data: b64 } }] }],
-      generationConfig: json ? { responseMimeType: "application/json" } : {},
-    }),
-  });
-  if (r.status === 429) throw new Error("تم تجاوز حد استخدام مفتاح الذكاء الاصطناعي، حاول بعد قليل.");
-  if (!r.ok) throw new Error("تعذر الاتصال بخدمة الذكاء الاصطناعي الخارجية. تحقق من صلاحية المفتاح.");
-  const j = await r.json();
-  const t = j?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!t) throw new Error("لم تُرجع خدمة الذكاء الاصطناعي نتيجة، حاول مرة أخرى.");
-  return String(t);
+  const b64 = Buffer.from(bytes).toString("base64");
+  return callAiParts([{ text: `${system}\n\n${prompt}` }, { inline_data: { mime_type: mime, data: b64 } }], json);
 }
 
 const OCR_SYSTEM = "أنت أداة OCR دقيقة للنصوص العربية التعليمية. انسخ النص الموجود في الملف حرفياً كما هو بدون شرح أو إضافات، مع الحفاظ على ترتيب الفقرات والأسئلة.";
