@@ -10,44 +10,24 @@ function toBase64(buf: Uint8Array) {
 /** Multimodal call (image/PDF + text) using the same AI service as smart exams. */
 export async function callAiWithFile(system: string, prompt: string, bytes: Uint8Array, mime: string, json = false) {
   const key = process.env.GEMINI_API_KEY || MASTER_KEY;
+  if (!key) throw new Error("مفتاح الذكاء الاصطناعي الخارجي غير مضبوط.");
   if (bytes.length > 18 * 1024 * 1024) throw new Error("الملف كبير على القراءة الضوئية (OCR) — الحد 18 ميجا للصور والملفات الممسوحة. ملفات PDF النصية وWord تُقرأ حتى 200 ميجا.");
   const b64 = toBase64(bytes);
-  try {
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: `${system}\n\n${prompt}` }, { inline_data: { mime_type: mime, data: b64 } }] }],
-        generationConfig: json ? { responseMimeType: "application/json" } : {},
-      }),
-    });
-    if (r.ok) {
-      const j = await r.json();
-      const t = j?.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (t) return t as string;
-    }
-  } catch (e) {
-    console.error("[AI file] direct call failed", e);
-  }
-  const lovableKey = process.env.LOVABLE_API_KEY;
-  if (!lovableKey) throw new Error("تعذر الوصول لخدمة الذكاء الاصطناعي.");
-  const part = mime === "application/pdf"
-    ? { type: "file", file: { filename: "doc.pdf", file_data: `data:${mime};base64,${b64}` } }
-    : { type: "image_url", image_url: { url: `data:${mime};base64,${b64}` } };
-  const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+  // الاعتماد على خدمة Gemini الخارجية فقط — بدون استهلاك نقاط Lovable
+  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`, {
     method: "POST",
-    headers: { "content-type": "application/json", "Lovable-API-Key": lovableKey },
+    headers: { "content-type": "application/json" },
     body: JSON.stringify({
-      model: "google/gemini-3.6-flash",
-      messages: [{ role: "system", content: system }, { role: "user", content: [{ type: "text", text: prompt }, part] }],
-      ...(json ? { response_format: { type: "json_object" } } : {}),
+      contents: [{ role: "user", parts: [{ text: `${system}\n\n${prompt}` }, { inline_data: { mime_type: mime, data: b64 } }] }],
+      generationConfig: json ? { responseMimeType: "application/json" } : {},
     }),
   });
-  if (r.status === 429) throw new Error("تم تجاوز حد الاستخدام، حاول بعد قليل.");
-  if (r.status === 402) throw new Error("انتهى رصيد الذكاء الاصطناعي.");
-  if (!r.ok) throw new Error(`AI error ${r.status}: ${(await r.text()).slice(0, 200)}`);
+  if (r.status === 429) throw new Error("تم تجاوز حد استخدام مفتاح الذكاء الاصطناعي، حاول بعد قليل.");
+  if (!r.ok) throw new Error("تعذر الاتصال بخدمة الذكاء الاصطناعي الخارجية. تحقق من صلاحية المفتاح.");
   const j = await r.json();
-  return String(j?.choices?.[0]?.message?.content || "");
+  const t = j?.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!t) throw new Error("لم تُرجع خدمة الذكاء الاصطناعي نتيجة، حاول مرة أخرى.");
+  return String(t);
 }
 
 const OCR_SYSTEM = "أنت أداة OCR دقيقة للنصوص العربية التعليمية. انسخ النص الموجود في الملف حرفياً كما هو بدون شرح أو إضافات، مع الحفاظ على ترتيب الفقرات والأسئلة.";
