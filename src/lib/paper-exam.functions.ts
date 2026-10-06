@@ -38,7 +38,7 @@ async function download(path: string) {
 
 export const indexSource = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => d as { path: string; filename: string; mime: string; title: string; grade: string; subject: string; lesson: string; text?: string; size?: number })
+  .inputValidator((d: unknown) => d as { path: string; filename: string; mime: string; title: string; grade: string; subject: string; lesson: string; term?: string; text?: string; size?: number })
   .handler(async ({ data, context }) => {
     await assertTeacher(context);
     if (!data.path.startsWith("sources/")) throw new Error("مسار غير صالح");
@@ -52,7 +52,7 @@ export const indexSource = createServerFn({ method: "POST" })
       if (!text) { status = "failed"; err = "لم يتم العثور على نص"; }
     } catch (e: any) { status = "failed"; err = e?.message || "فشل الاستخراج"; }
     const { data: row, error } = await supabaseAdmin.from("exam_sources").insert({
-      title: data.title || data.filename, grade: data.grade || null, subject: data.subject || null, lesson: data.lesson || null,
+      title: data.title || data.filename, grade: data.grade || null, subject: data.subject || null, lesson: data.lesson || null, term: data.term || null,
       path: data.path, mime: data.mime, extracted_text: text || null, status, error: err,
     }).select("id, status, error").single();
     if (error) throw new Error(error.message);
@@ -61,12 +61,13 @@ export const indexSource = createServerFn({ method: "POST" })
 
 export const listSources = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => d as { grade?: string; subject?: string; q?: string; kind?: "source" | "spec" })
+  .inputValidator((d: unknown) => d as { grade?: string; subject?: string; q?: string; kind?: "source" | "spec"; term?: string })
   .handler(async ({ data, context }) => {
     await assertTeacher(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    let q = supabaseAdmin.from("exam_sources").select("id,title,grade,subject,lesson,mime,status,error,created_at,extracted_text,kind,spec,parts,page_count").eq("kind", data.kind || "source").order("created_at", { ascending: false }).limit(200);
+    let q = supabaseAdmin.from("exam_sources").select("id,title,grade,term,subject,lesson,mime,status,error,created_at,extracted_text,kind,spec,parts,page_count").eq("kind", data.kind || "source").order("created_at", { ascending: false }).limit(200);
     if (data.grade) q = q.eq("grade", data.grade);
+    if (data.term) q = q.or(`term.eq.${data.term},term.is.null`);
     if (data.subject) q = q.ilike("subject", `%${data.subject}%`);
     const term = (data.q || "").trim().replace(/[%,()]/g, " ");
     if (term) q = q.or(`title.ilike.%${term}%,lesson.ilike.%${term}%,extracted_text.ilike.%${term}%`);
@@ -99,13 +100,13 @@ export const deleteSource = createServerFn({ method: "POST" })
 
 export const createSourceRecord = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => d as { parts: string[]; filename: string; mime: string; size: number; title: string; grade: string; subject: string; lesson: string })
+  .inputValidator((d: unknown) => d as { parts: string[]; filename: string; mime: string; size: number; title: string; grade: string; subject: string; lesson: string; term?: string })
   .handler(async ({ data, context }) => {
     await assertTeacher(context);
     if (!data.parts?.length || data.parts.some((p) => !p.startsWith("sources/"))) throw new Error("مسار غير صالح");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: row, error } = await supabaseAdmin.from("exam_sources").insert({
-      title: data.title || data.filename, grade: data.grade || null, subject: data.subject || null, lesson: data.lesson || null,
+      title: data.title || data.filename, grade: data.grade || null, subject: data.subject || null, lesson: data.lesson || null, term: data.term || null,
       path: data.parts[0], parts: data.parts as any, mime: data.mime, size_bytes: data.size, status: "processing",
     }).select("id").single();
     if (error) throw new Error(error.message);
@@ -159,12 +160,12 @@ export const ocrPageImage = createServerFn({ method: "POST" })
 
 export const updateSource = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => d as { id: string; title: string; grade: string; subject: string; lesson: string })
+  .inputValidator((d: unknown) => d as { id: string; title: string; grade: string; subject: string; lesson: string; term?: string })
   .handler(async ({ data, context }) => {
     await assertTeacher(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { error } = await supabaseAdmin.from("exam_sources").update({
-      title: data.title, grade: data.grade || null, subject: data.subject || null, lesson: data.lesson || null,
+      title: data.title, grade: data.grade || null, subject: data.subject || null, lesson: data.lesson || null, term: data.term || null,
     }).eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true };
@@ -246,7 +247,7 @@ export const analyzeSpecs = createServerFn({ method: "POST" })
 
 export const generatePaperExam = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => d as { grade: string; subject: string; lessons: string; sourceIds: string[]; spec: ExamSpec })
+  .inputValidator((d: unknown) => d as { grade: string; term?: string; subject: string; lessons: string; sourceIds: string[]; spec: ExamSpec })
   .handler(async ({ data, context }) => {
     await assertTeacher(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -260,7 +261,7 @@ export const generatePaperExam = createServerFn({ method: "POST" })
       sourceText = await retrieveSourceText(data.sourceIds, data.lessons || "");
     }
     const prompt = `أنشئ امتحاناً ورقياً مصرياً مطابقاً للمواصفات التالية بدقة.
-الصف: ${data.grade} | المادة: ${data.subject} | الدروس: ${data.lessons || "حسب المصادر"}
+الصف: ${data.grade}${data.term ? ` | ${data.term}` : ""} | المادة: ${data.subject} | الدروس: ${data.lessons || "حسب المصادر"}
 الهيكل (التزم بعدد الأسئلة في كل قسم حرفياً):
 ${spec.sections.map((s, i) => `${i + 1}) ${s.title} — النوع: ${s.kind} — عدد البنود: ${s.count} — درجة كل بند: ${s.score_each}${s.instructions ? ` — التعليمات: ${s.instructions}` : ""}`).join("\n")}
 المجموع الكلي: ${spec.total_score}
