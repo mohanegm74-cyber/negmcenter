@@ -285,13 +285,13 @@ ${sourceText ? `اعتمد في صياغة الأسئلة على المصادر 
 
 export const saveSpec = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => d as { grade: string; subject: string; spec: ExamSpec; path?: string })
+  .inputValidator((d: unknown) => d as { grade: string; term?: string; subject: string; spec: ExamSpec; path?: string })
   .handler(async ({ data, context }) => {
     await assertTeacher(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const spec = normalizeSpec(data.spec);
     const { error } = await supabaseAdmin.from("exam_sources").insert({
-      kind: "spec", title: spec.title, grade: data.grade || null, subject: data.subject || null,
+      kind: "spec", title: spec.title, grade: data.grade || null, term: data.term || null, subject: data.subject || null,
       path: data.path || "", status: "indexed", spec: spec as any,
       extracted_text: spec.sections.map((s) => `${s.title} ${s.kind} ${s.count}×${s.score_each}`).join("\n"),
     });
