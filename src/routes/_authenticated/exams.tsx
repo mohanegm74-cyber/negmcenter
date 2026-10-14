@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { Trash2, X, Loader2, FileQuestion, Plus, BrainCircuit, Timer, BarChart3, Trophy, Eye, Pencil, Send, Ban, CheckCircle2 } from "lucide-react";
 import { generateExam } from "@/lib/exams.functions";
-import { updateExamStatusAdmin, getExamsDataAdmin, saveExamFullAdmin, deleteExamAdmin, setExamAnswersReleasedAdmin } from "@/lib/admin.functions";
+import { updateExamStatusAdmin, getExamsDataAdmin, saveExamFullAdmin, deleteExamAdmin, setExamAnswersReleasedAdmin, getExamQuestionsAdmin } from "@/lib/admin.functions";
 import { QUESTION_KINDS, TERMS, GRADES, DIFFICULTIES } from "@/lib/exam-constants";
 import { supabase } from "@/integrations/supabase/client";
 import { PaperExamButtons, SourcePicker } from "@/components/PaperExamTools";
@@ -41,6 +41,7 @@ function ExamsPage() {
   const updateStatusFn = useServerFn(updateExamStatusAdmin);
   const releaseAnswersFn = useServerFn(setExamAnswersReleasedAdmin);
   const loadFn = useServerFn(getExamsDataAdmin);
+  const loadQuestionsFn = useServerFn(getExamQuestionsAdmin);
   const saveFullExamFn = useServerFn(saveExamFullAdmin);
   const deleteExamFn = useServerFn(deleteExamAdmin);
 
