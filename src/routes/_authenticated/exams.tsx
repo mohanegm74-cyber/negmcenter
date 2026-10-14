@@ -310,11 +310,11 @@ function ExamsPage() {
                 <div className="space-y-3">
                   <textarea className="w-full rounded-xl border-slate-100 p-3 text-sm font-bold bg-slate-50 focus:bg-white outline-none focus:ring-2 focus:ring-primary/10" rows={2} value={q.prompt || ""} onChange={e => updateQ(i, { prompt: e.target.value })} placeholder="اكتب نص السؤال هنا..." />
                   {["اختيار من متعدد", "اختر من القائمة"].includes(q.kind) && (
-                     <input className="w-full rounded-xl border-slate-100 p-3 text-xs bg-slate-50 focus:bg-white outline-none" value={optionsText[i] ?? (Array.isArray(q.options) ? q.options.join(" | ") : "")} onChange={e => {
+                     <input className="w-full rounded-xl border-slate-100 p-3 text-xs bg-slate-50 focus:bg-white outline-none" value={optionsText[i] ?? (Array.isArray(q.options) ? q.options.join(" / ") : "")} onChange={e => {
                        const value = e.target.value;
                        setOptionsText(prev => ({ ...prev, [i]: value }));
-                       updateQ(i, { options: value.split("|").map(s => s.trim()).filter(Boolean) });
-                     }} placeholder="الاختيارات (افصل بينها بـ | )" />
+                       updateQ(i, { options: value.split("/").map(s => s.trim()).filter(Boolean) });
+                     }} placeholder="الاختيارات (افصل بينها بـ / ) مثال: أحمد / محمد / سارة" />
                   )}
                   <input className="w-full rounded-xl border-emerald-100 p-3 text-xs font-black bg-emerald-50 focus:bg-white outline-none border-2" value={typeof q.correct_answer === "string" ? q.correct_answer : (q.correct_answer ?? "")} onChange={e => updateQ(i, { correct_answer: e.target.value })} placeholder="الإجابة الصحيحة النموذجية" />
                 </div>

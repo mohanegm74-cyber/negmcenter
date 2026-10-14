@@ -530,7 +530,7 @@ function PaperExamBuilder({ onClose }: { onClose: () => void }) {
                   <input className={inputCls + " sm:col-span-1"} type="number" step="0.5" value={q.score} onChange={(e) => updQ(si, qi, { score: Number(e.target.value) })} title="الدرجة" />
                   <input className={inputCls + " sm:col-span-1"} type="number" min={0} value={q.lines} onChange={(e) => updQ(si, qi, { lines: Number(e.target.value) })} title="أسطر الإجابة" />
                   <button onClick={() => setSections(sections.map((x, n) => n !== si ? x : { ...x, questions: x.questions.filter((_, m) => m !== qi) }))} className="text-destructive sm:col-span-1"><Trash2 className="mx-auto h-4 w-4" /></button>
-                  <input className={inputCls + " sm:col-span-6 sm:col-start-2"} placeholder="الاختيارات مفصولة بـ |" value={q.options.join(" | ")} onChange={(e) => updQ(si, qi, { options: e.target.value.split("|").map((x) => x.trim()).filter(Boolean) })} />
+                  <input className={inputCls + " sm:col-span-6 sm:col-start-2"} placeholder="الاختيارات مفصولة بـ / مثال: أحمد / محمد / سارة" value={q.options.join(" / ")} onChange={(e) => updQ(si, qi, { options: e.target.value.split("/").map((x) => x.trim()).filter(Boolean) })} />
                   <input className={inputCls + " sm:col-span-5"} placeholder="الإجابة النموذجية" value={q.answer} onChange={(e) => updQ(si, qi, { answer: e.target.value })} />
                 </div>
               ))}
