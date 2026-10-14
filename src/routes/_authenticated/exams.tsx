@@ -6,7 +6,6 @@ import { Trash2, X, Loader2, FileQuestion, Plus, BrainCircuit, Timer, BarChart3,
 import { generateExam } from "@/lib/exams.functions";
 import { updateExamStatusAdmin, getExamsDataAdmin, saveExamFullAdmin, deleteExamAdmin, setExamAnswersReleasedAdmin, getExamQuestionsAdmin } from "@/lib/admin.functions";
 import { QUESTION_KINDS, TERMS, GRADES, DIFFICULTIES } from "@/lib/exam-constants";
-import { supabase } from "@/integrations/supabase/client";
 import { PaperExamButtons, SourcePicker } from "@/components/PaperExamTools";
 
 export const Route = createFileRoute("/_authenticated/exams")({
