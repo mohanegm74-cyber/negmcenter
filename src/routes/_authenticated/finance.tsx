@@ -53,19 +53,22 @@ function FinancePage() {
   const groupMap = useMemo(() => Object.fromEntries(groups.map(g => [g.id, g])), [groups]);
 
   // حسابات الملخص العام للمالية (إجمالي + هذا الشهر)
+  // مؤشرات الشهر المختار (أو كل الشهور إن لم يُحدد شهر): المتأخرات = المستحق − المدفوع − الإعفاء
   const totals = useMemo(() => {
-    const cur = new Date().toISOString().slice(0, 7);
-    const inMonth = (p: any) => String(p.month || p.paid_at || "").slice(0, 7) === cur;
-    const sum = (list: any[], k: string) => list.filter(p => p.kind === k).reduce((a, b) => a + Number(b.amount), 0);
-    const all = payments.filter(p => !month || p.month === month);
-    const cm = payments.filter(inMonth);
-    const fees = students.reduce((a, s) => a + (s.group_id ? Number(groupMap[s.group_id]?.monthly_fee || 0) : 0), 0);
-    const charged = sum(all, "charge"), chargedM = sum(cm, "charge");
-    const dues = charged || fees, duesM = chargedM || fees;
-    const paid = sum(all, "payment"), paidM = sum(cm, "payment");
-    const exempt = sum(all, "exempt"), exemptM = sum(cm, "exempt");
-    return { paid, exempt, dues, outstanding: Math.max(0, dues - paid - exempt), duesM, paidM, exemptM, outstandingM: Math.max(0, duesM - paidM - exemptM) };
-  }, [payments, month, students, groupMap]);
+    const list = students.filter(s => !groupFilter || s.group_id === groupFilter);
+    let duesM = 0, paidM = 0, exemptM = 0, outstandingM = 0;
+    for (const s of list) {
+      const sp = payments.filter(p => p.student_id === s.id && (!month || p.month === month));
+      const sum = (k: string) => sp.filter(p => p.kind === k).reduce((a, b) => a + Number(b.amount), 0);
+      const charged = sum("charge");
+      const fee = s.group_id ? Number(groupMap[s.group_id]?.monthly_fee || 0) : 0;
+      const due = charged > 0 ? charged : (month ? fee : 0);
+      const paid = sum("payment"), exempt = sum("exempt");
+      duesM += due; paidM += paid; exemptM += exempt;
+      outstandingM += Math.max(0, due - paid - exempt);
+    }
+    return { duesM, paidM, exemptM, outstandingM, label: month ? `شهر ${month}` : "كل الشهور" };
+  }, [payments, month, students, groupMap, groupFilter]);
 
   const rows = useMemo(() => {
     return students
@@ -78,7 +81,7 @@ function FinancePage() {
         
         const totalDue = dues > 0 ? dues : fee; 
          const exempt = studentPayments.filter(p => p.kind === "exempt").reduce((a, b) => a + Number(b.amount), 0);
-         const balance = totalDue - paid - exempt;
+         const balance = Math.max(0, totalDue - paid - exempt);
         
          return { student: s, groupName: s.group_id ? groupMap[s.group_id]?.name : "—", totalDue, paid, exempt, balance };
       });
@@ -148,16 +151,11 @@ function FinancePage() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <FinanceCard icon={<TrendingUp className="h-5 w-5" />} label="إجمالي المستحق" value={totals.dues} tone="primary" />
-        <FinanceCard icon={<ArrowDownCircle className="h-5 w-5" />} label="إجمالي المدفوع" value={totals.paid} tone="secondary" />
-        <FinanceCard icon={<ArrowUpCircle className="h-5 w-5" />} label="إجمالي الإعفاءات" value={totals.exempt} tone="primary" />
-        <FinanceCard icon={<AlertCircle className="h-5 w-5" />} label="إجمالي المتأخرات" value={totals.outstanding} tone="destructive" />
-        <FinanceCard icon={<TrendingUp className="h-5 w-5" />} label="المستحق هذا الشهر" value={totals.duesM} tone="primary" />
-        <FinanceCard icon={<ArrowDownCircle className="h-5 w-5" />} label="المدفوع فعلياً هذا الشهر" value={totals.paidM} tone="secondary" />
-        <FinanceCard icon={<ArrowUpCircle className="h-5 w-5" />} label="الإعفاء هذا الشهر" value={totals.exemptM} tone="primary" />
-        <FinanceCard icon={<AlertCircle className="h-5 w-5" />} label="المتأخرات هذا الشهر" value={totals.outstandingM} tone="destructive" />
+        <FinanceCard icon={<TrendingUp className="h-5 w-5" />} label={`المستحق — ${totals.label}`} value={totals.duesM} tone="primary" />
+        <FinanceCard icon={<ArrowDownCircle className="h-5 w-5" />} label={`المدفوع فعلياً — ${totals.label}`} value={totals.paidM} tone="secondary" />
+        <FinanceCard icon={<ArrowUpCircle className="h-5 w-5" />} label={`الإعفاءات — ${totals.label}`} value={totals.exemptM} tone="primary" />
+        <FinanceCard icon={<AlertCircle className="h-5 w-5" />} label={`المتأخرات — ${totals.label}`} value={totals.outstandingM} tone="destructive" />
       </div>
-
 
       {editingPayment && (
         <form onSubmit={handleUpdate} className="rounded-2xl bg-white p-6 shadow-xl border-2 border-secondary animate-in zoom-in-95">
