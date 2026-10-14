@@ -1,3 +1,4 @@
+import { autoFeeApplies, academicMonths } from "@/lib/fees";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -10,11 +11,25 @@ export const Route = createFileRoute("/_authenticated/finance")({
   component: FinancePage,
 });
 
-type Student = { id: string; full_name: string; code: string; grade: string | null; group_id: string | null };
+type Student = { id: string; full_name: string; code: string; grade: string | null; group_id: string | null; active?: boolean; archived?: boolean };
 type Group = { id: string; name: string; monthly_fee: number };
 type Payment = { id: string; student_id: string; group_id: string | null; amount: number; kind: string; method: string | null; note: string | null; paid_at: string; month: string | null };
 
 function currentMonth() { return new Date().toISOString().slice(0, 7); }
+
+// المستحق: حركة المستحق إن وجدت، وإلا اشتراك المجموعة من سبتمبر للطلاب النشطين؛ المدفوع يُحتفظ به دائماً
+function calcStudent(s: Student, payments: Payment[], fee: number, month: string) {
+  const months = month ? [month] : Array.from(new Set([...academicMonths(), ...payments.filter(p => p.student_id === s.id && p.month).map(p => p.month as string)]));
+  let due = 0, paid = 0, exempt = 0, late = 0;
+  for (const m of months) {
+    const sp = payments.filter(p => p.student_id === s.id && p.month === m);
+    const sum = (k: string) => sp.filter(p => p.kind === k).reduce((a, b) => a + Number(b.amount), 0);
+    const c = sum("charge"); const d = c > 0 ? c : (autoFeeApplies(m, s.active !== false) ? fee : 0);
+    const pd = sum("payment"), ex = sum("exempt");
+    due += d; paid += pd; exempt += ex; late += Math.max(0, d - pd - ex);
+  }
+  return { due, paid, exempt, late };
+}
 
 function FinancePage() {
   const [students, setStudents] = useState<Student[]>([]);
@@ -58,31 +73,20 @@ function FinancePage() {
     const list = students.filter(s => !groupFilter || s.group_id === groupFilter);
     let duesM = 0, paidM = 0, exemptM = 0, outstandingM = 0;
     for (const s of list) {
-      const sp = payments.filter(p => p.student_id === s.id && (!month || p.month === month));
-      const sum = (k: string) => sp.filter(p => p.kind === k).reduce((a, b) => a + Number(b.amount), 0);
-      const charged = sum("charge");
       const fee = s.group_id ? Number(groupMap[s.group_id]?.monthly_fee || 0) : 0;
-      const due = charged > 0 ? charged : (month ? fee : 0);
-      const paid = sum("payment"), exempt = sum("exempt");
-      duesM += due; paidM += paid; exemptM += exempt;
-      outstandingM += Math.max(0, due - paid - exempt);
+      const r = calcStudent(s, payments, fee, month);
+      duesM += r.due; paidM += r.paid; exemptM += r.exempt; outstandingM += r.late;
     }
     return { duesM, paidM, exemptM, outstandingM, label: month ? `شهر ${month}` : "كل الشهور" };
   }, [payments, month, students, groupMap, groupFilter]);
 
   const rows = useMemo(() => {
     return students
-      .filter(s => (!groupFilter || s.group_id === groupFilter) && (!studentSearch || `${s.full_name} ${s.code}`.toLocaleLowerCase().includes(studentSearch.toLocaleLowerCase())))
+      .filter(s => (!s.archived || payments.some(p => p.student_id === s.id)) && (!groupFilter || s.group_id === groupFilter) && (!studentSearch || `${s.full_name} ${s.code}`.toLocaleLowerCase().includes(studentSearch.toLocaleLowerCase())))
       .map(s => {
-        const studentPayments = payments.filter(p => p.student_id === s.id && (!month || p.month === month));
-        const paid = studentPayments.filter(p => p.kind === "payment").reduce((a, b) => a + Number(b.amount), 0);
-        const dues = studentPayments.filter(p => p.kind === "charge").reduce((a, b) => a + Number(b.amount), 0);
         const fee = s.group_id ? Number(groupMap[s.group_id]?.monthly_fee || 0) : 0;
-        
-        const totalDue = dues > 0 ? dues : fee; 
-         const exempt = studentPayments.filter(p => p.kind === "exempt").reduce((a, b) => a + Number(b.amount), 0);
-         const balance = Math.max(0, totalDue - paid - exempt);
-        
+        const c = calcStudent(s, payments, fee, month);
+        const totalDue = c.due, paid = c.paid, exempt = c.exempt, balance = c.late;
          return { student: s, groupName: s.group_id ? groupMap[s.group_id]?.name : "—", totalDue, paid, exempt, balance };
       });
   }, [students, groupMap, payments, month, groupFilter, studentSearch]);
@@ -242,7 +246,7 @@ function FinancePage() {
                 <>
                   <tr key={r.student.id} className="border-t hover:bg-muted/30">
                     <td className="p-4">
-                      <div className="font-bold">{r.student.full_name}</div>
+                      <div className="font-bold">{r.student.full_name}{r.student.archived ? <span className="ms-2 rounded bg-muted px-1.5 text-[10px]">محذوف — السجل محفوظ</span> : r.student.active === false ? <span className="ms-2 rounded bg-muted px-1.5 text-[10px]">موقوف</span> : null}</div>
                       <div className="text-[10px] text-muted-foreground font-mono">{r.student.code}</div>
                     </td>
                     <td className="p-4"><span className="rounded bg-muted px-2 py-1 text-[10px] font-bold">{r.groupName}</span></td>
