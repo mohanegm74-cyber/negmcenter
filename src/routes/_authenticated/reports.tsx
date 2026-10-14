@@ -50,10 +50,10 @@ function ReportsPage() {
   const groupMap = useMemo(() => Object.fromEntries(groups.map(g => [g.id, g])), [groups]);
 
   const byGrade = useMemo(() => {
-    const map = new Map<string, { grade: string; students: number; present: number; absent: number; late: number; income: number; dues: number }>();
+    const map = new Map<string, { grade: string; students: number; present: number; absent: number; late: number; income: number; dues: number; exempt: number }>();
     for (const s of students) {
       const g = s.grade || "غير محدد";
-      if (!map.has(g)) map.set(g, { grade: g, students: 0, present: 0, absent: 0, late: 0, income: 0, dues: 0 });
+      if (!map.has(g)) map.set(g, { grade: g, students: 0, present: 0, absent: 0, late: 0, income: 0, dues: 0, exempt: 0 });
       map.get(g)!.students++;
     }
     for (const a of att) {
@@ -67,6 +67,7 @@ function ReportsPage() {
       const s = students.find(x => x.id === p.student_id); if (!s) continue;
       const row = map.get(s.grade || "غير محدد")!;
       if (p.kind === "payment") row.income += Number(p.amount);
+      else if (p.kind === "exempt") row.exempt += Number(p.amount);
       else row.dues += Number(p.amount);
     }
     return Array.from(map.values()).sort((a, b) => a.grade.localeCompare(b.grade));
@@ -85,6 +86,7 @@ function ReportsPage() {
         late: gAtt.filter(x => x.status === "late").length,
         income: gPay.filter(p => p.kind === "payment").reduce((a, b) => a + Number(b.amount), 0),
         dues: gPay.filter(p => p.kind === "charge").reduce((a, b) => a + Number(b.amount), 0),
+        exempt: gPay.filter(p => p.kind === "exempt").reduce((a, b) => a + Number(b.amount), 0),
       };
     });
   }, [groups, students, att, pay]);
@@ -103,13 +105,13 @@ function ReportsPage() {
 
   function printCurrent() {
     if (tab === "grade") {
-      const rows = byGrade.map(r => `<tr><td>${esc(r.grade)}</td><td>${r.students}</td><td>${r.present}</td><td>${r.late}</td><td>${r.absent}</td><td>${r.dues.toLocaleString("ar-EG")}</td><td>${r.income.toLocaleString("ar-EG")}</td><td>${(r.dues - r.income).toLocaleString("ar-EG")}</td></tr>`).join("");
+      const rows = byGrade.map(r => `<tr><td>${esc(r.grade)}</td><td>${r.students}</td><td>${r.present}</td><td>${r.late}</td><td>${r.absent}</td><td>${r.dues.toLocaleString("ar-EG")}</td><td>${r.income.toLocaleString("ar-EG")}</td><td>${r.exempt.toLocaleString("ar-EG")}</td><td>${Math.max(0, r.dues - r.income - r.exempt).toLocaleString("ar-EG")}</td></tr>`).join("");
       openPrint("تقرير مصنّف حسب الصف", `<h2>تقرير حسب الصف — من ${esc(from)} إلى ${esc(to)}</h2>
-        <table><thead><tr><th>الصف</th><th>عدد الطلاب</th><th>حضور</th><th>تأخير</th><th>غياب</th><th>المستحق</th><th>المدفوع</th><th>المتأخرات</th></tr></thead><tbody>${rows}</tbody></table>`);
+        <table><thead><tr><th>الصف</th><th>عدد الطلاب</th><th>حضور</th><th>تأخير</th><th>غياب</th><th>المستحق</th><th>المدفوع</th><th>الإعفاء</th><th>المتأخرات</th></tr></thead><tbody>${rows}</tbody></table>`);
     } else if (tab === "group") {
-      const rows = byGroup.map(r => `<tr><td>${esc(r.group.name)}</td><td>${esc(r.group.grade)}</td><td>${r.students}</td><td>${r.present}</td><td>${r.late}</td><td>${r.absent}</td><td>${r.dues.toLocaleString("ar-EG")}</td><td>${r.income.toLocaleString("ar-EG")}</td><td>${(r.dues - r.income).toLocaleString("ar-EG")}</td></tr>`).join("");
+      const rows = byGroup.map(r => `<tr><td>${esc(r.group.name)}</td><td>${esc(r.group.grade)}</td><td>${r.students}</td><td>${r.present}</td><td>${r.late}</td><td>${r.absent}</td><td>${r.dues.toLocaleString("ar-EG")}</td><td>${r.income.toLocaleString("ar-EG")}</td><td>${r.exempt.toLocaleString("ar-EG")}</td><td>${Math.max(0, r.dues - r.income - r.exempt).toLocaleString("ar-EG")}</td></tr>`).join("");
       openPrint("تقرير مصنّف حسب المجموعة", `<h2>تقرير حسب المجموعة — من ${esc(from)} إلى ${esc(to)}</h2>
-        <table><thead><tr><th>المجموعة</th><th>الصف</th><th>عدد الطلاب</th><th>حضور</th><th>تأخير</th><th>غياب</th><th>المستحق</th><th>المدفوع</th><th>المتأخرات</th></tr></thead><tbody>${rows}</tbody></table>`);
+        <table><thead><tr><th>المجموعة</th><th>الصف</th><th>عدد الطلاب</th><th>حضور</th><th>تأخير</th><th>غياب</th><th>المستحق</th><th>المدفوع</th><th>الإعفاء</th><th>المتأخرات</th></tr></thead><tbody>${rows}</tbody></table>`);
     } else {
       const rows = attReport.map((r, i) => `<tr><td>${i + 1}</td><td>${esc(r.student.full_name)}</td><td>${esc(r.student.code)}</td><td>${esc(r.student.grade)}</td><td>${esc(r.group?.name)}</td><td>${r.present}</td><td>${r.late}</td><td style="color:${r.absent > 3 ? "#dc2626" : "inherit"};font-weight:${r.absent > 3 ? 700 : 400}">${r.absent}</td></tr>`).join("");
       openPrint("تقرير الحضور التفصيلي", `<h2>تقرير الحضور — من ${esc(from)} إلى ${esc(to)}</h2>
@@ -126,9 +128,10 @@ function ReportsPage() {
     try {
       const income = pay.filter(p => p.kind === "payment").reduce((a, b) => a + Number(b.amount), 0);
       const dues = pay.filter(p => p.kind === "charge").reduce((a, b) => a + Number(b.amount), 0);
+      const exempt = pay.filter(p => p.kind === "exempt").reduce((a, b) => a + Number(b.amount), 0);
       const topAbsent = attReport.filter(r => r.absent > 0).slice(0, 10).map(r => ({ name: r.student.full_name, absent: r.absent }));
       const r = await genCenter({ data: {
-        totals: { students: students.length, groups: groups.length, income, dues, outstanding: Math.max(0, dues - income) },
+        totals: { students: students.length, groups: groups.length, income, dues, exempt, outstanding: Math.max(0, dues - income - exempt) },
         attendance: {
           present: att.filter(a => a.status === "present").length,
           absent: att.filter(a => a.status === "absent").length,
@@ -194,6 +197,13 @@ function ReportsPage() {
         </div>
       )}
 
+      {(() => {
+        const cur = new Date().toISOString().slice(0, 7);
+        const sm = (k: string, m?: boolean) => pay.filter(p => p.kind === k && (!m || String(p.month || "").slice(0, 7) === cur)).reduce((a, b) => a + Number(b.amount), 0);
+        const d = sm("charge"), pd = sm("payment"), ex = sm("exempt"), dM = sm("charge", true), pM = sm("payment", true), eM = sm("exempt", true);
+        const items = [["إجمالي المستحق", d], ["المستحق هذا الشهر", dM], ["إجمالي المدفوع", pd], ["المدفوع هذا الشهر", pM], ["إجمالي الإعفاءات", ex], ["الإعفاء هذا الشهر", eM], ["إجمالي المتأخرات", Math.max(0, d - pd - ex)], ["المتأخرات هذا الشهر", Math.max(0, dM - pM - eM)]] as const;
+        return <div className="mb-4 grid grid-cols-2 gap-2 lg:grid-cols-4">{items.map(([l, v]) => <div key={l} className="rounded-2xl bg-white p-3 shadow-sm"><div className="text-xs font-bold text-muted-foreground">{l}</div><div className="text-lg font-black">{Number(v).toLocaleString("ar-EG")}</div></div>)}</div>;
+      })()}
       <div className="mb-4 flex gap-2 rounded-2xl bg-white p-1.5 shadow-sm">
         {(["grade", "group", "attendance"] as const).map(t => (
           <button key={t} onClick={() => setTab(t)} className={`flex-1 rounded-xl px-4 py-2 text-sm font-bold transition ${tab === t ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}>
@@ -208,7 +218,7 @@ function ReportsPage() {
             <table className="w-full text-sm">
               <thead className="bg-primary text-primary-foreground text-right"><tr>
                 <th className="p-3">الصف</th><th className="p-3">عدد الطلاب</th><th className="p-3">حضور</th><th className="p-3">تأخير</th><th className="p-3">غياب</th>
-                <th className="p-3">المستحق</th><th className="p-3">المدفوع</th><th className="p-3">المتأخرات</th>
+                <th className="p-3">المستحق</th><th className="p-3">المدفوع</th><th className="p-3">الإعفاء</th><th className="p-3">المتأخرات</th>
               </tr></thead>
               <tbody>
                 {byGrade.map((r, i) => (
@@ -220,7 +230,8 @@ function ReportsPage() {
                     <td className="p-3 text-destructive">{r.absent}</td>
                     <td className="p-3">{r.dues.toLocaleString("ar-EG")}</td>
                     <td className="p-3 text-secondary">{r.income.toLocaleString("ar-EG")}</td>
-                    <td className={`p-3 font-bold ${r.dues - r.income > 0 ? "text-destructive" : "text-secondary"}`}>{(r.dues - r.income).toLocaleString("ar-EG")}</td>
+                    <td className="p-3 text-sky-700">{r.exempt.toLocaleString("ar-EG")}</td>
+                    <td className={`p-3 font-bold ${r.dues - r.income - r.exempt > 0 ? "text-destructive" : "text-secondary"}`}>{Math.max(0, r.dues - r.income - r.exempt).toLocaleString("ar-EG")}</td>
                   </tr>
                 ))}
               </tbody>
@@ -230,7 +241,7 @@ function ReportsPage() {
             <table className="w-full text-sm">
               <thead className="bg-primary text-primary-foreground text-right"><tr>
                 <th className="p-3">المجموعة</th><th className="p-3">الصف</th><th className="p-3">طلاب</th><th className="p-3">حضور</th><th className="p-3">تأخير</th><th className="p-3">غياب</th>
-                <th className="p-3">المستحق</th><th className="p-3">المدفوع</th><th className="p-3">المتأخرات</th>
+                <th className="p-3">المستحق</th><th className="p-3">المدفوع</th><th className="p-3">الإعفاء</th><th className="p-3">المتأخرات</th>
               </tr></thead>
               <tbody>
                 {byGroup.map((r, i) => (
@@ -243,7 +254,8 @@ function ReportsPage() {
                     <td className="p-3 text-destructive">{r.absent}</td>
                     <td className="p-3">{r.dues.toLocaleString("ar-EG")}</td>
                     <td className="p-3 text-secondary">{r.income.toLocaleString("ar-EG")}</td>
-                    <td className={`p-3 font-bold ${r.dues - r.income > 0 ? "text-destructive" : "text-secondary"}`}>{(r.dues - r.income).toLocaleString("ar-EG")}</td>
+                    <td className="p-3 text-sky-700">{r.exempt.toLocaleString("ar-EG")}</td>
+                    <td className={`p-3 font-bold ${r.dues - r.income - r.exempt > 0 ? "text-destructive" : "text-secondary"}`}>{Math.max(0, r.dues - r.income - r.exempt).toLocaleString("ar-EG")}</td>
                   </tr>
                 ))}
               </tbody>
