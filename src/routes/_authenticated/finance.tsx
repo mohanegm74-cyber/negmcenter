@@ -34,8 +34,8 @@ function FinancePage() {
   const delFn = useServerFn(deletePaymentAdmin);
   const updateFn = useServerFn(updatePaymentAdmin);
 
-  async function fetchAll() {
-    setLoading(true);
+  async function fetchAll(silent = false) {
+    if (!silent) setLoading(true);
     try {
       const res = await loadFn({});
       setStudents(res.students as Student[]);
@@ -91,7 +91,8 @@ function FinancePage() {
     e.preventDefault();
     if (!addingFor) return;
     setBusy(true);
-    const fd = new FormData(e.currentTarget);
+    const form = e.currentTarget;
+    const fd = new FormData(form);
     try {
       await addFn({ data: {
         student_id: addingFor.id, 
@@ -102,7 +103,7 @@ function FinancePage() {
         paid_at: String(fd.get("paid_at")), 
         note: String(fd.get("note") || "") || null,
       }});
-      toast.success("تم الحفظ"); setAddingFor(null); fetchAll();
+      toast.success("تم الحفظ"); const amt = (form.elements.namedItem("amount") as HTMLInputElement | null); if (amt) amt.value = ""; fetchAll(true);
     } catch (err: any) { toast.error(err.message); }
     finally { setBusy(false); }
   }
@@ -123,14 +124,30 @@ function FinancePage() {
           note: String(fd.get("note") || "") || null,
         }
       }});
-      toast.success("تم التعديل بنجاح"); setEditingPayment(null); fetchAll();
+      toast.success("تم التعديل بنجاح"); setEditingPayment(null); fetchAll(true);
+    } catch (err: any) { toast.error(err.message); }
+    finally { setBusy(false); }
+  }
+
+  async function saveManualDue(st: Student, value: number, m: string) {
+    if (!m) { toast.error("حدد الشهر أولاً"); return; }
+    setBusy(true);
+    try {
+      const charges = payments.filter(p => p.student_id === st.id && p.month === m && p.kind === "charge");
+      if (charges.length > 0) {
+        await updateFn({ data: { id: charges[0].id, payload: { amount: value, kind: "charge", month: m, paid_at: charges[0].paid_at, note: charges[0].note } } });
+        for (const c of charges.slice(1)) await delFn({ data: { id: c.id } });
+      } else {
+        await addFn({ data: { student_id: st.id, group_id: st.group_id, amount: value, kind: "charge", month: m, paid_at: new Date().toISOString().slice(0, 10), note: "تعديل يدوي للمستحق" } });
+      }
+      toast.success("تم تعديل المستحق"); fetchAll(true);
     } catch (err: any) { toast.error(err.message); }
     finally { setBusy(false); }
   }
 
   async function handleDelete(id: string) {
     if (!confirm("هل أنت متأكد من حذف هذا السجل المالي نهائياً؟")) return;
-    try { await delFn({ data: { id } }); toast.success("تم الحذف"); fetchAll(); }
+    try { await delFn({ data: { id } }); toast.success("تم الحذف"); fetchAll(true); }
     catch (err: any) { toast.error(err.message); }
   }
 
@@ -258,6 +275,7 @@ function FinancePage() {
                             </div>
                           </div>
                         </form>
+                        <ManualDue key={r.totalDue + month} initial={r.totalDue} month={month} busy={busy} onSave={(v, m) => saveManualDue(r.student, v, m)} />
                       </td>
                     </tr>
                   )}
@@ -295,6 +313,18 @@ function FinF({ name, label, type = "text", defaultValue = "", required = false,
       ) : (
         <input name={name} type={type} defaultValue={defaultValue} required={required} className="w-full rounded-lg border bg-white p-2.5 text-sm font-bold" />
       )}
+    </div>
+  );
+}
+function ManualDue({ initial, month, busy, onSave }: { initial: number; month: string; busy: boolean; onSave: (v: number, m: string) => void }) {
+  const [v, setV] = useState(String(initial));
+  const [m, setM] = useState(month);
+  return (
+    <div className="mt-3 flex flex-wrap items-end gap-3 rounded-2xl border-2 border-dashed border-gold bg-white p-4">
+      <div className="text-sm font-black text-gold-foreground w-full">تعديل المستحق يدوياً (القيمة التلقائية من اشتراك المجموعة: {initial.toLocaleString("ar-EG")})</div>
+      <div><label className="mb-1 block text-[10px] font-bold text-muted-foreground">الشهر</label><input type="month" value={m} onChange={e => setM(e.target.value)} className="rounded-lg border bg-white p-2.5 text-sm font-bold" /></div>
+      <div><label className="mb-1 block text-[10px] font-bold text-muted-foreground">المستحق الجديد</label><input type="number" value={v} onChange={e => setV(e.target.value)} className="rounded-lg border bg-white p-2.5 text-sm font-bold" /></div>
+      <button type="button" disabled={busy || v === ""} onClick={() => onSave(Number(v), m)} className="rounded-lg bg-gold px-4 py-2.5 text-sm font-black text-gold-foreground">حفظ المستحق</button>
     </div>
   );
 }
