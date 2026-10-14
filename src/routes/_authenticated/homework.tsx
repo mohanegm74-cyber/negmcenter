@@ -36,6 +36,8 @@ function HomeworkPage() {
   const [activeHW, setActiveHW] = useState<HW | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [drafts, setDrafts] = useState<Record<string, { level: string; note: string; checked: boolean }>>({});
+  const [savingAll, setSavingAll] = useState(false);
 
   const loadFn = useServerFn(getHomeworkDataAdmin);
   const saveHWFn = useServerFn(saveHomeworkAdmin);
@@ -43,8 +45,8 @@ function HomeworkPage() {
   const deleteHWFn = useServerFn(deleteHomeworkAdmin);
   const releaseFn = useServerFn(releaseHomeworkResultsAdmin);
 
-  async function load() {
-    setLoading(true);
+  async function load(silent = false) {
+    if (!silent) setLoading(true);
     try {
       const res = await loadFn({});
       setGroups(res.groups as Group[]);
@@ -55,6 +57,32 @@ function HomeworkPage() {
     finally { setLoading(false); }
   }
   useEffect(() => { load(); }, []);
+  useEffect(() => {
+    if (!activeHW) return;
+    const d: Record<string, { level: string; note: string; checked: boolean }> = {};
+    for (const st of students) {
+      const sb = subs.find(x => x.homework_id === activeHW.id && x.student_id === st.id);
+      d[st.id] = { level: evaluationLevel(sb, activeHW.max_score) || "", note: sb?.note || "", checked: sb?.status === "graded" };
+    }
+    setDrafts(d);
+  }, [activeHW?.id]);
+  async function saveAllDrafts() {
+    if (!activeHW) return;
+    const list = students.filter(s => (!activeHW.group_id || s.group_id === activeHW.group_id) && (!activeHW.grade || s.grade === activeHW.grade));
+    const targets = list.filter(s => drafts[s.id] && (drafts[s.id].checked || drafts[s.id].level || drafts[s.id].note));
+    if (!targets.length) { toast.info("لا توجد تقييمات لحفظها"); return; }
+    setSavingAll(true);
+    try {
+      for (const s of targets) {
+        const d = drafts[s.id];
+        const sb = subs.find(x => x.homework_id === activeHW.id && x.student_id === s.id);
+        await upsertSubFn({ data: { payload: { student_id: s.id, homework_id: activeHW.id, level: d.level || null, note: d.note || null, status: d.checked || d.level ? "graded" : (sb?.status || "submitted") } } });
+      }
+      toast.success(`تم حفظ تقييم ${targets.length} طالب`);
+      load(true);
+    } catch (e: any) { toast.error(e.message); }
+    finally { setSavingAll(false); }
+  }
 
   async function save(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -209,8 +237,17 @@ function HomeworkPage() {
             
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
               {students.filter(s => (!activeHW.group_id || s.group_id === activeHW.group_id) && (!activeHW.grade || s.grade === activeHW.grade)).map(s => (
-                <StudentSubmissionRow key={s.id} student={s} hw={activeHW} sub={subs.find(x => x.homework_id === activeHW.id && x.student_id === s.id)} onUpdate={load} />
+                <StudentSubmissionRow key={s.id} student={s} hw={activeHW} sub={subs.find(x => x.homework_id === activeHW.id && x.student_id === s.id)} onUpdate={() => load(true)}
+                  draft={drafts[s.id] || { level: "", note: "", checked: false }}
+                  setDraft={(patch) => setDrafts(prev => ({ ...prev, [s.id]: { ...(prev[s.id] || { level: "", note: "", checked: false }), ...patch } }))} />
               ))}
+            </div>
+            <div className="p-4 border-t bg-slate-50 rounded-b-[2.5rem] flex flex-wrap items-center justify-between gap-3">
+              <span className="text-xs font-bold text-slate-500">المُعلَّم بعلامة ✓: {Object.values(drafts).filter(d => d.checked).length}</span>
+              <div className="flex gap-2">
+                <button onClick={saveAllDrafts} disabled={savingAll} className="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-5 py-2.5 text-xs font-black text-white shadow-lg disabled:opacity-60">{savingAll ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />} حفظ الصفحة كلها</button>
+                <button onClick={() => setActiveHW(null)} className="rounded-2xl bg-slate-200 px-5 py-2.5 text-xs font-black text-slate-700">إغلاق</button>
+              </div>
             </div>
           </div>
         </div>
@@ -219,7 +256,8 @@ function HomeworkPage() {
   );
 }
 
-function StudentSubmissionRow({ student, hw, sub, onUpdate }: { student: Student; hw: HW; sub?: Sub; onUpdate: () => void }) {
+type Draft = { level: string; note: string; checked: boolean };
+function StudentSubmissionRow({ student, hw, sub, onUpdate, draft, setDraft }: { student: Student; hw: HW; sub?: Sub; onUpdate: () => void; draft: Draft; setDraft: (p: Partial<Draft>) => void }) {
   const [isGrading, setIsGrading] = useState(false);
   const [imgUrls, setImgUrls] = useState<string[]>([]);
   const [showImg, setShowImg] = useState<string | null>(null);
@@ -296,19 +334,23 @@ function StudentSubmissionRow({ student, hw, sub, onUpdate }: { student: Student
         </div>
       )}
 
-      <div className="mt-5 pt-5 border-t border-dashed flex flex-wrap items-center gap-4">
-        <div className="flex items-center gap-2">
-           <span className="text-[10px] font-black text-slate-500 uppercase ms-1">التقييم:</span>
-           <select value={level || ""} onChange={e => update({ level: e.target.value || null, status: e.target.value ? "graded" : (sub?.status || "submitted") })} className="rounded-xl border-2 border-emerald-100 bg-emerald-50/20 px-3 py-2 text-sm font-black text-emerald-700 outline-none focus:border-emerald-500">
-             <option value="">غير مقيم</option>
-             {EVALUATION_LEVELS.map(item => <option key={item} value={item}>{item}</option>)}
-           </select>
+      <div className="mt-5 pt-5 border-t border-dashed flex flex-wrap items-center gap-3">
+        <label className="inline-flex items-center gap-2 cursor-pointer select-none rounded-xl border-2 border-emerald-100 px-3 py-2">
+          <input type="checkbox" checked={draft.checked} onChange={e => setDraft({ checked: e.target.checked })} className="h-5 w-5 accent-emerald-600" />
+          <span className="text-xs font-black text-emerald-700">تم التقييم</span>
+        </label>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {EVALUATION_LEVELS.map(item => (
+            <label key={item} className={`inline-flex items-center gap-1 cursor-pointer rounded-xl border-2 px-2.5 py-1.5 text-xs font-black ${draft.level === item ? "border-emerald-500 bg-emerald-50 text-emerald-700" : "border-slate-100 text-slate-500"}`}>
+              <input type="checkbox" checked={draft.level === item} onChange={e => setDraft({ level: e.target.checked ? item : "", checked: e.target.checked ? true : draft.checked })} className="h-4 w-4 accent-emerald-600" />
+              {item}
+            </label>
+          ))}
         </div>
-        <div className="flex-1 relative">
-          <input defaultValue={sub?.note ?? ""} placeholder="اكتب ملاحظة أو توجيه للطالب هنا (تظهر له فوراً)..."
-            onBlur={e => update({ note: e.target.value || null })}
-            className="w-full rounded-xl border-2 border-slate-100 bg-white px-5 py-2.5 text-xs font-bold outline-none focus:border-primary shadow-sm" />
-        </div>
+        <input value={draft.note} onChange={e => setDraft({ note: e.target.value })} placeholder="اكتب ملاحظة أو توجيه للطالب هنا..."
+          className="flex-1 min-w-[200px] rounded-xl border-2 border-slate-100 bg-white px-4 py-2.5 text-xs font-bold outline-none focus:border-primary shadow-sm" />
+        <button type="button" disabled={isGrading} onClick={async () => { await update({ level: draft.level || null, note: draft.note || null, status: draft.checked || draft.level ? "graded" : (sub?.status || "submitted") }); toast.success("تم حفظ تقييم " + student.full_name); }} className="rounded-xl bg-primary px-4 py-2.5 text-xs font-black text-white">حفظ</button>
+        <button type="button" disabled={isGrading || !sub} onClick={async () => { if (!confirm("حذف التقييم والملاحظة لهذا الطالب؟")) return; await update({ level: null, score: null, note: null, status: hasSubmission ? "submitted" : "pending" }); setDraft({ level: "", note: "", checked: false }); toast.success("تم حذف التقييم"); }} className="rounded-xl bg-rose-50 px-4 py-2.5 text-xs font-black text-destructive disabled:opacity-40">حذف التقييم</button>
         {isGrading && <Loader2 className="h-5 w-5 animate-spin text-primary shrink-0" />}
       </div>
 
