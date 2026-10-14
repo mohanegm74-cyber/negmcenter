@@ -127,8 +127,22 @@ function ExamsPage() {
   async function handleEdit(ex: any) {
     setLoading(true);
     try {
-      const { data: qs } = await supabase.from("exam_questions").select("*").eq("exam_id", ex.id).order("position");
-      setPreviewExam({ id: ex.id, exam: ex, questions: qs || [] });
+      const res = await loadQuestionsFn({ data: { examId: ex.id } });
+      const qs = (res.questions || []).map((q: any) => ({
+        position: q.position, kind: q.kind, prompt: q.prompt, passage: q.passage || null,
+        options: q.options || [], correct_answer: q.correct_answer ?? null, rationale: q.rationale || null,
+        skill: q.skill || null, difficulty: q.difficulty || ex.difficulty, score: Number(q.score) || 1,
+        source_ref: q.source_ref || null,
+      }));
+      setForm({
+        grade: ex.grade || GRADES[0], term: ex.term || TERMS[0], group_id: ex.group_id || "",
+        subject: ex.subject || "", lesson: ex.title || "", question_count: ex.question_count || qs.length || 10,
+        duration_minutes: ex.duration_minutes || 20, total_score: ex.total_score || 100,
+        difficulty: ex.difficulty || "medium", adaptive: !!ex.adaptive,
+      });
+      if (Array.isArray(ex.question_types) && ex.question_types.length) setKinds(ex.question_types);
+      setOptionsText({});
+      setPreviewExam({ id: ex.id, exam: ex, questions: qs });
       setCreateMode("manual");
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch { toast.error("فشل تحميل الأسئلة للتعديل"); }
