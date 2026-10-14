@@ -100,7 +100,7 @@ export const getAllStudentsAdmin = createServerFn({ method: "GET" })
   .middleware([requireAuthMiddleware])
   .handler(async () => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: st } = await supabaseAdmin.from("students").select("*").order("created_at", { ascending: false });
+    const { data: st } = await supabaseAdmin.from("students").select("*").eq("archived", false).order("created_at", { ascending: false });
     const { data: gr } = await supabaseAdmin.from("groups").select("id,name,grade").order("name");
     return { students: st || [], groups: gr || [] };
   });
@@ -129,6 +129,12 @@ export const deleteStudentAdmin = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => d as { id: string })
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { count } = await supabaseAdmin.from("payments").select("id", { count: "exact", head: true }).eq("student_id", data.id);
+    if ((count || 0) > 0) {
+      // الاحتفاظ بالسجل المالي: أرشفة بدلاً من الحذف النهائي
+      await supabaseAdmin.from("students").update({ archived: true, active: false }).eq("id", data.id);
+      return { ok: true, archived: true };
+    }
     await supabaseAdmin.from("students").delete().eq("id", data.id);
     return { ok: true };
   });
@@ -256,7 +262,7 @@ export const getFinanceDataAdmin = createServerFn({ method: "GET" })
   .handler(async () => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const [st, gr, py] = await Promise.all([
-      supabaseAdmin.from("students").select("id,full_name,code,grade,group_id").order("full_name"),
+      supabaseAdmin.from("students").select("id,full_name,code,grade,group_id,active,archived").order("full_name"),
       supabaseAdmin.from("groups").select("id,name,monthly_fee").order("name"),
       supabaseAdmin.from("payments").select("*").order("paid_at", { ascending: false }),
     ]);

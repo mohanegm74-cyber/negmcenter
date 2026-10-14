@@ -1,3 +1,4 @@
+import { autoFeeApplies } from "@/lib/fees";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { Printer, FileBarChart, Sparkles, X, Loader2 } from "lucide-react";
@@ -12,7 +13,7 @@ export const Route = createFileRoute("/_authenticated/reports")({
   component: ReportsPage,
 });
 
-type Student = { id: string; full_name: string; code: string; grade: string | null; group_id: string | null; phone: string | null };
+type Student = { id: string; full_name: string; code: string; grade: string | null; group_id: string | null; phone: string | null; active?: boolean };
 type Group = { id: string; name: string; grade: string | null; monthly_fee: number };
 type Att = { student_id: string; group_id: string | null; date: string; status: string };
 type Pay = { student_id: string; amount: number; kind: string; month: string | null };
@@ -57,7 +58,7 @@ function ReportsPage() {
     for (const m of months) {
       const sp = pay.filter(p => p.student_id === s.id && String(p.month || "").slice(0, 7) === m);
       const sum = (k: string) => sp.filter(p => p.kind === k).reduce((a, b) => a + Number(b.amount), 0);
-      const c = sum("charge"), due = c > 0 ? c : fee, pd = sum("payment"), ex = sum("exempt");
+      const c = sum("charge"), due = c > 0 ? c : (autoFeeApplies(m, s.active !== false) ? fee : 0), pd = sum("payment"), ex = sum("exempt");
       dues += due; income += pd; exempt += ex; late += Math.max(0, due - pd - ex);
     }
     return { dues, income, exempt, late };
