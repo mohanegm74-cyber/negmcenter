@@ -38,6 +38,8 @@ function HomeworkPage() {
   const [busy, setBusy] = useState(false);
   const [drafts, setDrafts] = useState<Record<string, { level: string; note: string; checked: boolean }>>({});
   const [savingAll, setSavingAll] = useState(false);
+  const [hwSearch, setHwSearch] = useState("");
+  const [hwStatus, setHwStatus] = useState<"all" | "done" | "late">("all");
 
   const loadFn = useServerFn(getHomeworkDataAdmin);
   const saveHWFn = useServerFn(saveHomeworkAdmin);
@@ -235,8 +237,20 @@ function HomeworkPage() {
               <button onClick={() => setActiveHW(null)} className="p-2 hover:bg-white rounded-full transition-all text-slate-400"><X className="h-7 w-7" /></button>
             </div>
             
+            <div className="flex flex-wrap items-center gap-2 border-b px-6 py-3">
+              <input value={hwSearch} onChange={e => setHwSearch(e.target.value)} placeholder="بحث باسم الطالب أو الكود" className="flex-1 min-w-[180px] rounded-lg border bg-white px-3 py-2 text-sm font-bold" />
+              {([["all", "الكل"], ["done", "قام بالواجب"], ["late", "متأخر / لم يسلّم"]] as const).map(([k, l]) => {
+                const base = students.filter(s => (!activeHW.group_id || s.group_id === activeHW.group_id) && (!activeHW.grade || s.grade === activeHW.grade));
+                const isDone = (id: string) => { const x = subs.find(y => y.homework_id === activeHW.id && y.student_id === id); return !!(x && (x.answer_text || x.file_url)); };
+                const n = k === "all" ? base.length : base.filter(s => k === "done" ? isDone(s.id) : !isDone(s.id)).length;
+                return <button key={k} onClick={() => setHwStatus(k)} className={`rounded-full border px-3 py-1.5 text-xs font-black ${hwStatus === k ? "border-primary bg-primary text-primary-foreground" : "bg-card hover:bg-muted"}`}>{l} ({n})</button>;
+              })}
+            </div>
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
-              {students.filter(s => (!activeHW.group_id || s.group_id === activeHW.group_id) && (!activeHW.grade || s.grade === activeHW.grade)).map(s => (
+              {students.filter(s => (!activeHW.group_id || s.group_id === activeHW.group_id) && (!activeHW.grade || s.grade === activeHW.grade))
+                .filter(s => !hwSearch || `${s.full_name} ${(s as any).code || ""}`.toLocaleLowerCase().includes(hwSearch.toLocaleLowerCase()))
+                .filter(s => { if (hwStatus === "all") return true; const x = subs.find(y => y.homework_id === activeHW.id && y.student_id === s.id); const d = !!(x && (x.answer_text || x.file_url)); return hwStatus === "done" ? d : !d; })
+                .map(s => (
                 <StudentSubmissionRow key={s.id} student={s} hw={activeHW} sub={subs.find(x => x.homework_id === activeHW.id && x.student_id === s.id)} onUpdate={() => load(true)}
                   draft={drafts[s.id] || { level: "", note: "", checked: false }}
                   setDraft={(patch) => setDrafts(prev => ({ ...prev, [s.id]: { ...(prev[s.id] || { level: "", note: "", checked: false }), ...patch } }))} />
