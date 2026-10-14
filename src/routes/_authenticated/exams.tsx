@@ -4,9 +4,8 @@ import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { Trash2, X, Loader2, FileQuestion, Plus, BrainCircuit, Timer, BarChart3, Trophy, Eye, Pencil, Send, Ban, CheckCircle2 } from "lucide-react";
 import { generateExam } from "@/lib/exams.functions";
-import { updateExamStatusAdmin, getExamsDataAdmin, saveExamFullAdmin, deleteExamAdmin, setExamAnswersReleasedAdmin } from "@/lib/admin.functions";
+import { updateExamStatusAdmin, getExamsDataAdmin, saveExamFullAdmin, deleteExamAdmin, setExamAnswersReleasedAdmin, getExamQuestionsAdmin } from "@/lib/admin.functions";
 import { QUESTION_KINDS, TERMS, GRADES, DIFFICULTIES } from "@/lib/exam-constants";
-import { supabase } from "@/integrations/supabase/client";
 import { PaperExamButtons, SourcePicker } from "@/components/PaperExamTools";
 
 export const Route = createFileRoute("/_authenticated/exams")({
@@ -41,6 +40,7 @@ function ExamsPage() {
   const updateStatusFn = useServerFn(updateExamStatusAdmin);
   const releaseAnswersFn = useServerFn(setExamAnswersReleasedAdmin);
   const loadFn = useServerFn(getExamsDataAdmin);
+  const loadQuestionsFn = useServerFn(getExamQuestionsAdmin);
   const saveFullExamFn = useServerFn(saveExamFullAdmin);
   const deleteExamFn = useServerFn(deleteExamAdmin);
 
@@ -127,8 +127,22 @@ function ExamsPage() {
   async function handleEdit(ex: any) {
     setLoading(true);
     try {
-      const { data: qs } = await supabase.from("exam_questions").select("*").eq("exam_id", ex.id).order("position");
-      setPreviewExam({ id: ex.id, exam: ex, questions: qs || [] });
+      const res = await loadQuestionsFn({ data: { examId: ex.id } });
+      const qs = (res.questions || []).map((q: any) => ({
+        position: q.position, kind: q.kind, prompt: q.prompt, passage: q.passage || null,
+        options: q.options || [], correct_answer: q.correct_answer ?? null, rationale: q.rationale || null,
+        skill: q.skill || null, difficulty: q.difficulty || ex.difficulty, score: Number(q.score) || 1,
+        source_ref: q.source_ref || null,
+      }));
+      setForm({
+        grade: ex.grade || GRADES[0], term: ex.term || TERMS[0], group_id: ex.group_id || "",
+        subject: ex.subject || "", lesson: ex.title || "", question_count: ex.question_count || qs.length || 10,
+        duration_minutes: ex.duration_minutes || 20, total_score: ex.total_score || 100,
+        difficulty: ex.difficulty || "medium", adaptive: !!ex.adaptive,
+      });
+      if (Array.isArray(ex.question_types) && ex.question_types.length) setKinds(ex.question_types);
+      setOptionsText({});
+      setPreviewExam({ id: ex.id, exam: ex, questions: qs });
       setCreateMode("manual");
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch { toast.error("فشل تحميل الأسئلة للتعديل"); }
