@@ -49,6 +49,22 @@ function ReportsPage() {
 
   const groupMap = useMemo(() => Object.fromEntries(groups.map(g => [g.id, g])), [groups]);
 
+  // توحيد الحساب مع الماليات: المستحق لكل شهر = حركة المستحق إن وجدت وإلا اشتراك المجموعة
+  const monthsInRange = useMemo(() => { const out: string[] = []; let d = new Date(from.slice(0, 7) + "-01"); const end = to.slice(0, 7); while (d.toISOString().slice(0, 7) <= end && out.length < 60) { out.push(d.toISOString().slice(0, 7)); d = new Date(d.getFullYear(), d.getMonth() + 1, 15); } return out; }, [from, to]);
+  const finFor = (s: Student, months: string[]) => {
+    let dues = 0, income = 0, exempt = 0, late = 0;
+    const fee = s.group_id ? Number(groupMap[s.group_id]?.monthly_fee || 0) : 0;
+    for (const m of months) {
+      const sp = pay.filter(p => p.student_id === s.id && String(p.month || "").slice(0, 7) === m);
+      const sum = (k: string) => sp.filter(p => p.kind === k).reduce((a, b) => a + Number(b.amount), 0);
+      const c = sum("charge"), due = c > 0 ? c : fee, pd = sum("payment"), ex = sum("exempt");
+      dues += due; income += pd; exempt += ex; late += Math.max(0, due - pd - ex);
+    }
+    return { dues, income, exempt, late };
+  };
+  const fin = useMemo(() => Object.fromEntries(students.map(s => [s.id, finFor(s, monthsInRange)])), [students, pay, monthsInRange, groupMap]);
+  const finCur = useMemo(() => { const cur = new Date().toISOString().slice(0, 7); return Object.fromEntries(students.map(s => [s.id, finFor(s, [cur])])); }, [students, pay, groupMap]);
+
   const byGrade = useMemo(() => {
     const map = new Map<string, { grade: string; students: number; present: number; absent: number; late: number; income: number; dues: number; exempt: number }>();
     for (const s of students) {
@@ -63,33 +79,31 @@ function ReportsPage() {
       else if (a.status === "absent") row.absent++;
       else if (a.status === "late") row.late++;
     }
-    for (const p of pay) {
-      const s = students.find(x => x.id === p.student_id); if (!s) continue;
-      const row = map.get(s.grade || "غير محدد")!;
-      if (p.kind === "payment") row.income += Number(p.amount);
-      else if (p.kind === "exempt") row.exempt += Number(p.amount);
-      else row.dues += Number(p.amount);
+    for (const s of students) {
+      const row = map.get(s.grade || "غير محدد")! as any; const f = fin[s.id]; if (!f) continue;
+      row.income += f.income; row.exempt += f.exempt; row.dues += f.dues; row.lateAmt = (row.lateAmt || 0) + f.late;
     }
-    return Array.from(map.values()).sort((a, b) => a.grade.localeCompare(b.grade));
-  }, [students, att, pay]);
+    return Array.from(map.values()).sort((a, b) => a.grade.localeCompare(b.grade)) as any[];
+  }, [students, att, fin]);
 
   const byGroup = useMemo(() => {
     return groups.map(g => {
       const gs = students.filter(s => s.group_id === g.id);
       const gAtt = att.filter(a => a.group_id === g.id);
-      const gPay = pay.filter(p => gs.some(s => s.id === p.student_id));
+      const sumF = (k: "dues" | "income" | "exempt" | "late") => gs.reduce((a, s) => a + (fin[s.id]?.[k] || 0), 0);
       return {
+        lateAmt: sumF("late"),
         group: g,
         students: gs.length,
         present: gAtt.filter(x => x.status === "present").length,
         absent: gAtt.filter(x => x.status === "absent").length,
         late: gAtt.filter(x => x.status === "late").length,
-        income: gPay.filter(p => p.kind === "payment").reduce((a, b) => a + Number(b.amount), 0),
-        dues: gPay.filter(p => p.kind === "charge").reduce((a, b) => a + Number(b.amount), 0),
-        exempt: gPay.filter(p => p.kind === "exempt").reduce((a, b) => a + Number(b.amount), 0),
+        income: sumF("income"),
+        dues: sumF("dues"),
+        exempt: sumF("exempt"),
       };
     });
-  }, [groups, students, att, pay]);
+  }, [groups, students, att, fin]);
 
   const attReport = useMemo(() => {
     return students.map(s => {
@@ -105,11 +119,11 @@ function ReportsPage() {
 
   function printCurrent() {
     if (tab === "grade") {
-      const rows = byGrade.map(r => `<tr><td>${esc(r.grade)}</td><td>${r.students}</td><td>${r.present}</td><td>${r.late}</td><td>${r.absent}</td><td>${r.dues.toLocaleString("ar-EG")}</td><td>${r.income.toLocaleString("ar-EG")}</td><td>${r.exempt.toLocaleString("ar-EG")}</td><td>${Math.max(0, r.dues - r.income - r.exempt).toLocaleString("ar-EG")}</td></tr>`).join("");
+      const rows = byGrade.map(r => `<tr><td>${esc(r.grade)}</td><td>${r.students}</td><td>${r.present}</td><td>${r.late}</td><td>${r.absent}</td><td>${r.dues.toLocaleString("ar-EG")}</td><td>${r.income.toLocaleString("ar-EG")}</td><td>${r.exempt.toLocaleString("ar-EG")}</td><td>${r.lateAmt.toLocaleString("ar-EG")}</td></tr>`).join("");
       openPrint("تقرير مصنّف حسب الصف", `<h2>تقرير حسب الصف — من ${esc(from)} إلى ${esc(to)}</h2>
         <table><thead><tr><th>الصف</th><th>عدد الطلاب</th><th>حضور</th><th>تأخير</th><th>غياب</th><th>المستحق</th><th>المدفوع</th><th>الإعفاء</th><th>المتأخرات</th></tr></thead><tbody>${rows}</tbody></table>`);
     } else if (tab === "group") {
-      const rows = byGroup.map(r => `<tr><td>${esc(r.group.name)}</td><td>${esc(r.group.grade)}</td><td>${r.students}</td><td>${r.present}</td><td>${r.late}</td><td>${r.absent}</td><td>${r.dues.toLocaleString("ar-EG")}</td><td>${r.income.toLocaleString("ar-EG")}</td><td>${r.exempt.toLocaleString("ar-EG")}</td><td>${Math.max(0, r.dues - r.income - r.exempt).toLocaleString("ar-EG")}</td></tr>`).join("");
+      const rows = byGroup.map(r => `<tr><td>${esc(r.group.name)}</td><td>${esc(r.group.grade)}</td><td>${r.students}</td><td>${r.present}</td><td>${r.late}</td><td>${r.absent}</td><td>${r.dues.toLocaleString("ar-EG")}</td><td>${r.income.toLocaleString("ar-EG")}</td><td>${r.exempt.toLocaleString("ar-EG")}</td><td>${r.lateAmt.toLocaleString("ar-EG")}</td></tr>`).join("");
       openPrint("تقرير مصنّف حسب المجموعة", `<h2>تقرير حسب المجموعة — من ${esc(from)} إلى ${esc(to)}</h2>
         <table><thead><tr><th>المجموعة</th><th>الصف</th><th>عدد الطلاب</th><th>حضور</th><th>تأخير</th><th>غياب</th><th>المستحق</th><th>المدفوع</th><th>الإعفاء</th><th>المتأخرات</th></tr></thead><tbody>${rows}</tbody></table>`);
     } else {
@@ -126,12 +140,11 @@ function ReportsPage() {
   async function runCenterAI() {
     setAiOpen(true); setAiLoading(true); setAiText(null);
     try {
-      const income = pay.filter(p => p.kind === "payment").reduce((a, b) => a + Number(b.amount), 0);
-      const dues = pay.filter(p => p.kind === "charge").reduce((a, b) => a + Number(b.amount), 0);
-      const exempt = pay.filter(p => p.kind === "exempt").reduce((a, b) => a + Number(b.amount), 0);
+      const vals = Object.values(fin) as any[];
+      const income = vals.reduce((a, f) => a + f.income, 0), dues = vals.reduce((a, f) => a + f.dues, 0), exempt = vals.reduce((a, f) => a + f.exempt, 0), lateT = vals.reduce((a, f) => a + f.late, 0);
       const topAbsent = attReport.filter(r => r.absent > 0).slice(0, 10).map(r => ({ name: r.student.full_name, absent: r.absent }));
       const r = await genCenter({ data: {
-        totals: { students: students.length, groups: groups.length, income, dues, exempt, outstanding: Math.max(0, dues - income - exempt) },
+        totals: { students: students.length, groups: groups.length, income, dues, exempt, outstanding: lateT },
         attendance: {
           present: att.filter(a => a.status === "present").length,
           absent: att.filter(a => a.status === "absent").length,
@@ -198,10 +211,8 @@ function ReportsPage() {
       )}
 
       {(() => {
-        const cur = new Date().toISOString().slice(0, 7);
-        const sm = (k: string, m?: boolean) => pay.filter(p => p.kind === k && (!m || String(p.month || "").slice(0, 7) === cur)).reduce((a, b) => a + Number(b.amount), 0);
-        const d = sm("charge"), pd = sm("payment"), ex = sm("exempt"), dM = sm("charge", true), pM = sm("payment", true), eM = sm("exempt", true);
-        const items = [["إجمالي المستحق", d], ["المستحق هذا الشهر", dM], ["إجمالي المدفوع", pd], ["المدفوع هذا الشهر", pM], ["إجمالي الإعفاءات", ex], ["الإعفاء هذا الشهر", eM], ["إجمالي المتأخرات", Math.max(0, d - pd - ex)], ["المتأخرات هذا الشهر", Math.max(0, dM - pM - eM)]] as const;
+        const tot = (src: Record<string, any>, k: string) => Object.values(src).reduce((a: number, f: any) => a + f[k], 0) as number;
+        const items = [["إجمالي المستحق (الفترة)", tot(fin, "dues")], ["المستحق هذا الشهر", tot(finCur, "dues")], ["إجمالي المدفوع (الفترة)", tot(fin, "income")], ["المدفوع هذا الشهر", tot(finCur, "income")], ["إجمالي الإعفاءات (الفترة)", tot(fin, "exempt")], ["الإعفاء هذا الشهر", tot(finCur, "exempt")], ["إجمالي المتأخرات (الفترة)", tot(fin, "late")], ["المتأخرات هذا الشهر", tot(finCur, "late")]] as const;
         return <div className="mb-4 grid grid-cols-2 gap-2 lg:grid-cols-4">{items.map(([l, v]) => <div key={l} className="rounded-2xl bg-white p-3 shadow-sm"><div className="text-xs font-bold text-muted-foreground">{l}</div><div className="text-lg font-black">{Number(v).toLocaleString("ar-EG")}</div></div>)}</div>;
       })()}
       <div className="mb-4 flex gap-2 rounded-2xl bg-white p-1.5 shadow-sm">
@@ -231,7 +242,7 @@ function ReportsPage() {
                     <td className="p-3">{r.dues.toLocaleString("ar-EG")}</td>
                     <td className="p-3 text-secondary">{r.income.toLocaleString("ar-EG")}</td>
                     <td className="p-3 text-sky-700">{r.exempt.toLocaleString("ar-EG")}</td>
-                    <td className={`p-3 font-bold ${r.dues - r.income - r.exempt > 0 ? "text-destructive" : "text-secondary"}`}>{Math.max(0, r.dues - r.income - r.exempt).toLocaleString("ar-EG")}</td>
+                    <td className={`p-3 font-bold ${r.lateAmt > 0 ? "text-destructive" : "text-secondary"}`}>{r.lateAmt.toLocaleString("ar-EG")}</td>
                   </tr>
                 ))}
               </tbody>
@@ -255,7 +266,7 @@ function ReportsPage() {
                     <td className="p-3">{r.dues.toLocaleString("ar-EG")}</td>
                     <td className="p-3 text-secondary">{r.income.toLocaleString("ar-EG")}</td>
                     <td className="p-3 text-sky-700">{r.exempt.toLocaleString("ar-EG")}</td>
-                    <td className={`p-3 font-bold ${r.dues - r.income - r.exempt > 0 ? "text-destructive" : "text-secondary"}`}>{Math.max(0, r.dues - r.income - r.exempt).toLocaleString("ar-EG")}</td>
+                    <td className={`p-3 font-bold ${r.lateAmt > 0 ? "text-destructive" : "text-secondary"}`}>{r.lateAmt.toLocaleString("ar-EG")}</td>
                   </tr>
                 ))}
               </tbody>
