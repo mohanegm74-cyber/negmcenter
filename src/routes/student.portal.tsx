@@ -396,7 +396,9 @@ function Portal() {
                     </div>
                     {l.urls?.length > 0 && (
                       <div className="mb-4 flex flex-wrap gap-2">
-                        {l.urls.map((u: string, i: number) => (
+                        {l.urls.map((u: string, i: number) => /\.(mp4|webm|mov|m4v|ogg)(\?|$)/i.test(u) ? (
+                          <video key={i} src={u} controls preload="metadata" className="w-full max-w-xl rounded-lg border" />
+                        ) : (
                           <a key={i} href={u} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-[11px] font-bold hover:bg-accent"><FileText className="h-3.5 w-3.5" /> ملف {i + 1}</a>
                         ))}
                       </div>

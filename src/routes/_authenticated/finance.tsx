@@ -52,22 +52,19 @@ function FinancePage() {
 
   const groupMap = useMemo(() => Object.fromEntries(groups.map(g => [g.id, g])), [groups]);
 
-  // حسابات الملخص العام للمالية
+  // حسابات الملخص العام للمالية (إجمالي + هذا الشهر)
   const totals = useMemo(() => {
-    const pFiltered = payments.filter(p => !month || p.month === month);
-    const paid = pFiltered.filter(p => p.kind === "payment").reduce((a, b) => a + Number(b.amount), 0);
-    const exempt = pFiltered.filter(p => p.kind === "exempt").reduce((a, b) => a + Number(b.amount), 0);
-    const charged = pFiltered.filter(p => p.kind === "charge").reduce((a, b) => a + Number(b.amount), 0);
-    
-    // إذا لم تكن هناك رسوم مسجلة يدوياً، نعتمد على رسوم المجموعات لجميع الطلاب
-    let estimatedTotal = charged;
-    if (charged === 0) {
-      students.forEach(s => {
-        if (s.group_id) estimatedTotal += Number(groupMap[s.group_id]?.monthly_fee || 0);
-      });
-    }
-
-    return { paid, exempt, dues: estimatedTotal, outstanding: Math.max(0, estimatedTotal - paid - exempt) };
+    const cur = new Date().toISOString().slice(0, 7);
+    const inMonth = (p: any) => String(p.month || p.paid_at || "").slice(0, 7) === cur;
+    const sum = (list: any[], k: string) => list.filter(p => p.kind === k).reduce((a, b) => a + Number(b.amount), 0);
+    const all = payments.filter(p => !month || p.month === month);
+    const cm = payments.filter(inMonth);
+    const fees = students.reduce((a, s) => a + (s.group_id ? Number(groupMap[s.group_id]?.monthly_fee || 0) : 0), 0);
+    const charged = sum(all, "charge"), chargedM = sum(cm, "charge");
+    const dues = charged || fees, duesM = chargedM || fees;
+    const paid = sum(all, "payment"), paidM = sum(cm, "payment");
+    const exempt = sum(all, "exempt"), exemptM = sum(cm, "exempt");
+    return { paid, exempt, dues, outstanding: Math.max(0, dues - paid - exempt), duesM, paidM, exemptM, outstandingM: Math.max(0, duesM - paidM - exemptM) };
   }, [payments, month, students, groupMap]);
 
   const rows = useMemo(() => {
@@ -151,10 +148,14 @@ function FinancePage() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <FinanceCard icon={<TrendingUp className="h-5 w-5" />} label="المستحق (الرسوم)" value={totals.dues} tone="primary" />
-        <FinanceCard icon={<ArrowDownCircle className="h-5 w-5" />} label="المحصل فعلياً" value={totals.paid} tone="secondary" />
-        <FinanceCard icon={<ArrowUpCircle className="h-5 w-5" />} label="الإعفاءات" value={totals.exempt} tone="primary" />
+        <FinanceCard icon={<TrendingUp className="h-5 w-5" />} label="إجمالي المستحق" value={totals.dues} tone="primary" />
+        <FinanceCard icon={<ArrowDownCircle className="h-5 w-5" />} label="إجمالي المدفوع" value={totals.paid} tone="secondary" />
+        <FinanceCard icon={<ArrowUpCircle className="h-5 w-5" />} label="إجمالي الإعفاءات" value={totals.exempt} tone="primary" />
         <FinanceCard icon={<AlertCircle className="h-5 w-5" />} label="إجمالي المتأخرات" value={totals.outstanding} tone="destructive" />
+        <FinanceCard icon={<TrendingUp className="h-5 w-5" />} label="المستحق هذا الشهر" value={totals.duesM} tone="primary" />
+        <FinanceCard icon={<ArrowDownCircle className="h-5 w-5" />} label="المدفوع فعلياً هذا الشهر" value={totals.paidM} tone="secondary" />
+        <FinanceCard icon={<ArrowUpCircle className="h-5 w-5" />} label="الإعفاء هذا الشهر" value={totals.exemptM} tone="primary" />
+        <FinanceCard icon={<AlertCircle className="h-5 w-5" />} label="المتأخرات هذا الشهر" value={totals.outstandingM} tone="destructive" />
       </div>
 
 
