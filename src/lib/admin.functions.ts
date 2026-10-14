@@ -208,6 +208,20 @@ export const getExamsDataAdmin = createServerFn({ method: "GET" })
     return { groups: g.data || [], students: s.data || [], exams: e.data || [], attempts: at.data || [] };
   });
 
+export const getExamQuestionsAdmin = createServerFn({ method: "POST" })
+  .middleware([requireAuthMiddleware])
+  .inputValidator((d: unknown) => d as { examId: string })
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: qs, error } = await supabaseAdmin
+      .from("exam_questions")
+      .select("*")
+      .eq("exam_id", data.examId)
+      .order("position");
+    if (error) throw new Error(error.message);
+    return { questions: qs || [] };
+  });
+
 export const saveExamFullAdmin = createServerFn({ method: "POST" })
   .middleware([requireAuthMiddleware])
   .inputValidator((d: unknown) => d as { id?: string; exam: any; questions: any[] })
