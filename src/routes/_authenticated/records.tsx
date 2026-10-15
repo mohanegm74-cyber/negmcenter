@@ -98,14 +98,54 @@ function BulkNotesModal({ students, groups, rows, date, setDate, onChanged, onCl
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [busy, setBusy] = useState(false);
+  const [savingAll, setSavingAll] = useState(false);
   const [levels, setLevels] = useState<Record<string, { exam: string | null; recitation: string | null }>>({});
+  const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const send = useServerFn(addBulkStudentNotesAdmin);
   const getLevels = useServerFn(getStudentLevelsAdmin);
+  const saveFn = useServerFn(saveStudentRecordAdmin);
+  const deleteFn = useServerFn(deleteStudentRecordAdmin);
   useEffect(() => { getLevels().then((r) => setLevels(r.levels)).catch(() => {}); }, []);
   const list = useMemo(() => students.filter((s) => (!grp || s.group_id === grp) && (!q || s.full_name.includes(q) || s.code.toUpperCase().includes(q.toUpperCase()))), [students, grp, q]);
   const toggle = (ids: string[], on: boolean) => setSel((prev) => { const n = new Set(prev); ids.forEach((i) => (on ? n.add(i) : n.delete(i))); return n; });
   const allOn = students.length > 0 && students.every((s) => sel.has(s.id));
   const listOn = list.length > 0 && list.every((s) => sel.has(s.id));
+  const existingOf = (id: string) => rows.find((r) => r.student_id === id && r.date === date) || null;
+  const draftOf = (id: string): Draft => drafts[id] || { exam: existingOf(id)?.exam_level || "", rec: existingOf(id)?.recitation_level || "", note: existingOf(id)?.note || "" };
+  const setDraft = (id: string, d: Draft) => setDrafts((prev) => ({ ...prev, [id]: d }));
+  useEffect(() => { setDrafts({}); }, [date]);
+  const hasUnsaved = students.some((s) => {
+    const d = draftOf(s.id); const ex = existingOf(s.id);
+    if (!d.exam && !d.rec && !d.note.trim()) return false;
+    return !ex || ex.exam_level !== (d.exam || null) || ex.recitation_level !== (d.rec || null) || ex.note !== (d.note.trim() || null);
+  });
+  const refresh = async () => { await onChanged(); getLevels().then((r) => setLevels(r.levels)).catch(() => {}); };
+  async function saveOne(student: Student, silent = false): Promise<boolean> {
+    const d = draftOf(student.id);
+    if (!d.exam && !d.rec && !d.note.trim()) { if (!silent) toast.error("أدخل الاختبار أو التسميع أو ملاحظة"); return false; }
+    try {
+      await saveFn({ data: { id: existingOf(student.id)?.id || undefined, payload: { student_id: student.id, group_id: student.group_id || null, date, exam_level: d.exam || null, recitation_level: d.rec || null, note: d.note.trim() || null } } });
+      if (!silent) toast.success(`تم حفظ سجل ${student.full_name}`);
+      return true;
+    } catch (e: any) { if (!silent) toast.error(e?.message || "تعذر الحفظ"); return false; }
+  }
+  async function saveAll() {
+    const targets = students.filter((s) => { const d = draftOf(s.id); return !!(d.exam || d.rec || d.note.trim()); });
+    if (!targets.length) return toast.error("لا توجد بيانات لحفظها");
+    setSavingAll(true);
+    let ok = 0, fail = 0;
+    for (const s of targets) { if (await saveOne(s, true)) ok++; else fail++; }
+    setSavingAll(false);
+    if (ok) { toast.success(`تم حفظ الكل — عدد الطلاب: ${ok}${fail ? ` — تعذر حفظ ${fail}` : ""}`); await refresh(); }
+    else toast.error("تعذر حفظ السجلات");
+  }
+  async function removeOne(student: Student) {
+    const ex = existingOf(student.id);
+    if (!ex) { setDraft(student.id, { exam: "", rec: "", note: "" }); return; }
+    if (!confirm(`حذف سجل ${student.full_name} لهذا التاريخ؟`)) return;
+    try { await deleteFn({ data: { id: ex.id } }); toast.success("تم حذف السجل"); setDraft(student.id, { exam: "", rec: "", note: "" }); await refresh(); }
+    catch (e: any) { toast.error(e?.message || "تعذر الحذف"); }
+  }
   async function submit() {
     if (!sel.size) return toast.error("اختر طالبًا واحدًا على الأقل");
     if (!body.trim()) return toast.error("اكتب نص الملاحظة");
@@ -113,12 +153,13 @@ function BulkNotesModal({ students, groups, rows, date, setDate, onChanged, onCl
     try { const r = await send({ data: { student_ids: [...sel], title, body } }); toast.success(`تم الإرسال إلى ${r.count} طالب`); setBody(""); setTitle(""); setSel(new Set()); }
     catch (e: any) { toast.error(e.message || "فشل الإرسال"); } finally { setBusy(false); }
   }
+  const guardClose = () => { if (hasUnsaved && !confirm("هناك بيانات لم تُحفظ بعد. هل تريد الإغلاق بدون حفظ؟")) return; onClose(); };
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
       <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b bg-primary/5 p-5">
           <div><h2 className="text-xl font-black text-primary">إرسال ملاحظة الأستاذ</h2><p className="text-xs font-bold text-muted-foreground">للجميع أو لمجموعة محددة أو لطلاب محددين — المحدد: {sel.size}</p></div>
-          <button onClick={onClose} className="rounded-full p-2 hover:bg-white"><X className="h-6 w-6" /></button>
+          <button onClick={guardClose} className="rounded-full p-2 hover:bg-white"><X className="h-6 w-6" /></button>
         </div>
         <div className="flex-1 space-y-4 overflow-y-auto p-5">
           <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="عنوان الملاحظة" className="w-full rounded-xl border p-3 text-sm font-bold" />
@@ -144,47 +185,28 @@ function BulkNotesModal({ students, groups, rows, date, setDate, onChanged, onCl
                     <span className="rounded-full bg-secondary/10 px-2 py-0.5 text-secondary">آخر تسميع: {lv?.recitation || "—"}</span>
                   </div>
                 </label>
-                <StudentRecordRow student={s} date={date} existing={rows.find((r) => r.student_id === s.id && r.date === date) || null} onChanged={async () => { await onChanged(); getLevels().then((r) => setLevels(r.levels)).catch(() => {}); }} />
+                <StudentRecordRow draft={draftOf(s.id)} existing={existingOf(s.id)} busy={savingAll} onInput={(d) => setDraft(s.id, d)} onSave={async () => { if (await saveOne(s)) await refresh(); }} onDelete={() => removeOne(s)} />
               </div>
             ); })}
             {list.length === 0 && <div className="p-6 text-center text-sm text-muted-foreground">لا يوجد طلاب</div>}
           </div>
         </div>
-        <div className="flex gap-2 border-t p-4"><button onClick={onClose} className="rounded-xl border px-5 py-3 text-sm font-bold">إنهاء وإغلاق</button><button onClick={submit} disabled={busy} className="flex-1 rounded-xl bg-secondary py-3 text-sm font-black text-white disabled:opacity-60">{busy ? "جارٍ الإرسال..." : `إرسال إلى ${sel.size} طالب`}</button></div>
+        <div className="flex flex-wrap gap-2 border-t p-4"><button onClick={guardClose} className="rounded-xl border px-5 py-3 text-sm font-bold">إنهاء وإغلاق</button><button onClick={saveAll} disabled={savingAll} className="inline-flex items-center gap-1 rounded-xl bg-primary px-5 py-3 text-sm font-black text-primary-foreground disabled:opacity-60"><Save className="h-4 w-4" /> {savingAll ? "جارٍ حفظ الكل..." : "حفظ الكل"}</button><button onClick={submit} disabled={busy} className="flex-1 rounded-xl bg-secondary py-3 text-sm font-black text-white disabled:opacity-60">{busy ? "جارٍ الإرسال..." : `إرسال إلى ${sel.size} طالب`}</button></div>
       </div>
     </div>
   );
 }
 
 
-function StudentRecordRow({ student, date, existing, onChanged }: { student: Student; date: string; existing: Row | null; onChanged: () => Promise<void> }) {
-  const [exam, setExam] = useState(existing?.exam_level || "");
-  const [rec, setRec] = useState(existing?.recitation_level || "");
-  const [note, setNote] = useState(existing?.note || "");
-  const [busy, setBusy] = useState(false);
-  const saveFn = useServerFn(saveStudentRecordAdmin);
-  const deleteFn = useServerFn(deleteStudentRecordAdmin);
-  useEffect(() => { setExam(existing?.exam_level || ""); setRec(existing?.recitation_level || ""); setNote(existing?.note || ""); }, [existing?.id, date]);
-  async function save() {
-    if (!exam && !rec && !note.trim()) return toast.error("أدخل الاختبار أو التسميع أو ملاحظة");
-    setBusy(true);
-    try { await saveFn({ data: { id: existing?.id || undefined, payload: { student_id: student.id, group_id: student.group_id || null, date, exam_level: exam || null, recitation_level: rec || null, note: note.trim() || null } } }); toast.success(`تم حفظ سجل ${student.full_name}`); await onChanged(); }
-    catch (e: any) { toast.error(e?.message || "تعذر الحفظ"); } finally { setBusy(false); }
-  }
-  async function remove() {
-    if (!existing) { setExam(""); setRec(""); setNote(""); return; }
-    if (!confirm(`حذف سجل ${student.full_name} لهذا التاريخ؟`)) return;
-    setBusy(true);
-    try { await deleteFn({ data: { id: existing.id } }); toast.success("تم حذف السجل"); await onChanged(); }
-    catch (e: any) { toast.error(e?.message || "تعذر الحذف"); } finally { setBusy(false); }
-  }
-  const sel = (v: string, on: (v: string) => void, label: string) => <select value={v} onChange={(e) => on(e.target.value)} className="rounded-lg border px-2 py-1.5 text-xs font-bold"><option value="">{label}</option>{LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}</select>;
+type Draft = { exam: string; rec: string; note: string };
+
+function StudentRecordRow({ draft, existing, busy, onInput, onSave, onDelete }: { draft: Draft; existing: Row | null; busy: boolean; onInput: (d: Draft) => void; onSave: () => void; onDelete: () => void }) {
   return <div className="flex flex-wrap items-center gap-2 pr-8">
-    <input value={exam} onChange={(e) => setExam(e.target.value)} placeholder="درجة الاختبار (نص أو رقم)" className="w-[150px] rounded-lg border px-2 py-1.5 text-xs font-bold" />
-    {sel(rec, setRec, "التسميع")}
-    <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="ملاحظة خاصة بالطالب" className="min-w-[160px] flex-1 rounded-lg border px-2 py-1.5 text-xs" />
-    <button type="button" disabled={busy} onClick={save} className="inline-flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-xs font-black text-primary-foreground disabled:opacity-60"><Save className="h-3.5 w-3.5" /> {existing ? "تحديث" : "حفظ"}</button>
-    <button type="button" disabled={busy} onClick={remove} className="rounded-lg bg-destructive/10 p-1.5 text-destructive" aria-label="حذف"><Trash2 className="h-4 w-4" /></button>
+    <input value={draft.exam} onChange={(e) => onInput({ ...draft, exam: e.target.value })} placeholder="درجة الاختبار (نص أو رقم)" className="w-[150px] rounded-lg border px-2 py-1.5 text-xs font-bold" />
+    <select value={draft.rec} onChange={(e) => onInput({ ...draft, rec: e.target.value })} className="rounded-lg border px-2 py-1.5 text-xs font-bold"><option value="">التسميع</option>{LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}</select>
+    <input value={draft.note} onChange={(e) => onInput({ ...draft, note: e.target.value })} placeholder="ملاحظة خاصة بالطالب" className="min-w-[160px] flex-1 rounded-lg border px-2 py-1.5 text-xs" />
+    <button type="button" disabled={busy} onClick={onSave} className="inline-flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-xs font-black text-primary-foreground disabled:opacity-60"><Save className="h-3.5 w-3.5" /> {existing ? "تحديث" : "حفظ"}</button>
+    <button type="button" disabled={busy} onClick={onDelete} className="rounded-lg bg-destructive/10 p-1.5 text-destructive" aria-label="حذف"><Trash2 className="h-4 w-4" /></button>
     {existing && <span className="text-[10px] font-bold text-primary">✔ محفوظ</span>}
   </div>;
 }
