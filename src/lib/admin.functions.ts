@@ -736,3 +736,26 @@ export const generateLessonDraftAdmin = createServerFn({ method: "POST" })
     if (e2) throw new Error(e2.message);
     return { ok: true, configured: true, message: "تم إنشاء المسودة — راجعها وعدّلها قبل النشر" };
   });
+
+export const addBulkStudentNotesAdmin = createServerFn({ method: "POST" })
+  .middleware([requireAuthMiddleware])
+  .inputValidator((d: unknown) => d as { student_ids: string[]; title: string; body: string })
+  .handler(async ({ data }) => {
+    const ids = Array.from(new Set((data.student_ids || []).filter(Boolean))).slice(0, 2000);
+    const title = String(data.title || "").trim().slice(0, 200), body = String(data.body || "").trim().slice(0, 4000);
+    if (!ids.length || !body) throw new Error("اختر طالبًا واحدًا على الأقل واكتب الملاحظة");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await supabaseAdmin.from("student_notes").insert(ids.map(student_id => ({ student_id, title: title || null, body })));
+    if (error) throw new Error("فشل الإرسال");
+    return { ok: true, count: ids.length };
+  });
+
+export const getStudentLevelsAdmin = createServerFn({ method: "POST" })
+  .middleware([requireAuthMiddleware])
+  .handler(async () => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data } = await supabaseAdmin.from("student_records").select("student_id, exam_level, recitation_level, date").order("date", { ascending: false }).limit(5000);
+    const out: Record<string, { exam: string | null; recitation: string | null }> = {};
+    for (const r of data || []) if (!out[r.student_id]) out[r.student_id] = { exam: r.exam_level, recitation: r.recitation_level };
+    return { levels: out };
+  });

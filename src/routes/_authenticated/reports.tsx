@@ -121,11 +121,11 @@ function ReportsPage() {
   function printCurrent() {
     if (tab === "grade") {
       const rows = byGrade.map(r => `<tr><td>${esc(r.grade)}</td><td>${r.students}</td><td>${r.present}</td><td>${r.late}</td><td>${r.absent}</td><td>${r.dues.toLocaleString("ar-EG")}</td><td>${r.income.toLocaleString("ar-EG")}</td><td>${r.exempt.toLocaleString("ar-EG")}</td><td>${r.lateAmt.toLocaleString("ar-EG")}</td></tr>`).join("");
-      openPrint("تقرير مصنّف حسب الصف", `<h2>تقرير حسب الصف — من ${esc(from)} إلى ${esc(to)}</h2>
+      openPrint("تقرير مصنّف حسب الصف", `<h2>تقرير حسب الصف (المبالغ بالجنيه المصري) — من ${esc(from)} إلى ${esc(to)}</h2>
         <table><thead><tr><th>الصف</th><th>عدد الطلاب</th><th>حضور</th><th>تأخير</th><th>غياب</th><th>المستحق</th><th>المدفوع</th><th>الإعفاء</th><th>المتأخرات</th></tr></thead><tbody>${rows}</tbody></table>`);
     } else if (tab === "group") {
       const rows = byGroup.map(r => `<tr><td>${esc(r.group.name)}</td><td>${esc(r.group.grade)}</td><td>${r.students}</td><td>${r.present}</td><td>${r.late}</td><td>${r.absent}</td><td>${r.dues.toLocaleString("ar-EG")}</td><td>${r.income.toLocaleString("ar-EG")}</td><td>${r.exempt.toLocaleString("ar-EG")}</td><td>${r.lateAmt.toLocaleString("ar-EG")}</td></tr>`).join("");
-      openPrint("تقرير مصنّف حسب المجموعة", `<h2>تقرير حسب المجموعة — من ${esc(from)} إلى ${esc(to)}</h2>
+      openPrint("تقرير مصنّف حسب المجموعة", `<h2>تقرير حسب المجموعة (المبالغ بالجنيه المصري) — من ${esc(from)} إلى ${esc(to)}</h2>
         <table><thead><tr><th>المجموعة</th><th>الصف</th><th>عدد الطلاب</th><th>حضور</th><th>تأخير</th><th>غياب</th><th>المستحق</th><th>المدفوع</th><th>الإعفاء</th><th>المتأخرات</th></tr></thead><tbody>${rows}</tbody></table>`);
     } else {
       const rows = attReport.map((r, i) => `<tr><td>${i + 1}</td><td>${esc(r.student.full_name)}</td><td>${esc(r.student.code)}</td><td>${esc(r.student.grade)}</td><td>${esc(r.group?.name)}</td><td>${r.present}</td><td>${r.late}</td><td style="color:${r.absent > 3 ? "#dc2626" : "inherit"};font-weight:${r.absent > 3 ? 700 : 400}">${r.absent}</td></tr>`).join("");
@@ -214,7 +214,7 @@ function ReportsPage() {
       {(() => {
         const tot = (src: Record<string, any>, k: string) => Object.values(src).reduce((a: number, f: any) => a + f[k], 0) as number;
         const items = [["إجمالي المستحق (الفترة)", tot(fin, "dues")], ["المستحق هذا الشهر", tot(finCur, "dues")], ["إجمالي المدفوع (الفترة)", tot(fin, "income")], ["المدفوع هذا الشهر", tot(finCur, "income")], ["إجمالي الإعفاءات (الفترة)", tot(fin, "exempt")], ["الإعفاء هذا الشهر", tot(finCur, "exempt")], ["إجمالي المتأخرات (الفترة)", tot(fin, "late")], ["المتأخرات هذا الشهر", tot(finCur, "late")]] as const;
-        return <div className="mb-4 grid grid-cols-2 gap-2 lg:grid-cols-4">{items.map(([l, v]) => <div key={l} className="rounded-2xl bg-white p-3 shadow-sm"><div className="text-xs font-bold text-muted-foreground">{l}</div><div className="text-lg font-black">{Number(v).toLocaleString("ar-EG")}</div></div>)}</div>;
+        return <div className="mb-4 grid grid-cols-2 gap-2 lg:grid-cols-4">{items.map(([l, v]) => <div key={l} className="rounded-2xl bg-white p-3 shadow-sm"><div className="text-xs font-bold text-muted-foreground">{l}</div><div className="text-lg font-black">{Number(v).toLocaleString("ar-EG")} <span className="text-xs font-bold text-muted-foreground">جنيه مصري</span></div></div>)}</div>;
       })()}
       <div className="mb-4 flex gap-2 rounded-2xl bg-white p-1.5 shadow-sm">
         {(["grade", "group", "attendance"] as const).map(t => (
