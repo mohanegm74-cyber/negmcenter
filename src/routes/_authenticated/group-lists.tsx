@@ -5,6 +5,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { getFinanceDataAdmin } from "@/lib/admin.functions";
 import { openPrint, esc } from "@/lib/print";
 import { toast } from "sonner";
+import { SEPTEMBER_FEE } from "@/lib/fees";
 
 export const Route = createFileRoute("/_authenticated/group-lists")({
   head: () => ({ meta: [{ title: "قوائم المجموعات والماليات — الأستاذ" }, { name: "description", content: "استخراج قوائم الطلاب حسب المجموعات مع حالة الدفع." }] }),
@@ -53,18 +54,22 @@ function GroupListsPage() {
       .map((s, idx) => {
         const studentPayments = payments.filter(p => p.student_id === s.id && p.month === month);
         const paid = studentPayments.filter(p => p.kind === "payment").reduce((a, b) => a + Number(b.amount), 0);
+        const exempt = studentPayments.filter(p => p.kind === "exempt").reduce((a, b) => a + Number(b.amount), 0);
         const dues = studentPayments.filter(p => p.kind === "charge").reduce((a, b) => a + Number(b.amount), 0);
-        const fee = activeGroup?.monthly_fee || 0;
-        
-        const target = dues > 0 ? dues : fee;
+        const fee = Number(activeGroup?.monthly_fee || 0);
+        const target = dues > 0 ? dues : (month.endsWith("-09") ? SEPTEMBER_FEE : fee);
+
         let status = "لم يسدد";
         let statusColor = "#dc2626"; // red
 
-        if (paid >= target && target > 0) {
-          status = "تم السداد";
+        if (exempt > 0 && exempt >= target - paid && paid === 0) {
+          status = "تم الإعفاء";
+          statusColor = "#0284c7"; // blue
+        } else if (paid > 0 && paid + exempt >= target) {
+          status = "تم الدفع";
           statusColor = "#059669"; // green
         } else if (paid > 0) {
-          status = `سداد جزئي (${paid})`;
+          status = `سداد جزئي (${paid} جنيه مصري)`;
           statusColor = "#d97706"; // orange
         }
 
