@@ -90,3 +90,64 @@ function RecordsPage() {
   </div>;
 }
 function SelectField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) { return <div><label className="mb-1 block text-xs font-black text-muted-foreground">{label}</label><select value={value} onChange={(e) => onChange(e.target.value)} className="w-full rounded-xl border px-3 py-2 text-sm font-bold"><option value="">غير محدد</option>{LEVELS.map((level) => <option key={level} value={level}>{level}</option>)}</select></div>; }
+
+function BulkNotesModal({ students, groups, onClose }: { students: Student[]; groups: Group[]; onClose: () => void }) {
+  const [sel, setSel] = useState<Set<string>>(new Set());
+  const [q, setQ] = useState("");
+  const [grp, setGrp] = useState("");
+  const [title, setTitle] = useState("");
+  const [body, setBody] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [levels, setLevels] = useState<Record<string, { exam: string | null; recitation: string | null }>>({});
+  const send = useServerFn(addBulkStudentNotesAdmin);
+  const getLevels = useServerFn(getStudentLevelsAdmin);
+  useEffect(() => { getLevels().then((r) => setLevels(r.levels)).catch(() => {}); }, []);
+  const list = useMemo(() => students.filter((s) => (!grp || s.group_id === grp) && (!q || s.full_name.includes(q) || s.code.toUpperCase().includes(q.toUpperCase()))), [students, grp, q]);
+  const toggle = (ids: string[], on: boolean) => setSel((prev) => { const n = new Set(prev); ids.forEach((i) => (on ? n.add(i) : n.delete(i))); return n; });
+  const allOn = students.length > 0 && students.every((s) => sel.has(s.id));
+  const listOn = list.length > 0 && list.every((s) => sel.has(s.id));
+  async function submit() {
+    if (!sel.size) return toast.error("اختر طالبًا واحدًا على الأقل");
+    if (!body.trim()) return toast.error("اكتب نص الملاحظة");
+    setBusy(true);
+    try { const r = await send({ data: { student_ids: [...sel], title, body } }); toast.success(`تم الإرسال إلى ${r.count} طالب`); setBody(""); setTitle(""); setSel(new Set()); }
+    catch (e: any) { toast.error(e.message || "فشل الإرسال"); } finally { setBusy(false); }
+  }
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+      <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b bg-primary/5 p-5">
+          <div><h2 className="text-xl font-black text-primary">إرسال ملاحظة الأستاذ</h2><p className="text-xs font-bold text-muted-foreground">للجميع أو لمجموعة محددة أو لطلاب محددين — المحدد: {sel.size}</p></div>
+          <button onClick={onClose} className="rounded-full p-2 hover:bg-white"><X className="h-6 w-6" /></button>
+        </div>
+        <div className="flex-1 space-y-4 overflow-y-auto p-5">
+          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="عنوان الملاحظة" className="w-full rounded-xl border p-3 text-sm font-bold" />
+          <textarea value={body} onChange={(e) => setBody(e.target.value)} placeholder="نص الملاحظة..." rows={3} className="w-full rounded-xl border p-3 text-sm" />
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="flex cursor-pointer items-center gap-2 rounded-lg border bg-primary/5 px-3 py-2 text-sm font-black"><input type="checkbox" className="h-4 w-4" checked={allOn} onChange={(e) => toggle(students.map((s) => s.id), e.target.checked)} /> الجميع ({students.length})</label>
+            <select value={grp} onChange={(e) => setGrp(e.target.value)} className="rounded-lg border px-3 py-2 text-sm">
+              <option value="">كل المجموعات</option>
+              {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+            </select>
+            <label className="flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm font-bold"><input type="checkbox" className="h-4 w-4" checked={listOn} onChange={(e) => toggle(list.map((s) => s.id), e.target.checked)} /> تحديد المعروض ({list.length})</label>
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="بحث بالاسم أو الكود" className="min-w-[140px] flex-1 rounded-lg border px-3 py-2 text-sm" />
+          </div>
+          <div className="max-h-[40vh] divide-y overflow-y-auto rounded-xl border">
+            {list.map((s) => { const lv = levels[s.id]; return (
+              <label key={s.id} className={`flex cursor-pointer items-center gap-3 p-3 hover:bg-muted/30 ${sel.has(s.id) ? "bg-secondary/5" : ""}`}>
+                <input type="checkbox" className="h-5 w-5" checked={sel.has(s.id)} onChange={(e) => toggle([s.id], e.target.checked)} />
+                <div className="min-w-0 flex-1"><div className="text-sm font-bold">{s.full_name}</div><div className="text-[11px] text-muted-foreground">{s.code} • {s.grade || "—"} • {groups.find((g) => g.id === s.group_id)?.name || "—"}</div></div>
+                <div className="flex flex-wrap gap-1 text-[11px] font-bold">
+                  <span className="rounded-full bg-primary/10 px-2 py-0.5 text-primary">الاختبار: {lv?.exam || "—"}</span>
+                  <span className="rounded-full bg-secondary/10 px-2 py-0.5 text-secondary">التسميع: {lv?.recitation || "—"}</span>
+                </div>
+              </label>
+            ); })}
+            {list.length === 0 && <div className="p-6 text-center text-sm text-muted-foreground">لا يوجد طلاب</div>}
+          </div>
+        </div>
+        <div className="border-t p-4"><button onClick={submit} disabled={busy} className="w-full rounded-xl bg-secondary py-3 text-sm font-black text-white disabled:opacity-60">{busy ? "جارٍ الإرسال..." : `إرسال إلى ${sel.size} طالب`}</button></div>
+      </div>
+    </div>
+  );
+}
