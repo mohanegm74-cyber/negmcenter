@@ -94,7 +94,7 @@ function GroupsPage() {
             <F name="time" label="الميعاد" placeholder="4:00 – 6:00 م" defaultValue={editing?.time ?? ""} />
             <F name="room" label="القاعة" defaultValue={editing?.room ?? ""} />
             <F name="max_students" label="الحد الأقصى" type="number" defaultValue={editing?.max_students ? String(editing.max_students) : ""} />
-            <F name="monthly_fee" label="الرسوم الشهرية (ج.م)" type="number" defaultValue={editing?.monthly_fee ? String(editing.monthly_fee) : ""} />
+            <F name="monthly_fee" label="الرسوم الشهرية (جنيه مصري)" type="number" defaultValue={editing?.monthly_fee ? String(editing.monthly_fee) : ""} />
             <div>
               <label className="mb-1.5 block text-sm font-semibold">اللون</label>
               <input type="color" name="color" defaultValue={editing?.color || "#1e40af"} className="h-[42px] w-full rounded-lg border border-input" />
@@ -125,7 +125,7 @@ function GroupsPage() {
               <Row k="الميعاد" v={g.time} />
               <Row k="القاعة" v={g.room} />
               <Row k="الحد الأقصى" v={String(g.max_students ?? "—")} />
-              <Row k="الرسوم الشهرية" v={g.monthly_fee ? `${g.monthly_fee} ج.م` : "—"} />
+              <Row k="الرسوم الشهرية" v={g.monthly_fee ? `${g.monthly_fee} جنيه مصري` : "—"} />
             </dl>
           </div>
         ))}

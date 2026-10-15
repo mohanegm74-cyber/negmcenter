@@ -169,7 +169,7 @@ function GroupListsPage() {
                   <th className="p-4 text-center w-16">مسلسل</th>
                   <th className="p-4">اسم الطالب</th>
                   <th className="p-4 text-center">الصف</th>
-                  <th className="p-4 text-center">موقف الدفع (${month})</th>
+                  <th className="p-4 text-center">موقف الدفع ({month})</th>
                   <th className="p-4 text-center">الكود</th>
                 </tr>
               </thead>
