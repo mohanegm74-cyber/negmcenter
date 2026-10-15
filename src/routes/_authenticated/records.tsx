@@ -180,7 +180,8 @@ function StudentRecordRow({ student, date, existing, onChanged }: { student: Stu
   }
   const sel = (v: string, on: (v: string) => void, label: string) => <select value={v} onChange={(e) => on(e.target.value)} className="rounded-lg border px-2 py-1.5 text-xs font-bold"><option value="">{label}</option>{LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}</select>;
   return <div className="flex flex-wrap items-center gap-2 pr-8">
-    {sel(exam, setExam, "الاختبار")}{sel(rec, setRec, "التسميع")}
+    <input value={exam} onChange={(e) => setExam(e.target.value)} placeholder="درجة الاختبار (نص أو رقم)" className="w-[150px] rounded-lg border px-2 py-1.5 text-xs font-bold" />
+    {sel(rec, setRec, "التسميع")}
     <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="ملاحظة خاصة بالطالب" className="min-w-[160px] flex-1 rounded-lg border px-2 py-1.5 text-xs" />
     <button type="button" disabled={busy} onClick={save} className="inline-flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-xs font-black text-primary-foreground disabled:opacity-60"><Save className="h-3.5 w-3.5" /> {existing ? "تحديث" : "حفظ"}</button>
     <button type="button" disabled={busy} onClick={remove} className="rounded-lg bg-destructive/10 p-1.5 text-destructive" aria-label="حذف"><Trash2 className="h-4 w-4" /></button>
