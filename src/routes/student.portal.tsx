@@ -451,13 +451,13 @@ function Portal() {
           <section className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-100 animate-in fade-in slide-in-from-bottom-4">
             <h2 className="text-xl font-black mb-6">تقرير الموقف المالي</h2>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-              <div className="bg-slate-50 p-5 rounded-2xl border text-center"><div className="text-[10px] font-black text-muted-foreground">إجمالي المستحق</div><div className="text-2xl font-black">{estimatedDues} ج.م</div></div>
-              <div className="bg-emerald-50 p-5 rounded-2xl border border-emerald-100 text-center"><div className="text-[10px] font-black text-emerald-600">إجمالي المسدد</div><div className="text-2xl font-black">{totalPaid} ج.م</div></div>
-              <div className={`p-5 rounded-2xl border text-center ${balance > 0 ? "bg-rose-50" : "bg-emerald-50"}`}><div className="text-[10px] font-black">المتبقي</div><div className="text-2xl font-black">{balance} ج.م</div></div>
+              <div className="bg-slate-50 p-5 rounded-2xl border text-center"><div className="text-[10px] font-black text-muted-foreground">إجمالي المستحق</div><div className="text-2xl font-black">{estimatedDues} جنيه مصري</div></div>
+              <div className="bg-emerald-50 p-5 rounded-2xl border border-emerald-100 text-center"><div className="text-[10px] font-black text-emerald-600">إجمالي المسدد</div><div className="text-2xl font-black">{totalPaid} جنيه مصري</div></div>
+              <div className={`p-5 rounded-2xl border text-center ${balance > 0 ? "bg-rose-50" : "bg-emerald-50"}`}><div className="text-[10px] font-black">المتبقي</div><div className="text-2xl font-black">{balance} جنيه مصري</div></div>
             </div>
             <div className="mt-4 rounded-2xl border border-sky-100 bg-sky-50 p-4 text-center">
               <div className="text-[10px] font-black text-sky-700">إجمالي الإعفاءات</div>
-              <div className="text-xl font-black text-sky-800">{totalExempt} ج.م</div>
+              <div className="text-xl font-black text-sky-800">{totalExempt} جنيه مصري</div>
             </div>
           </section>
         )}

@@ -1,4 +1,4 @@
-import { autoFeeApplies, academicMonths } from "@/lib/fees";
+import { autoFee, autoFeeApplies, academicMonths } from "@/lib/fees";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -24,7 +24,7 @@ function calcStudent(s: Student, payments: Payment[], fee: number, month: string
   for (const m of months) {
     const sp = payments.filter(p => p.student_id === s.id && p.month === m);
     const sum = (k: string) => sp.filter(p => p.kind === k).reduce((a, b) => a + Number(b.amount), 0);
-    const c = sum("charge"); const d = c > 0 ? c : (autoFeeApplies(m, s.active !== false) ? fee : 0);
+    const c = sum("charge"); const d = c > 0 ? c : autoFee(m, fee, s.active !== false);
     const pd = sum("payment"), ex = sum("exempt");
     due += d; paid += pd; exempt += ex; late += Math.max(0, d - pd - ex);
   }
@@ -299,7 +299,7 @@ function FinanceCard({ icon, label, value, tone }: { icon: any; label: string; v
     <div className={`rounded-2xl p-5 shadow-sm flex items-center gap-4 ${bg}`}>
       <div className="bg-white/20 p-3 rounded-xl">{icon}</div>
       <div>
-        <div className="text-2xl font-black">{value.toLocaleString("ar-EG")} <span className="text-xs font-normal">ج.م</span></div>
+        <div className="text-2xl font-black">{value.toLocaleString("ar-EG")} <span className="text-xs font-normal">جنيه مصري</span></div>
         <div className="text-xs opacity-90 font-bold">{label}</div>
       </div>
     </div>

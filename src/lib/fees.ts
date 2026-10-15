@@ -14,3 +14,9 @@ export function academicMonths(): string[] {
   while (`${y}-${String(m).padStart(2, "0")}` <= end && out.length < 24) { out.push(`${y}-${String(m).padStart(2, "0")}`); m++; if (m > 12) { m = 1; y++; } }
   return out;
 }
+// المستحق الافتراضي لشهر سبتمبر 50 جنيه مصري، وباقي الشهور حسب اشتراك المجموعة
+export const SEPTEMBER_FEE = 50;
+export function autoFee(month: string, groupFee: number, active = true): number {
+  if (!autoFeeApplies(month, active)) return 0;
+  return month.endsWith("-09") ? SEPTEMBER_FEE : groupFee;
+}
