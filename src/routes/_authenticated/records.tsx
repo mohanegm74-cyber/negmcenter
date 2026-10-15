@@ -1,9 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { CalendarDays, ClipboardPenLine, Loader2, MessageSquareText, Save, Trash2, Trophy } from "lucide-react";
+import { CalendarDays, ClipboardPenLine, Loader2, MessageSquareQuote, MessageSquareText, Save, Trash2, Trophy, X } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
-import { deleteStudentRecordAdmin, getStudentRecordsAdmin, saveStudentRecordAdmin } from "@/lib/admin.functions";
+import { addBulkStudentNotesAdmin, deleteStudentRecordAdmin, getStudentLevelsAdmin, getStudentRecordsAdmin, saveStudentRecordAdmin } from "@/lib/admin.functions";
 
 export const Route = createFileRoute("/_authenticated/records")({
   head: () => ({ meta: [
@@ -34,6 +34,7 @@ function RecordsPage() {
   const [draft, setDraft] = useState({ student_id: "", group_id: "", exam_level: "", recitation_level: "", note: "" });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
   const loadFn = useServerFn(getStudentRecordsAdmin);
   const saveFn = useServerFn(saveStudentRecordAdmin);
   const deleteFn = useServerFn(deleteStudentRecordAdmin);
