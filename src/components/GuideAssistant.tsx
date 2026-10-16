@@ -9,7 +9,7 @@ type Msg = { role: "user" | "assistant"; content: string };
 const WELCOME: Msg = {
   role: "assistant",
   content:
-    "مستر محمد نِجْم يرحب بكم 👋\nأنا المساعد الإرشادي للمنصة. اسألني بالكتابة أو بالصوت عن كيفية استخدام المنصة: التسجيل، الدخول، بوابة الطالب، الدروس، الواجبات، الاختبارات والحضور.",
+    "مستر محمد نِجْم يرحب بكم 👋\nأهلًا بيك! أنا مساعدك على المنصة، اسألني كتابة أو بصوتك عن أي حاجة: التسجيل، الدخول، بوابة الطالب، الدروس، الواجبات، الاختبارات والحضور.",
 };
 const CLOSING = "مع تحيات مستر محمد نِجْم";
 
@@ -121,10 +121,9 @@ export function GuideAssistant() {
   }
 
   function toggleOpen() {
-    setOpen((v) => {
-      if (v) stopSpeak();
-      return !v;
-    });
+    if (open) stopSpeak();
+    else if (autoSpeak && messages.length === 1) speak(WELCOME.content);
+    setOpen(!open);
   }
 
   return (
