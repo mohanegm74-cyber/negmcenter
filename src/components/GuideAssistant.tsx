@@ -229,19 +229,6 @@ export function GuideAssistant() {
     return;
   }
 
-  function _unusedMicLegacy() {
-    const rec: any = {};
-    let finalText = "";
-    rec.onend = () => {
-      setListening(false);
-      if (finalText.trim()) send(finalText);
-    };
-    rec.onerror = () => { setListening(false); voiceModeRef.current = false; };
-    recRef.current = rec;
-    setListening(true);
-    rec.start();
-  }
-
   async function send(text: string) {
     const content = text.trim().slice(0, MAX_LEN);
     if (!content || sendingRef.current) return;
