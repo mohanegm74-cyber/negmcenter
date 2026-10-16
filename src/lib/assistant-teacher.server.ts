@@ -173,7 +173,25 @@ export async function synthesizeSpeech(text: string): Promise<string | null> {
       return `data:audio/wav;base64,${pcmToWavBase64(d.data, rate)}`;
     } catch { /* جرّب النموذج التالي */ }
   }
-  return null;
+  // احتياطي: صوت عربي طبيعي عبر Lovable AI (لما مفتاح جيميناي يوصل للحد)
+  const lk = process.env.LOVABLE_API_KEY;
+  if (!lk) return null;
+  try {
+    const r = await fetch("https://ai.gateway.lovable.dev/v1/audio/speech", {
+      method: "POST",
+      headers: { "content-type": "application/json", Authorization: `Bearer ${lk}` },
+      body: JSON.stringify({
+        model: "google/gemini-3.1-flash-tts-preview",
+        stream_format: "audio",
+        contents: [{ role: "user", parts: [{ text: `اقرأ النص التالي بصوت طفل مصري مرح وودود باللهجة المصرية العامية:\n${clean}` }] }],
+        generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: "Puck" } } } },
+      }),
+    });
+    if (!r.ok) { console.error("[tts] gateway", r.status, await r.text()); return null; }
+    const buf = new Uint8Array(await r.arrayBuffer());
+    let s = ""; for (let i = 0; i < buf.length; i += 0x8000) s += String.fromCharCode(...buf.subarray(i, i + 0x8000));
+    return `data:${r.headers.get("content-type") || "audio/wav"};base64,${btoa(s)}`;
+  } catch (e) { console.error("[tts] gateway failed", e); return null; }
 }
 
 function pcmToWavBase64(b64: string, rate: number): string {
