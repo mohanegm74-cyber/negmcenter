@@ -103,7 +103,8 @@ ${ASSISTANT_KNOWLEDGE}
 بيانات المركز الحالية:
 ${ctx}`;
   const transcript = history.map((m) => (m.role === "user" ? `الأستاذ: ${m.content}` : `المساعد: ${m.content}`)).join("\n");
-  const raw = await callAi(system, `المحادثة:\n${transcript}\n\nأجب على آخر رسالة من الأستاذ.`);
+  let raw = await callAi(system, `المحادثة:\n${transcript}\n\nأجب على آخر رسالة من الأستاذ.`);
+  raw = raw.replace(/\*\*/g, "").replace(/^\s*\*\s+/gm, "• ");
   return raw.length > 3000 ? raw.slice(0, 3000) + "…" : raw;
 }
 
