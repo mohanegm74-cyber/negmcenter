@@ -14,13 +14,14 @@ export const askTeacherAssistantFn = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { data: roles } = await context.supabase.from("user_roles").select("role").eq("user_id", context.userId);
     const isTeacher = (roles || []).some((r: any) => r.role === "teacher" || r.role === "admin");
-    if (!isTeacher) return { reply: "", notTeacher: true };
-    if (!checkRateLimit()) return { reply: "رسائل كتير في وقت قصير، استنى دقيقة وجرب تاني.", notTeacher: false };
+    if (!isTeacher) return { reply: "", notTeacher: true, executed: false };
+    if (!checkRateLimit()) return { reply: "رسائل كتير في وقت قصير، استنى دقيقة وجرب تاني.", notTeacher: false, executed: false };
     const { askTeacherAssistant } = await import("./assistant-teacher.server");
     try {
-      return { reply: await askTeacherAssistant(data.messages), notTeacher: false };
+      const r = await askTeacherAssistant(data.messages);
+      return { reply: r.reply, executed: r.executed, notTeacher: false };
     } catch (e: any) {
-      return { reply: e?.message || "تعذر الاتصال بالمساعد الآن.", notTeacher: false };
+      return { reply: e?.message || "تعذر الاتصال بالمساعد الآن.", notTeacher: false, executed: false };
     }
   });
 

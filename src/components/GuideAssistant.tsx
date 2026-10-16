@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { useRouterState } from "@tanstack/react-router";
+import { useRouter, useRouterState } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { askTeacherAssistantFn, speakTextFn } from "@/lib/assistant-teacher.functions";
 import { Loader2, Mic, MicOff, RotateCcw, Send, Volume2, VolumeX, X } from "lucide-react";
@@ -37,6 +37,7 @@ export function GuideAssistant() {
   const [micSupported, setMicSupported] = useState(false);
   const askFn = useServerFn(askGuideAssistant);
   const teacherFn = useServerFn(askTeacherAssistantFn);
+  const router = useRouter();
   const ttsFn = useServerFn(speakTextFn);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const studentArea = pathname.startsWith("/student") || pathname === "/";
@@ -213,7 +214,7 @@ export function GuideAssistant() {
         const { data: sess } = await supabase.auth.getSession();
         if (sess.session) {
           const t = await teacherFn({ data: { messages: history.map((m) => ({ ...m, content: m.content.slice(0, 3500) })) } });
-          if (!t.notTeacher) { res = t; setTeacherMode(true); }
+          if (!t.notTeacher) { res = t; setTeacherMode(true); if ((t as any).executed) { router.invalidate(); window.dispatchEvent(new Event("assistant:data-changed")); } }
         }
       }
       if (!res) res = await askFn({ data: { messages: history.map((m) => ({ ...m, content: m.content.slice(0, 500) })) } });

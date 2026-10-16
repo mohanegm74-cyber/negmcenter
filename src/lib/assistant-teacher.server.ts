@@ -1,4 +1,4 @@
-import { callAi } from "./ai.server";
+import { callAi, parseJson } from "./ai.server";
 import { ASSISTANT_KNOWLEDGE } from "./assistant-knowledge";
 import { academicMonths, autoFee } from "./fees";
 
@@ -90,12 +90,23 @@ ${hwLines.join("\n")}
 ${exLines.join("\n")}`;
 }
 
-export async function askTeacherAssistant(history: { role: string; content: string }[]): Promise<string> {
+export async function askTeacherAssistant(history: { role: string; content: string }[]): Promise<{ reply: string; executed: boolean }> {
   const ctx = await buildTeacherContext();
   const system = `أنت «مساعد مستر محمد نِجْم» الشخصي داخل لوحة الأستاذ. المستخدم هو الأستاذ صاحب المنصة نفسه وله كامل الصلاحيات.
 أجب عن أي سؤال بالكامل: الماليات والمبالغ والمتأخرات والإعفاءات، أعداد الطلاب والمجموعات، الحضور والغياب، الدرجات والاختبارات والواجبات، وطريقة استخدام أي صفحة.
-اعتمد على «بيانات المركز الحالية» أدناه فقط في الأرقام، واحسب منها بدقة (جمع، عدّ، ترتيب، تصفية حسب مجموعة أو صف). لا تخترع أرقامًا؛ إن لم تتوفر معلومة قل ذلك.
-ردّ باللهجة المصرية الودودة باختصار ووضوح، واستخدم قوائم مرقمة عند ذكر أكثر من عنصر. المبالغ بالجنيه المصري.
+اعتمد على «بيانات المركز الحالية» أدناه فقط في الأرقام، واحسب منها بدقة. لا تخترع أرقامًا؛ إن لم تتوفر معلومة قل ذلك.
+ردّ باللهجة المصرية الودودة باختصار ووضوح. المبالغ بالجنيه المصري.
+
+تنفيذ الأوامر: تقدر تنفذ أوامر الأستاذ التالية فقط: تسجيل الحضور/الغياب/التأخير، تسجيل دفع أو إعفاء أو مستحق، إرسال ملاحظة لطالب/مجموعة/الكل، تسجيل تقييم (اختبار/تسميع/ملاحظة) لطالب.
+أي أمر آخر (حذف، إضافة طالب، تعديل بيانات) قل إنه هيتضاف قريب ولا تنفذه.
+ردّك لازم يكون JSON فقط بالشكل: {"reply":"نص الرد","actions":[...]}
+أنواع actions (استخدم أسماء الطلاب أو أكوادهم وأسماء المجموعات كما في البيانات):
+{"type":"attendance","status":"present|absent|late","students":["اسم"],"group":"اسم مجموعة اختياري","except":["اسم"],"date":"YYYY-MM-DD اختياري"}
+{"type":"payment","student":"اسم","amount":100,"kind":"payment|exempt|charge","month":"YYYY-MM اختياري"}
+{"type":"note","body":"النص","title":"اختياري","students":["اسم"],"group":"اختياري","all":false}
+{"type":"record","student":"اسم","exam_level":"نص أو درجة","recitation_level":"ممتاز|جيد جدا|جيد|مقبول|ضعيف","note":"اختياري","date":"اختياري"}
+لو الأمر ناقص معلومة أساسية (مثلاً المبلغ أو اسم الطالب) أو الاسم غامض، اسأل ولا تضع actions. لو مجرد سؤال، اجعل actions فارغة.
+في reply عند التنفيذ اكتب جملة قصيرة إنك نفذت (النتيجة التفصيلية هتتضاف تلقائيًا).
 
 دليل استخدام المنصة:
 ${ASSISTANT_KNOWLEDGE}
@@ -103,9 +114,23 @@ ${ASSISTANT_KNOWLEDGE}
 بيانات المركز الحالية:
 ${ctx}`;
   const transcript = history.map((m) => (m.role === "user" ? `الأستاذ: ${m.content}` : `المساعد: ${m.content}`)).join("\n");
-  let raw = await callAi(system, `المحادثة:\n${transcript}\n\nأجب على آخر رسالة من الأستاذ.`);
-  raw = raw.replace(/\*\*/g, "").replace(/^\s*\*\s+/gm, "• ");
-  return raw.length > 3000 ? raw.slice(0, 3000) + "…" : raw;
+  const raw = await callAi(system, `المحادثة:\n${transcript}\n\nأجب على آخر رسالة من الأستاذ بصيغة JSON.`, true);
+  let reply = raw;
+  let actions: any[] = [];
+  try {
+    const j = parseJson(raw);
+    reply = String(j?.reply || "");
+    actions = Array.isArray(j?.actions) ? j.actions : [];
+  } catch { /* رد نصي عادي */ }
+  let executed = false;
+  if (actions.length) {
+    const { executeActions } = await import("./assistant-actions.server");
+    const res = await executeActions(actions);
+    executed = res.some((r) => r.startsWith("✅"));
+    reply = `${reply}\n${res.join("\n")}`.trim();
+  }
+  reply = reply.replace(/\*\*/g, "").replace(/^\s*\*\s+/gm, "• ");
+  return { reply: reply.length > 3000 ? reply.slice(0, 3000) + "…" : reply, executed };
 }
 
 /** تحويل النص إلى صوت عربي طبيعي عبر Gemini TTS — يعيد data URL */
