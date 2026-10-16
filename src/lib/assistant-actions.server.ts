@@ -25,17 +25,17 @@ export async function executeActions(actions: AssistantAction[]): Promise<string
   const today = new Date().toISOString().slice(0, 10);
   const month = today.slice(0, 7);
 
-  const findStudent = (q: string) => {
+  const findStudent = (q: string): { s: any; err?: undefined } | { err: string; s?: undefined } => {
     const n = norm(q);
-    if (!n) return { err: "اسم فارغ" } as const;
+    if (!n) return { err: "اسم فارغ" };
     const byCode = students.find((s: any) => norm(s.code) === n);
-    if (byCode) return { s: byCode } as const;
+    if (byCode) return { s: byCode };
     const exact = students.filter((s: any) => norm(s.full_name) === n);
-    if (exact.length === 1) return { s: exact[0] } as const;
+    if (exact.length === 1) return { s: exact[0] };
     const part = students.filter((s: any) => norm(s.full_name).includes(n));
-    if (part.length === 1) return { s: part[0] } as const;
-    if (part.length > 1 || exact.length > 1) return { err: `«${q}» يطابق أكثر من طالب (${part.slice(0, 4).map((s: any) => s.full_name).join("، ")}) — حدد الاسم كامل أو الكود` } as const;
-    return { err: `مش لاقي طالب باسم «${q}»` } as const;
+    if (part.length === 1) return { s: part[0] };
+    if (part.length > 1 || exact.length > 1) return { err: `«${q}» يطابق أكثر من طالب (${part.slice(0, 4).map((s: any) => s.full_name).join("، ")}) — حدد الاسم كامل أو الكود` };
+    return { err: `مش لاقي طالب باسم «${q}»` };
   };
   const findGroup = (q: string) => {
     const n = norm(q);
@@ -52,12 +52,12 @@ export async function executeActions(actions: AssistantAction[]): Promise<string
         if (a.group) {
           const g = findGroup(a.group);
           if (!g) { out.push(`❌ مش لاقي مجموعة «${a.group}»`); continue; }
-          const ex = new Set((a.except || []).map((x) => { const r = findStudent(x); return "s" in r ? r.s.id : ""; }));
+          const ex = new Set((a.except || []).map((x) => { const r = findStudent(x); return r.s ? r.s.id : ""; }));
           targets = students.filter((s: any) => s.group_id === g.id && !ex.has(s.id));
         }
         for (const q of a.students || []) {
           const r = findStudent(q);
-          if ("s" in r) { if (!targets.some((t) => t.id === r.s.id)) targets.push(r.s); } else errs.push(r.err);
+          if (r.s) { if (!targets.some((t) => t.id === r.s.id)) targets.push(r.s); } else errs.push(r.err);
         }
         if (targets.length) {
           const ids = targets.map((t) => t.id);
@@ -74,7 +74,7 @@ export async function executeActions(actions: AssistantAction[]): Promise<string
         errs.forEach((e) => out.push(`❌ ${e}`));
       } else if (a.type === "payment") {
         const r = findStudent(a.student);
-        if (!("s" in r)) { out.push(`❌ ${r.err}`); continue; }
+        if (!(r.s)) { out.push(`❌ ${r.err}`); continue; }
         const amount = Number(a.amount);
         if (!(amount > 0) || amount > 100000) { out.push("❌ المبلغ غير صحيح"); continue; }
         const kind = a.kind && ["payment", "exempt", "charge"].includes(a.kind) ? a.kind : "payment";
@@ -89,7 +89,7 @@ export async function executeActions(actions: AssistantAction[]): Promise<string
         let targets: any[] = [];
         if (a.all) targets = students;
         else if (a.group) { const g = findGroup(a.group); if (!g) { out.push(`❌ مش لاقي مجموعة «${a.group}»`); continue; } targets = students.filter((s: any) => s.group_id === g.id); }
-        for (const q of a.students || []) { const r = findStudent(q); if ("s" in r) targets.push(r.s); else out.push(`❌ ${r.err}`); }
+        for (const q of a.students || []) { const r = findStudent(q); if (r.s) targets.push(r.s); else out.push(`❌ ${r.err}`); }
         if (!targets.length) { out.push("❌ مفيش طلاب محددين للملاحظة"); continue; }
         const rows = targets.map((t) => ({ student_id: t.id, title: a.title || "ملاحظة من المستر", body }));
         const { error } = await db.from("student_notes").insert(rows);
@@ -97,7 +97,7 @@ export async function executeActions(actions: AssistantAction[]): Promise<string
         out.push(`✅ اتبعتت الملاحظة لـ ${targets.length} طالب`);
       } else if (a.type === "record") {
         const r = findStudent(a.student);
-        if (!("s" in r)) { out.push(`❌ ${r.err}`); continue; }
+        if (!(r.s)) { out.push(`❌ ${r.err}`); continue; }
         const date = isDate(a.date) ? a.date! : today;
         const { error } = await db.from("student_records").insert({ student_id: r.s.id, group_id: r.s.group_id, date, exam_level: a.exam_level || null, recitation_level: a.recitation_level || null, note: a.note || null });
         if (error) throw new Error(error.message);
