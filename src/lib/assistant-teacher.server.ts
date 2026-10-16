@@ -112,7 +112,14 @@ export async function askTeacherAssistant(history: { role: string; content: stri
 {"type":"update_group","group":"الاسم الحالي","name":"","grade":"","monthly_fee":0,"days":"","time":"","max_students":0}
 {"type":"homework","title":"","description":"","due_date":"YYYY-MM-DD","group":"","grade":"","max_score":10}
 {"type":"exam","title":"","grade":"","subject":"","lesson":"","group":"","question_count":10,"total_score":10,"difficulty":"سهل|متوسط|صعب","duration_minutes":30}
-الحذف: نفّذه فقط لو الأستاذ قال صراحة احذف وحدد الطالب بوضوح.
+{"type":"grade_homework","homework":"عنوان الواجب","student":"اسم","score":8,"level":"اختياري","note":"اختياري"}
+{"type":"delete_homework","homework":"العنوان بالظبط"}
+{"type":"delete_group","group":"اسم"}
+{"type":"publish_exam","exam":"عنوان الاختبار","publish":true}
+{"type":"certificate","student":"اسم","title":"شهادة تقدير","reason":"اختياري"}
+{"type":"restore_student","student":"اسم أو كود طالب مؤرشف"}
+الحذف: نفّذه فقط لو الأستاذ قال صراحة احذف وحدد الطالب/المجموعة/الواجب بوضوح. نشر الاختبار فقط لو قال انشر صراحة.
+اكتب reply دائمًا باللهجة المصرية العامية بجمل قصيرة مناسبة للقراءة بالصوت، بدون رموز أو جداول.
 لو الأمر ناقص معلومة أساسية (مثلاً المبلغ أو اسم الطالب) أو الاسم غامض، اسأل ولا تضع actions. لو مجرد سؤال، اجعل actions فارغة.
 في reply عند التنفيذ اكتب جملة قصيرة إنك نفذت (النتيجة التفصيلية هتتضاف تلقائيًا).
 

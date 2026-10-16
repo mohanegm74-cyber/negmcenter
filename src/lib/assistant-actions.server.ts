@@ -12,7 +12,13 @@ export type AssistantAction =
   | { type: "add_group"; name: string; grade?: string; monthly_fee?: number; days?: string; time?: string; max_students?: number }
   | { type: "update_group"; group: string; name?: string; grade?: string; monthly_fee?: number; days?: string; time?: string; max_students?: number }
   | { type: "homework"; title: string; description?: string; due_date?: string; group?: string; grade?: string; max_score?: number }
-  | { type: "exam"; title?: string; grade?: string; subject?: string; lesson?: string; group?: string; question_count?: number; total_score?: number; difficulty?: string; duration_minutes?: number };
+  | { type: "exam"; title?: string; grade?: string; subject?: string; lesson?: string; group?: string; question_count?: number; total_score?: number; difficulty?: string; duration_minutes?: number }
+  | { type: "grade_homework"; homework: string; student: string; score?: number; level?: string; note?: string }
+  | { type: "delete_homework"; homework: string }
+  | { type: "delete_group"; group: string }
+  | { type: "publish_exam"; exam: string; publish?: boolean }
+  | { type: "certificate"; student: string; title?: string; reason?: string }
+  | { type: "restore_student"; student: string };
 
 const norm = (s: string) =>
   String(s || "").trim().toLowerCase()
@@ -186,6 +192,59 @@ export async function executeActions(actions: AssistantAction[]): Promise<string
         if (error) throw new Error(error.message);
         await db.from("exam_questions").insert(qs.map((q: any, i: number) => ({ exam_id: ex.id, position: i, kind: q.kind || "اختيار من متعدد", prompt: String(q.prompt || ""), options: Array.isArray(q.options) ? q.options : [], correct_answer: q.correct_answer ?? null, rationale: q.rationale || null, skill: q.skill || null, difficulty: q.difficulty || "متوسط", score: Number(q.score) || 1 })));
         out.push(`✅ اتكتب اختبار «${ex.title}» (${qs.length} سؤال) كمسودة في تبويب الاختبارات — راجعه وانشره بنفسك`);
+      } else if (a.type === "grade_homework") {
+        const { data: hws } = await db.from("homework").select("id,title").limit(500);
+        const n = norm(a.homework);
+        const hw = (hws || []).find((h: any) => norm(h.title) === n) || (hws || []).find((h: any) => norm(h.title).includes(n));
+        if (!hw) { out.push(`❌ مش لاقي واجب «${a.homework}»`); continue; }
+        const r = findStudent(a.student);
+        if (!r.s) { out.push(`❌ ${r.err}`); continue; }
+        const patch: any = { status: "graded" };
+        if (a.score != null) patch.score = Number(a.score);
+        if (a.level) patch.level = a.level;
+        if (a.note) patch.note = a.note;
+        const { data: ex } = await db.from("homework_submissions").select("id").eq("homework_id", hw.id).eq("student_id", r.s.id).maybeSingle();
+        const { error } = ex
+          ? await db.from("homework_submissions").update(patch).eq("id", ex.id)
+          : await db.from("homework_submissions").insert({ ...patch, homework_id: hw.id, student_id: r.s.id });
+        if (error) throw new Error(error.message);
+        out.push(`✅ اتقيّم ${r.s.full_name} في واجب «${hw.title}»${a.score != null ? ` بدرجة ${a.score}` : ""}`);
+      } else if (a.type === "delete_homework") {
+        const { data: hws } = await db.from("homework").select("id,title").limit(500);
+        const n = norm(a.homework);
+        const hw = (hws || []).filter((h: any) => norm(h.title) === n);
+        if (hw.length !== 1) { out.push(`❌ حدد اسم الواجب بالظبط («${a.homework}»)`); continue; }
+        const { error } = await db.from("homework").delete().eq("id", hw[0].id);
+        if (error) throw new Error(error.message);
+        out.push(`✅ اتحذف واجب «${hw[0].title}»`);
+      } else if (a.type === "delete_group") {
+        const g = findGroup(a.group);
+        if (!g) { out.push(`❌ مش لاقي مجموعة «${a.group}»`); continue; }
+        if (students.some((s: any) => s.group_id === g.id)) { out.push(`❌ مجموعة ${g.name} فيها طلاب — انقلهم الأول`); continue; }
+        const { error } = await db.from("groups").delete().eq("id", g.id);
+        if (error) throw new Error(error.message);
+        out.push(`✅ اتحذفت مجموعة ${g.name}`);
+      } else if (a.type === "publish_exam") {
+        const { data: exs } = await db.from("exams").select("id,title").limit(500);
+        const n = norm(a.exam);
+        const ex = (exs || []).find((e: any) => norm(e.title) === n) || (exs || []).find((e: any) => norm(e.title).includes(n));
+        if (!ex) { out.push(`❌ مش لاقي اختبار «${a.exam}»`); continue; }
+        const status = a.publish === false ? "draft" : "published";
+        const { error } = await db.from("exams").update({ status }).eq("id", ex.id);
+        if (error) throw new Error(error.message);
+        out.push(`✅ اختبار «${ex.title}» بقى ${status === "published" ? "منشور للطلاب" : "مسودة"}`);
+      } else if (a.type === "certificate") {
+        const r = findStudent(a.student);
+        if (!r.s) { out.push(`❌ ${r.err}`); continue; }
+        const { error } = await db.from("certificates").insert({ student_id: r.s.id, title: a.title || "شهادة تقدير", reason: a.reason || null, signer: "مستر محمد نِجْم" });
+        if (error) throw new Error(error.message);
+        out.push(`✅ اتعملت شهادة تقدير لـ ${r.s.full_name} (اطبعها من تبويب الشهادات)`);
+      } else if (a.type === "restore_student") {
+        const n = norm(a.student);
+        const s = (st || []).find((x: any) => x.archived && (norm(x.full_name) === n || norm(x.code) === n));
+        if (!s) { out.push(`❌ مش لاقي طالب مؤرشف «${a.student}»`); continue; }
+        await db.from("students").update({ archived: false, active: true }).eq("id", s.id);
+        out.push(`✅ رجع ${s.full_name} للطلاب النشطين`);
       } else {
         out.push("❌ أمر غير مدعوم");
       }
