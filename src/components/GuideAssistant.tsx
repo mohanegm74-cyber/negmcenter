@@ -35,30 +35,83 @@ export function GuideAssistant() {
   const askFn = useServerFn(askGuideAssistant);
   const listRef = useRef<HTMLDivElement>(null);
   const recRef = useRef<any>(null);
+  const voicesRef = useRef<SpeechSynthesisVoice[]>([]);
 
   useEffect(() => {
     const w = window as any;
     setMicSupported(!!(w.SpeechRecognition || w.webkitSpeechRecognition));
-    return () => { window.speechSynthesis?.cancel(); recRef.current?.abort?.(); };
+    // تحميل أصوات المتصفح: كثير من الأجهزة تعيد قائمة فارغة أول مرة
+    const synth = window.speechSynthesis;
+    const loadVoices = () => { if (synth) voicesRef.current = synth.getVoices(); };
+    loadVoices();
+    if (synth && typeof (synth as any).addEventListener === "function") {
+      synth.addEventListener("voiceschanged", loadVoices);
+    } else if (synth) {
+      (synth as any).onvoiceschanged = loadVoices;
+    }
+    return () => {
+      window.speechSynthesis?.cancel();
+      recRef.current?.abort?.();
+      if (synth && typeof (synth as any).removeEventListener === "function") {
+        synth.removeEventListener("voiceschanged", loadVoices);
+      }
+    };
   }, []);
 
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, sending, open]);
 
+  function pickVoice(): SpeechSynthesisVoice | undefined {
+    const voices = voicesRef.current.length ? voicesRef.current : window.speechSynthesis?.getVoices() || [];
+    voicesRef.current = voices;
+    return (
+      voices.find((v) => /ar[-_]EG/i.test(v.lang)) ||
+      voices.find((v) => v.lang.toLowerCase().startsWith("ar")) ||
+      voices.find((v) => /ar/i.test(v.lang))
+    );
+  }
+
+  // تقسيم النص إلى مقاطع قصيرة: بعض المتصفحات تفشل في قراءة النص الطويل دفعة واحدة
+  function chunkText(text: string): string[] {
+    const clean = text.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/gu, "").trim();
+    if (clean.length <= 180) return [clean];
+    const chunks: string[] = [];
+    const parts = clean.split(/\n+/);
+    let cur = "";
+    for (const p of parts) {
+      if ((cur + "\n" + p).length > 180 && cur) { chunks.push(cur.trim()); cur = p; }
+      else cur = cur ? cur + "\n" + p : p;
+      while (cur.length > 350) {
+        const cut = cur.lastIndexOf(" ", 350);
+        chunks.push(cur.slice(0, cut > 0 ? cut : 350).trim());
+        cur = cur.slice(cut > 0 ? cut : 350);
+      }
+    }
+    if (cur.trim()) chunks.push(cur.trim());
+    return chunks;
+  }
+
   function speak(text: string) {
     const synth = window.speechSynthesis;
     if (!synth) return;
     synth.cancel();
-    const u = new SpeechSynthesisUtterance(text.replace(/[👋✅]/g, ""));
-    u.lang = "ar-EG";
-    const v = synth.getVoices().find((x) => x.lang.startsWith("ar"));
-    if (v) u.voice = v;
-    u.rate = 1;
-    u.onstart = () => setSpeaking(true);
-    u.onend = () => setSpeaking(false);
-    u.onerror = () => setSpeaking(false);
-    synth.speak(u);
+    const chunks = chunkText(text);
+    const voice = pickVoice();
+    chunks.forEach((chunk, i) => {
+      const u = new SpeechSynthesisUtterance(chunk);
+      u.lang = voice?.lang || "ar-EG";
+      if (voice) u.voice = voice;
+      u.rate = 1;
+      u.pitch = 1.15;
+      u.volume = 1;
+      if (i === 0) u.onstart = () => setSpeaking(true);
+      if (i === chunks.length - 1) {
+        u.onend = () => setSpeaking(false);
+        u.onerror = () => setSpeaking(false);
+      }
+      synth.speak(u);
+    });
   }
 
   function stopSpeak() {
