@@ -44,6 +44,9 @@ export function GuideAssistant() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const speakIdRef = useRef(0);
   const voiceModeRef = useRef(false);
+  const messagesRef = useRef<Msg[]>([WELCOME]);
+  const sendingRef = useRef(false);
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
   const listRef = useRef<HTMLDivElement>(null);
   const recRef = useRef<any>(null);
   const voicesRef = useRef<SpeechSynthesisVoice[]>([]);
@@ -196,8 +199,10 @@ export function GuideAssistant() {
 
   async function send(text: string) {
     const content = text.trim().slice(0, MAX_LEN);
-    if (!content || sending) return;
-    const next: Msg[] = [...messages, { role: "user", content }];
+    if (!content || sendingRef.current) return;
+    sendingRef.current = true;
+    const next: Msg[] = [...messagesRef.current, { role: "user", content }];
+    messagesRef.current = next;
     setMessages(next);
     setInput("");
     setSending(true);
@@ -217,6 +222,7 @@ export function GuideAssistant() {
     } catch {
       setMessages((cur) => [...cur, { role: "assistant", content: "حدث خطأ غير متوقع، حاول مرة أخرى." }]);
     } finally {
+      sendingRef.current = false;
       setSending(false);
     }
   }
