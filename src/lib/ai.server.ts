@@ -1,5 +1,5 @@
 /** الاتصال بالذكاء الاصطناعي: Gemini الخارجي أولاً، ثم Lovable AI كخيار احتياطي */
-const GEMINI_MODEL = "gemini-2.5-flash";
+const GEMINI_MODEL = "gemini-3.5-flash";
 
 type Part = { text: string } | { inline_data: { mime_type: string; data: string } };
 
