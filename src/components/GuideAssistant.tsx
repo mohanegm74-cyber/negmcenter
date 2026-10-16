@@ -164,7 +164,8 @@ export function GuideAssistant() {
   }
 
   function toggleMic() {
-    if (listening) { voiceModeRef.current = false; recRef.current?.stop(); return; }
+    // الضغط أثناء الاستماع = "خلصت كلامي": يرسل الرسالة كاملة فورًا
+    if (listening) { (recRef.current as any)?.__finish?.(); return; }
     voiceModeRef.current = true;
     startMic();
   }
@@ -175,19 +176,62 @@ export function GuideAssistant() {
     const SR = w.SpeechRecognition || w.webkitSpeechRecognition;
     if (!SR) return;
     stopSpeak();
-    const rec = new SR();
-    rec.lang = "ar-EG";
-    rec.interimResults = true;
-    rec.maxAlternatives = 1;
     let finalText = "";
-    rec.onresult = (e: any) => {
-      let interim = "";
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const t = e.results[i][0].transcript;
-        if (e.results[i].isFinal) finalText += t; else interim += t;
-      }
-      setInput((finalText + interim).slice(0, MAX_LEN));
+    let interimText = "";
+    let done = false;
+    let timer: any = null;
+    let rec: any = null;
+    const SILENCE_MS = 3000; // ينتظر 3 ثوانٍ صمت بعد آخر كلمة قبل الإرسال
+    const finish = () => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      try { rec?.stop(); } catch { /* ignore */ }
+      setListening(false);
+      recRef.current = null;
+      const full = (finalText + " " + interimText).trim();
+      if (full) send(full);
     };
+    const arm = () => { clearTimeout(timer); timer = setTimeout(finish, SILENCE_MS); };
+    const begin = () => {
+      rec = new SR();
+      rec.lang = "ar-EG";
+      rec.continuous = true;
+      rec.interimResults = true;
+      rec.maxAlternatives = 1;
+      rec.__finish = finish;
+      rec.onresult = (e: any) => {
+        let interim = "";
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          const t = e.results[i][0].transcript;
+          if (e.results[i].isFinal) finalText += t + " "; else interim += t;
+        }
+        interimText = interim;
+        setInput((finalText + interim).slice(0, MAX_LEN));
+        arm();
+      };
+      // بعض المتصفحات توقف الاستماع وحدها: نعيد التشغيل حتى ينتهي الكلام كاملًا
+      rec.onend = () => {
+        if (done) return;
+        if (finalText.trim() || interimText.trim()) { finalText += interimText + " "; interimText = ""; }
+        try { begin(); } catch { finish(); }
+      };
+      rec.onerror = (ev: any) => {
+        if (ev?.error === "no-speech" || ev?.error === "aborted") return;
+        done = true; clearTimeout(timer); setListening(false); voiceModeRef.current = false; recRef.current = null;
+      };
+      recRef.current = rec;
+      rec.start();
+    };
+    setListening(true);
+    begin();
+    timer = setTimeout(() => { if (!finalText.trim() && !interimText.trim()) { done = true; try { rec?.stop(); } catch { /* */ } setListening(false); recRef.current = null; voiceModeRef.current = false; } }, 12000);
+    return;
+  }
+
+  function _unusedMicLegacy() {
+    const rec: any = {};
+    let finalText = "";
     rec.onend = () => {
       setListening(false);
       if (finalText.trim()) send(finalText);
