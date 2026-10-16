@@ -23,7 +23,7 @@ const SUGGESTIONS = [
   "كيف أدخل الاختبار وأسلّمه؟",
 ];
 
-const MAX_LEN = 500;
+const MAX_LEN = 1500;
 const MAX_HISTORY = 10;
 
 export function GuideAssistant() {
