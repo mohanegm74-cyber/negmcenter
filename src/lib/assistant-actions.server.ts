@@ -57,7 +57,7 @@ export async function executeActions(actions: AssistantAction[]): Promise<string
         }
         for (const q of a.students || []) {
           const r = findStudent(q);
-          if (r.s) { if (!targets.some((t) => t.id === r.s.id)) targets.push(r.s); } else errs.push(r.err);
+          if (r.s) { if (!targets.some((t) => t.id === r.s.id)) targets.push(r.s); } else errs.push(r.err || "");
         }
         if (targets.length) {
           const ids = targets.map((t) => t.id);
