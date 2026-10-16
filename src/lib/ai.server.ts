@@ -1,5 +1,5 @@
 /** الاتصال بالذكاء الاصطناعي: Gemini الخارجي أولاً، ثم Lovable AI كخيار احتياطي */
-const GEMINI_MODEL = "gemini-2.5-flash";
+const GEMINI_MODEL = "gemini-3.5-flash";
 
 type Part = { text: string } | { inline_data: { mime_type: string; data: string } };
 
@@ -31,7 +31,7 @@ async function lovableCall(parts: Part[], json: boolean): Promise<string> {
   const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
     headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
-    body: JSON.stringify({ model: "google/gemini-2.5-flash", messages: [{ role: "user", content }], ...(json ? { response_format: { type: "json_object" } } : {}) }),
+    body: JSON.stringify({ model: "google/gemini-3.8-flash", messages: [{ role: "user", content }], ...(json ? { response_format: { type: "json_object" } } : {}) }),
   });
   if (r.status === 429) throw new Error("تم تجاوز حد الاستخدام، حاول بعد قليل.");
   if (r.status === 402) throw new Error("نفد رصيد الذكاء الاصطناعي في Lovable، ومفتاح Gemini الخارجي لا يعمل.");
