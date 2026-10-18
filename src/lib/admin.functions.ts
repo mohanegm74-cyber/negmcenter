@@ -146,7 +146,7 @@ export const getHomeworkDataAdmin = createServerFn({ method: "GET" })
     const [g, h, s, sb] = await Promise.all([
       supabaseAdmin.from("groups").select("id,name,grade").order("name"),
       supabaseAdmin.from("homework").select("*").order("created_at", { ascending: false }),
-      supabaseAdmin.from("students").select("id,full_name,code,group_id,grade").order("full_name"),
+      supabaseAdmin.from("students").select("id,full_name,code,group_id,grade").eq("archived", false).order("full_name"),
       supabaseAdmin.from("homework_submissions").select("*"),
     ]);
     return { groups: g.data || [], items: h.data || [], students: s.data || [], subs: sb.data || [] };
@@ -201,7 +201,7 @@ export const getExamsDataAdmin = createServerFn({ method: "GET" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const [g, s, e, at] = await Promise.all([
       supabaseAdmin.from("groups").select("id,name,grade,subject").order("name"),
-      supabaseAdmin.from("students").select("id,full_name,code,group_id,grade").order("full_name"),
+      supabaseAdmin.from("students").select("id,full_name,code,group_id,grade").eq("archived", false).order("full_name"),
       supabaseAdmin.from("exams").select("*").order("created_at", { ascending: false }),
       supabaseAdmin.from("exam_attempts").select("*").eq("status", "submitted"),
     ]);
@@ -276,7 +276,7 @@ export const getFinanceDataAdmin = createServerFn({ method: "GET" })
   .handler(async () => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const [st, gr, py] = await Promise.all([
-      supabaseAdmin.from("students").select("id,full_name,code,grade,group_id,active,archived").order("full_name"),
+      supabaseAdmin.from("students").select("id,full_name,code,grade,group_id,active,archived").eq("archived", false).order("full_name"),
       supabaseAdmin.from("groups").select("id,name,monthly_fee").order("name"),
       supabaseAdmin.from("payments").select("*").order("paid_at", { ascending: false }),
     ]);
@@ -325,7 +325,7 @@ export const getAdminDataSummary = createServerFn({ method: "GET" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const [gr, st, at] = await Promise.all([
       supabaseAdmin.from("groups").select("id,name").order("name"),
-      supabaseAdmin.from("students").select("id,full_name,code,group_id,active,grade,phone").order("full_name"),
+      supabaseAdmin.from("students").select("id,full_name,code,group_id,active,grade,phone").eq("archived", false).order("full_name"),
       supabaseAdmin.from("attendance").select("*"),
     ]);
     return { groups: gr.data || [], students: st.data || [], attendance: at.data || [] };
@@ -364,7 +364,7 @@ export const getReportsDataAdmin = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const [s, g, a, p] = await Promise.all([
-      supabaseAdmin.from("students").select("*"),
+      supabaseAdmin.from("students").select("*").eq("archived", false),
       supabaseAdmin.from("groups").select("*"),
       supabaseAdmin.from("attendance").select("*").gte("date", data.from).lte("date", data.to),
       supabaseAdmin.from("payments").select("*"),
@@ -516,7 +516,7 @@ export const getStudentRecordsAdmin = createServerFn({ method: "GET" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const [g, s, r] = await Promise.all([
       supabaseAdmin.from("groups").select("id,name,grade").order("name"),
-      supabaseAdmin.from("students").select("id,full_name,code,group_id,grade").order("full_name"),
+      supabaseAdmin.from("students").select("id,full_name,code,group_id,grade").eq("archived", false).order("full_name"),
       supabaseAdmin.from("student_records").select("*").order("date", { ascending: false }),
     ]);
     return { groups: g.data || [], students: s.data || [], records: r.data || [] };
