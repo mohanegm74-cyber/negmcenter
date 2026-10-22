@@ -28,8 +28,8 @@ function Landing() {
         </div>
 
         <h1 className="text-4xl font-black leading-tight text-white sm:text-6xl">
-          سنتر الأستاذ<br />
-          <span style={{ color: "var(--color-gold)" }}>محمد نجم</span>
+          سنــتر الأسـتاذ<br />
+          <span style={{ color: "var(--color-gold)" }}>محـمد نجـم</span>
         </h1>
         
         <p className="mt-4 max-w-xl text-lg text-white/90 font-bold">
