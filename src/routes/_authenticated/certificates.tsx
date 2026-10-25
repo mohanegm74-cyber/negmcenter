@@ -16,6 +16,7 @@ const TEMPLATES = [
   { id: "emerald", name: "الزمرد الأنيق", preview: "linear-gradient(135deg,#ecfdf5,#fff)", css: ".frame { background: #ecfdf5; border:6px solid #059669; } .title { color: #065f46; }" },
   { id: "modern-blue", name: "العصري الأزرق", preview: "linear-gradient(135deg,#eff6ff,#fff)", css: ".frame { background: #eff6ff; border:8px solid #1e3a8a; border-radius: 40px; } .title { color: #1e3a8a; }" },
   { id: "classic", name: "الكلاسيكي الموقر", preview: "linear-gradient(135deg,#fff,#f8fafc)", css: ".frame { background: #fff; border:4px solid #334155; padding: 40px; } .title { color: #0f172a; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; }" },
+  { id: "frameless", name: "المميز بدون إطار", preview: "#ffffff", css: ".frame { background: #fff; border: none !important; box-shadow: none !important; border-radius: 0; } .title { color: #1e3a8a; font-size: 2.6rem; letter-spacing: 1px; background: linear-gradient(90deg,#1e3a8a,#c9a227,#1e3a8a); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }" },
 ];
 
 function CertsPage() {
