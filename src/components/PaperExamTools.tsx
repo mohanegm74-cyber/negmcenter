@@ -4,6 +4,8 @@ import { useServerFn } from "@tanstack/react-start";
 import { Loader2, X, Upload, Trash2, Search, FileDown, Printer, Plus, Sparkles, FolderPlus, ScrollText, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { TERMS, GRADES } from "@/lib/exam-constants";
+import { Button } from "@/components/ui/button";
+import { reviewPaper } from "@/lib/paper-grounding";
 import {
   createSourceUploadUrl, indexSource, saveSpec, createSourceRecord, saveSourcePages, finalizeSource, ocrPageImage, updateSource, getSourceFiles, getSourcePages, listSources, deleteSource, analyzeSpecs, generatePaperExam,
   type ExamSpec, type PaperSection,
@@ -340,6 +342,7 @@ async function exportDocx(spec: ExamSpec, sections: PaperSection[], info: { grad
       if (q.options.length) children.push(P(q.options.map((o, k) => `${ARABIC_LETTERS[k] || k + 1}) ${o}`).join("     "), { size: 24 }));
       for (let l = 0; l < (q.lines || 0); l++) children.push(P("..................................................................................................................", { size: 22 }));
       if (withAnswers && q.answer) children.push(P(`الإجابة: ${q.answer}`, { size: 22, bold: true }));
+      if (withAnswers) q.citations?.forEach((ref) => children.push(P(`المرجع: ${ref.title} — ${ref.locator} | «${ref.quote}»${q.citationStale ? " (يحتاج مراجعة بعد التعديل)" : ""}`, { size: 20 })));
     });
     children.push(P("", { after: 120 }));
   });
@@ -393,10 +396,19 @@ function PaperExamBuilder({ onClose }: { onClose: () => void }) {
   const [spec, setSpec] = useState<ExamSpec | null>(null);
   const [sections, setSections] = useState<PaperSection[] | null>(null);
   const [busy, setBusy] = useState(false);
+  const [strictSources, setStrictSources] = useState(true);
+  const [evidenceView, setEvidenceView] = useState<{ title: string; locator: string; quote: string } | null>(null);
+  const paperReview = spec && sections ? reviewPaper(spec, sections, strictSources) : null;
 
   useEffect(() => {
-    listFn({ data: { grade: info.grade, term: info.term, subject: info.subject } }).then((r: any) => setSources(Array.isArray(r) ? r.filter((x: any) => x.status === "indexed") : [])).catch(() => setSources([]));
+    let cancelled = false;
+    setSources([]); setPicked([]);
+    listFn({ data: { grade: info.grade, term: info.term, subject: info.subject } }).then((r: any) => {
+      if (cancelled) return;
+      setSources(Array.isArray(r) ? r.filter((x: any) => x.status === "indexed") : []);
+    }).catch(() => { if (!cancelled) setSources([]); });
     loadSpecs();
+    return () => { cancelled = true; };
   }, [info.grade, info.term, info.subject]);
 
   async function storeSpec() {
@@ -426,11 +438,13 @@ function PaperExamBuilder({ onClose }: { onClose: () => void }) {
 
   async function generate() {
     if (!spec) return;
+    if (!info.subject.trim()) return toast.error("حدد المادة");
+    if (strictSources && !picked.length) return toast.error("اختر مصدراً مفهرساً للتوليد الموثق");
     if (specSum !== Number(spec.total_score)) return toast.error(`مجموع درجات الأقسام (${specSum}) لا يساوي الدرجة الكلية (${spec.total_score})`);
     setBusy(true);
     const t = toast.loading("جاري توليد الامتحان من المصادر...");
     try {
-      const r = await genFn({ data: { grade: info.grade, term: info.term, subject: info.subject, lessons: info.lessons, sourceIds: picked, spec } });
+      const r = await genFn({ data: { grade: info.grade, term: info.term, subject: info.subject, lessons: info.lessons, sourceIds: picked, spec, strictSources } });
       setSections(r.sections);
       r.warnings.forEach((w: string) => toast.warning(w));
       toast.success("تم توليد الامتحان", { id: t });
@@ -439,7 +453,12 @@ function PaperExamBuilder({ onClose }: { onClose: () => void }) {
   }
 
   const updSpec = (i: number, p: any) => setSpec((s) => s && { ...s, sections: s.sections.map((x, n) => (n === i ? { ...x, ...p } : x)) });
-  const updQ = (si: number, qi: number, p: any) => setSections((ss) => ss && ss.map((s, n) => n !== si ? s : { ...s, questions: s.questions.map((q, m) => (m === qi ? { ...q, ...p } : q)) }));
+  const updQ = (si: number, qi: number, p: any) => setSections((ss) => ss && ss.map((s, n) => n !== si ? s : { ...s, questions: s.questions.map((q, m) => (m === qi ? { ...q, ...p, citationStale: ("prompt" in p || "answer" in p || "options" in p) && q.citations?.length ? true : q.citationStale } : q)) }));
+
+  function allowExport() {
+    if (paperReview && !paperReview.valid && !confirm(`الاختبار يحتاج مراجعة:\n${paperReview.issues.slice(0, 6).join("\n")}\nهل تريد التصدير رغم ذلك؟`)) return false;
+    return true;
+  }
 
   return (
     <Modal title="توليد امتحان ورقي (للمدرس فقط)" onClose={onClose}>
@@ -450,16 +469,21 @@ function PaperExamBuilder({ onClose }: { onClose: () => void }) {
         <input className={inputCls} placeholder="المادة" value={info.subject} onChange={(e) => setInfo({ ...info, subject: e.target.value })} />
         <input className={inputCls} placeholder="الدروس (مفصولة بفواصل)" value={info.lessons} onChange={(e) => setInfo({ ...info, lessons: e.target.value })} />
         <div className="sm:col-span-3">
+          <label className="mb-3 flex items-center gap-2 text-sm font-bold">
+            <input type="checkbox" checked={strictSources} onChange={(e) => setStrictSources(e.target.checked)} className="h-4 w-4 accent-primary" />
+            الاعتماد على المصادر فقط مع توثيق الأسئلة
+          </label>
           <div className="mb-1 text-xs font-black text-muted-foreground">المصادر ({picked.length} مختار)</div>
           <div className="flex max-h-32 flex-wrap gap-2 overflow-y-auto">
-            {sources.length === 0 && <span className="text-xs font-bold text-muted-foreground">لا توجد مصادر مفهرسة لهذا الصف/المادة — سيُعتمد على المنهج الرسمي.</span>}
+            {sources.length === 0 && <span className="text-xs font-bold text-muted-foreground">{strictSources ? "لا توجد مصادر مفهرسة لهذا الصف/المادة" : "لا توجد مصادر مفهرسة لهذا الصف/المادة — سيُعتمد على المنهج الرسمي."}</span>}
             {sources.map((s) => (
-              <button key={s.id} onClick={() => setPicked((p) => (p.includes(s.id) ? p.filter((x) => x !== s.id) : [...p, s.id]))}
-                className={`rounded-full border px-3 py-1 text-xs font-bold ${picked.includes(s.id) ? "border-primary bg-primary/10 text-primary" : ""}`}>
+              <Button variant="outline" size="sm" key={s.id} aria-pressed={picked.includes(s.id)} onClick={() => setPicked((p) => (p.includes(s.id) ? p.filter((x) => x !== s.id) : [...p, s.id]))}
+                className={`h-auto whitespace-normal text-start ${picked.includes(s.id) ? "border-primary bg-primary/10 text-primary" : ""}`}>
                 {s.title}{s.lesson ? ` • ${s.lesson}` : ""}
-              </button>
+              </Button>
             ))}
           </div>
+          {picked.length > 0 && <div className="mt-2 text-xs font-bold text-muted-foreground">{sources.filter(s => picked.includes(s.id)).map(s => `${s.title} (${s.page_count || 0} صفحة/مقطع)`).join(" — ")}</div>}
         </div>
         {savedSpecs.length > 0 && (
           <div className="sm:col-span-3">
@@ -520,6 +544,10 @@ function PaperExamBuilder({ onClose }: { onClose: () => void }) {
             {examSum === Number(spec.total_score) && !countIssues.length ? <CheckCircle2 className="h-5 w-5" /> : <AlertTriangle className="h-5 w-5" />}
             مجموع الدرجات: {examSum} / {spec.total_score}{countIssues.length ? ` — عدد البنود لا يطابق المواصفات في: ${countIssues.join("، ")}` : " — مطابق للمواصفات"}
           </div>
+          {paperReview && <div className="space-y-2 border-b pb-3 text-sm">
+            <div className="flex flex-wrap items-center gap-2 font-bold text-primary"><CheckCircle2 className="h-4 w-4" /> مراجع موثقة: {paperReview.cited} / {paperReview.count} — {paperReview.valid ? "اجتاز المراجعة الآلية" : "يحتاج مراجعة"}</div>
+            {paperReview.issues.length > 0 && <ul className="list-inside list-disc text-xs text-destructive">{paperReview.issues.map((issue, i) => <li key={i}>{issue}</li>)}</ul>}
+          </div>}
           {sections.map((s, si) => (
             <div key={si} className="space-y-2">
               <div className="font-black">{s.title} — {s.instructions || s.kind}</div>
@@ -532,18 +560,26 @@ function PaperExamBuilder({ onClose }: { onClose: () => void }) {
                   <button onClick={() => setSections(sections.map((x, n) => n !== si ? x : { ...x, questions: x.questions.filter((_, m) => m !== qi) }))} className="text-destructive sm:col-span-1"><Trash2 className="mx-auto h-4 w-4" /></button>
                   <input className={inputCls + " sm:col-span-6 sm:col-start-2"} placeholder="الاختيارات مفصولة بـ / مثال: أحمد / محمد / سارة" value={q.options.join(" / ")} onChange={(e) => updQ(si, qi, { options: e.target.value.split("/").map((x) => x.trim()).filter(Boolean) })} />
                   <input className={inputCls + " sm:col-span-5"} placeholder="الإجابة النموذجية" value={q.answer} onChange={(e) => updQ(si, qi, { answer: e.target.value })} />
+                  {q.citations?.length ? <div className="flex flex-wrap items-center gap-2 sm:col-span-11 sm:col-start-2">
+                    {q.citations.map((ref, ri) => <Button key={ri} variant="outline" size="sm" className="h-auto whitespace-normal text-start" onClick={() => setEvidenceView(ref)}>{ref.title} — {ref.locator}</Button>)}
+                    {q.citationStale && <span className="text-xs text-destructive">تم تعديل النص — راجع المراجع</span>}
+                  </div> : strictSources && <span className="text-xs text-destructive sm:col-span-11 sm:col-start-2">بند يدوي بدون مرجع موثق</span>}
                 </div>
               ))}
               <button onClick={() => setSections(sections.map((x, n) => n !== si ? x : { ...x, questions: [...x.questions, { prompt: "", options: [], answer: "", score: x.score_each, lines: 2 }] }))} className="inline-flex items-center gap-1 rounded-xl bg-muted px-3 py-1.5 text-xs font-bold"><Plus className="h-3 w-3" /> بند</button>
             </div>
           ))}
           <div className="flex flex-wrap gap-2 border-t pt-4">
-            <button onClick={() => exportDocx(spec, sections, info, false).catch((e) => toast.error(e.message))} className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-black text-primary-foreground"><FileDown className="h-4 w-4" /> تصدير Word</button>
-            <button onClick={() => exportDocx(spec, sections, info, true).catch((e) => toast.error(e.message))} className="inline-flex items-center gap-2 rounded-xl bg-muted px-4 py-2.5 text-sm font-black"><FileDown className="h-4 w-4" /> نموذج الإجابة Word</button>
-            <button onClick={() => printPreview(spec, sections, info)} className="inline-flex items-center gap-2 rounded-xl bg-muted px-4 py-2.5 text-sm font-black"><Printer className="h-4 w-4" /> معاينة الطباعة</button>
+            <Button onClick={() => { if (allowExport()) exportDocx(spec, sections, info, false).catch((e) => toast.error(e.message)); }}><FileDown className="h-4 w-4" /> تصدير Word</Button>
+            <Button variant="outline" onClick={() => { if (allowExport()) exportDocx(spec, sections, info, true).catch((e) => toast.error(e.message)); }}><FileDown className="h-4 w-4" /> نموذج الإجابة Word</Button>
+            <Button variant="outline" onClick={() => { if (allowExport()) printPreview(spec, sections, info); }}><Printer className="h-4 w-4" /> معاينة الطباعة</Button>
           </div>
         </div>
       )}
+      {evidenceView && <div className="mt-4 border-t pt-4">
+        <div className="flex items-center justify-between gap-3"><h3 className="text-sm font-bold">{evidenceView.title} — {evidenceView.locator}</h3><Button variant="ghost" size="icon" aria-label="إغلاق المرجع" onClick={() => setEvidenceView(null)}><X /></Button></div>
+        <blockquote className="mt-2 whitespace-pre-wrap border-s-2 border-primary ps-3 text-sm leading-7">{evidenceView.quote}</blockquote>
+      </div>}
     </Modal>
   );
 }
