@@ -1,9 +1,10 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { paperGenerationSchema, type PaperCitation } from "./paper-grounding";
 
 export type SpecSection = { title: string; kind: string; count: number; score_each: number; instructions?: string };
 export type ExamSpec = { title: string; duration_minutes: number; total_score: number; header_notes: string; sections: SpecSection[] };
-export type PaperQuestion = { prompt: string; options: string[]; answer: string; score: number; lines: number };
+export type PaperQuestion = { prompt: string; options: string[]; answer: string; score: number; lines: number; citations?: PaperCitation[]; citationStale?: boolean };
 export type PaperSection = SpecSection & { questions: PaperQuestion[] };
 
 async function assertTeacher(ctx: any) {
@@ -247,9 +248,15 @@ export const analyzeSpecs = createServerFn({ method: "POST" })
 
 export const generatePaperExam = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => d as { grade: string; term?: string; subject: string; lessons: string; sourceIds: string[]; spec: ExamSpec })
+  .inputValidator((d: unknown) => paperGenerationSchema.parse(d))
   .handler(async ({ data, context }) => {
     await assertTeacher(context);
+    if (data.strictSources) {
+      const { retrievePaperEvidence } = await import("./paper-sources.server");
+      const { generateGroundedPaper } = await import("./paper-generation.server");
+      const evidence = await retrievePaperEvidence(data.sourceIds, data.lessons, data);
+      return generateGroundedPaper(data, data.spec, evidence);
+    }
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { callAi } = await import("./paper-exam.server");
     const { parseJson } = await import("./ai.server");
