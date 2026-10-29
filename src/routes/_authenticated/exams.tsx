@@ -12,6 +12,11 @@ export const Route = createFileRoute("/_authenticated/exams")({
   head: () => ({
     meta: [
       { title: "الاختبارات الذكية — سنتر الأستاذ محمد نجم" },
+      { name: "description", content: "إدارة الاختبارات الإلكترونية وإعداد اختبارات ورقية بالمواصفات والمصادر في سنتر الأستاذ محمد نجم." },
+      { property: "og:title", content: "الاختبارات الذكية والورقية — سنتر الأستاذ محمد نجم" },
+      { property: "og:description", content: "إعداد ومراجعة الاختبارات الورقية بالمراجع والمواصفات وإدارة الاختبارات الإلكترونية." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: ExamsPage,
