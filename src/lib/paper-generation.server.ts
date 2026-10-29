@@ -7,6 +7,7 @@ export async function generateGroundedPaper(info: { grade: string; term?: string
   for (const section of spec.sections) {
     const prompt = `أعد قسم اختبار ورقي للصف ${info.grade}، المادة ${info.subject}، الفصل ${info.term || "غير محدد"}، الدروس ${info.lessons || "حسب المصادر"}.
 المواصفات الملزمة: ${JSON.stringify(section)}
+التعليمات العامة الملزمة للورقة: ${spec.header_notes || "لا توجد"}. لا تضف شروطاً جديدة لم يطلبها المعلم.
 ولّد بالضبط ${section.count} بنداً من النوع المحدد، بإجابات نموذجية واضحة، والتزم بتعليمات القسم. لا تكرر أسئلة الأقسام السابقة: ${JSON.stringify(sections.flatMap(s => s.questions.map(q => q.prompt)))}.
 اعتمد حصراً على المقتطفات التالية للأسئلة والإجابات. إذا كانت غير كافية أرجع questions فارغة وسبباً في reason، ولا تخترع محتوى أو مراجع. في أسئلة الاختيار ضع بدائل مميزة وإجابة واحدة صحيحة واكتب الإجابة الصحيحة نصاً.
 كل سؤال يتضمن citations مع evidenceId مطابق تماماً للمقتطف وquote اقتباس حرفي داعم للإجابة من نفس المقتطف. هذه المراجع تثبت وجود الاقتباس فقط، فراجع ملاءمته للسؤال.
