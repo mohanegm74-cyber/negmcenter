@@ -5,7 +5,8 @@ import { toast } from "sonner";
 import { Plus, Trash2, Pencil, X, Printer, BookOpen, Loader2, FileText, ImageIcon, Eye, CheckCircle2, ChevronDown, ChevronUp } from "lucide-react";
 import { openPrint, esc } from "@/lib/print";
 import { useServerFn } from "@tanstack/react-start";
-import { getHomeworkDataAdmin, saveHomeworkAdmin, upsertHomeworkSubmissionAdmin, deleteHomeworkAdmin, getHomeworkSubmissionFileUrl, releaseHomeworkResultsAdmin } from "@/lib/admin.functions";
+import { getHomeworkDataAdmin, saveHomeworkAdmin, upsertHomeworkSubmissionAdmin, deleteHomeworkAdmin, getHomeworkSubmissionFileUrl, releaseHomeworkResultsAdmin, createLessonUploadUrlAdmin, getHomeworkAttachmentUrlsAdmin } from "@/lib/admin.functions";
+import { supabase } from "@/integrations/supabase/client";
 import { GRADES } from "@/lib/exam-constants";
 
 export const Route = createFileRoute("/_authenticated/homework")({
@@ -14,7 +15,7 @@ export const Route = createFileRoute("/_authenticated/homework")({
 });
 
 type Group = { id: string; name: string; grade: string | null };
-type HW = { id: string; group_id: string | null; title: string; description: string | null; due_date: string | null; max_score: number | null; grade: string | null; model_solution?: string | null; results_released?: boolean; created_at?: string };
+type HW = { id: string; group_id: string | null; title: string; description: string | null; due_date: string | null; max_score: number | null; grade: string | null; model_solution?: string | null; attachment_paths?: string[] | null; results_released?: boolean; created_at?: string };
 type Student = { id: string; full_name: string; code: string; group_id: string | null; grade?: string | null };
 type Sub = { id: string; homework_id: string; student_id: string; score: number | null; level: string | null; status: string; note: string | null; answer_text: string | null; file_url: string | null; file_urls?: string[] | null };
 const EVALUATION_LEVELS = ["ممتاز", "جيد جداً", "جيد", "متوسط", "ضعيف"];
@@ -46,6 +47,10 @@ function HomeworkPage() {
   const upsertSubFn = useServerFn(upsertHomeworkSubmissionAdmin);
   const deleteHWFn = useServerFn(deleteHomeworkAdmin);
   const releaseFn = useServerFn(releaseHomeworkResultsAdmin);
+  const hwUploadFn = useServerFn(createLessonUploadUrlAdmin);
+  const [hwFiles, setHwFiles] = useState<File[]>([]);
+  const [keepPaths, setKeepPaths] = useState<string[]>([]);
+  useEffect(() => { setKeepPaths(editing?.attachment_paths || []); setHwFiles([]); }, [editing, open]);
 
   async function load(silent = false) {
     if (!silent) setLoading(true);
@@ -100,6 +105,14 @@ function HomeworkPage() {
       model_solution: String(fd.get("model_solution") || "").trim() || null,
     };
     try {
+      const paths = [...keepPaths];
+      for (const f of hwFiles) {
+        const { path, token } = await hwUploadFn({ data: { filename: f.name } });
+        const { error } = await supabase.storage.from("lesson-files").uploadToSignedUrl(path, token, f);
+        if (error) throw new Error("تعذر رفع الملف: " + error.message);
+        paths.push(path);
+      }
+      payload.attachment_paths = paths;
       await saveHWFn({ data: { id: editing?.id, payload } });
       toast.success(editing ? "تم التحديث" : "تم إنشاء الواجب");
       setOpen(false); setEditing(null); load();
@@ -159,6 +172,12 @@ function HomeworkPage() {
             <div className="md:col-span-2">
               <label className="mb-1.5 block text-xs font-black text-muted-foreground uppercase">المطلوب من الطالب (وصف الواجب)</label>
               <textarea name="description" defaultValue={editing?.description ?? ""} rows={3} className="w-full rounded-xl border border-input px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/20" placeholder="مثال: حل صفحة 40 في الكتاب الوزاري..." />
+              <div className="mt-2 rounded-xl border-2 border-dashed border-primary/30 p-3">
+                <label className="block text-xs font-black text-primary mb-1.5">إرفاق الواجب صورة أو PDF (اختياري)</label>
+                <input type="file" multiple accept="image/*,application/pdf" onChange={(e) => setHwFiles(Array.from(e.target.files || []))} className="text-xs" />
+                {keepPaths.length > 0 && <div className="mt-2 flex flex-wrap gap-1.5">{keepPaths.map(p => <span key={p} className="inline-flex items-center gap-1 rounded-lg bg-primary/10 px-2 py-1 text-[10px] font-bold text-primary">{p.split("-").slice(2).join("-") || "ملف"}<button type="button" onClick={() => setKeepPaths(keepPaths.filter(x => x !== p))}><X className="h-3 w-3" /></button></span>)}</div>}
+                {hwFiles.length > 0 && <div className="mt-1 text-[10px] font-bold text-muted-foreground">سيتم رفع {hwFiles.length} ملف عند الحفظ</div>}
+              </div>
             </div>
             <div className="md:col-span-2">
               <label className="mb-1.5 block text-xs font-black text-primary uppercase">نموذج الحل الصحيح (يظهر للطالب بعد التقييم)</label>
@@ -191,6 +210,7 @@ function HomeworkPage() {
               </div>
             </div>
             {h.description && <p className="mt-3 text-xs text-slate-600 line-clamp-2 italic leading-relaxed">"{h.description}"</p>}
+            {(h.attachment_paths?.length ?? 0) > 0 && <HWAttachments paths={h.attachment_paths!} />}
 
             <details className="mt-4 rounded-2xl bg-slate-50 border border-slate-100 p-3">
               <summary className="cursor-pointer text-[10px] font-black text-slate-500 uppercase select-none">نسخة الواجب المُرسل (تفاصيل ما تم إرساله)</summary>
@@ -383,6 +403,16 @@ function F({ name, label, type = "text", required = false, defaultValue }: any) 
     <div className="space-y-1">
       <label className="mb-1.5 block text-[11px] font-black text-muted-foreground uppercase ms-1">{label}</label>
       <input name={name} type={type} required={required} defaultValue={defaultValue} className="w-full rounded-xl border border-input bg-white px-4 py-2.5 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20 transition-all" />
+    </div>
+  );
+}
+function HWAttachments({ paths }: { paths: string[] }) {
+  const fn = useServerFn(getHomeworkAttachmentUrlsAdmin);
+  const [files, setFiles] = useState<{ path: string; url: string }[]>([]);
+  useEffect(() => { fn({ data: { paths } }).then(setFiles).catch(() => setFiles([])); }, [paths.join(",")]);
+  return (
+    <div className="mt-2 flex flex-wrap gap-1.5">
+      {files.map((f, i) => <a key={f.path} href={f.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-lg bg-primary/10 px-2 py-1 text-[10px] font-black text-primary hover:bg-primary/20">{/\.pdf$/i.test(f.path) ? <FileText className="h-3 w-3" /> : <ImageIcon className="h-3 w-3" />} مرفق {i + 1}</a>)}
     </div>
   );
 }

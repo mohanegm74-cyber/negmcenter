@@ -1,0 +1,1 @@
+ALTER TABLE public.homework ADD COLUMN IF NOT EXISTS attachment_paths text[] NOT NULL DEFAULT '{}';

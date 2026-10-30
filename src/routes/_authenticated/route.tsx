@@ -87,9 +87,9 @@ function TeacherShell() {
             <button onClick={signOut} className="inline-flex items-center gap-1 rounded-lg bg-destructive/10 px-3 py-1.5 text-xs font-semibold text-destructive hover:bg-destructive/15"><LogOut className="h-3.5 w-3.5" /> خروج</button>
           </div>
         </div>
-        <nav className="mx-auto flex max-w-7xl gap-1 overflow-x-auto px-4 pb-2 no-scrollbar">
+        <nav className="mx-auto grid max-w-7xl grid-flow-col grid-rows-2 auto-cols-max gap-1 overflow-x-auto px-4 pb-2 no-scrollbar">
           {NAV.map(({ to, label, icon: Icon, badge }: any) => (
-            <Link key={to} to={to} className={`relative inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold transition ${path === to ? "bg-primary text-primary-foreground shadow" : "text-foreground hover:bg-accent"}`}>
+            <Link key={to} to={to} className={`tab-flash relative inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold transition ${path === to ? "bg-primary text-primary-foreground shadow" : "text-foreground hover:bg-accent"}`}>
               <Icon className="h-4 w-4" /> 
               {label}
               {badge && <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-600 px-1 text-[8px] font-black text-white shadow-sm animate-bounce">{badge}</span>}

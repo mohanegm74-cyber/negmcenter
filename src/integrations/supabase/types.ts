@@ -545,6 +545,7 @@ export type Database = {
       }
       homework: {
         Row: {
+          attachment_paths: string[]
           created_at: string
           description: string | null
           due_date: string | null
@@ -557,6 +558,7 @@ export type Database = {
           title: string
         }
         Insert: {
+          attachment_paths?: string[]
           created_at?: string
           description?: string | null
           due_date?: string | null
@@ -569,6 +571,7 @@ export type Database = {
           title: string
         }
         Update: {
+          attachment_paths?: string[]
           created_at?: string
           description?: string | null
           due_date?: string | null

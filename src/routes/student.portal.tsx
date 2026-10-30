@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { BrandLogo } from "@/components/BrandLogo";
 import { ExamsTab } from "@/components/ExamsTab";
-import { getLessonsPortal, getBoardImagesPortal, getStudentPortal, updateStudentProfile, askTeacher, deleteStudentQuestionPortal, submitHomeworkText, createHomeworkUploadUrl, finalizeHomeworkUpload, getSubmissionUrl, markNotesAsRead, deleteCertificatePortal, deleteHomeworkImage } from "@/lib/student.functions";
+import { getLessonsPortal, getBoardImagesPortal, getStudentPortal, updateStudentProfile, askTeacher, deleteStudentQuestionPortal, submitHomeworkText, createHomeworkUploadUrl, finalizeHomeworkUpload, getSubmissionUrl, markNotesAsRead, deleteCertificatePortal, deleteHomeworkImage, getHomeworkAttachmentsPortal } from "@/lib/student.functions";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { GRADES } from "@/lib/exam-constants";
@@ -252,7 +252,7 @@ function Portal() {
           </div>
           <button onClick={() => {localStorage.removeItem("najm_student_code"); setData(null);}} className="p-2 rounded-xl bg-destructive/10 text-destructive hover:bg-destructive transition-all flex-shrink-0"><LogOut className="h-5 w-5" /></button>
         </div>
-        <nav className="max-w-5xl mx-auto flex gap-1.5 overflow-x-auto mt-4 no-scrollbar pb-1">
+        <nav className="max-w-5xl mx-auto grid grid-flow-col grid-rows-2 auto-cols-max gap-1.5 overflow-x-auto mt-4 no-scrollbar pb-1">
           <TabBtn label="بياناتي" icon={UserCircle} active={tab === "info"} onClick={() => setTab("info")} />
           <TabBtn label="المواعيد" icon={Calendar} active={tab === "schedule"} onClick={() => setTab("schedule")} />
           <TabBtn label="الحضور والغياب" icon={ClipboardList} active={tab === "attendance"} onClick={() => setTab("attendance")} />
@@ -606,6 +606,7 @@ function HomeworkItem({ h, studentCode, submission, onRefresh }: any) {
         <div className="flex-1">
           <h3 className="text-xl font-black text-slate-800">{h.title}</h3>
           <p className="text-sm text-slate-500 font-bold mt-1 leading-relaxed">{h.description || "لا يوجد وصف إضافي للواجب."}</p>
+          {(h.attachment_paths?.length ?? 0) > 0 && <StudentHWAttachments code={studentCode} homeworkId={h.id} />}
         </div>
         {isGraded && (
           <div className="bg-emerald-600 text-white px-5 py-2.5 rounded-2xl text-center shadow-lg animate-in zoom-in-50">
@@ -699,7 +700,7 @@ function HomeworkItem({ h, studentCode, submission, onRefresh }: any) {
 
 function TabBtn({ label, icon: Icon, active, badge, onClick }: any) {
   return (
-    <button onClick={onClick} className={`relative shrink-0 flex items-center gap-2 px-5 py-2.5 rounded-2xl text-[13px] font-black transition-all ${active ? "bg-primary text-white shadow-lg" : "bg-white text-slate-500 border border-slate-100 hover:border-primary/30"}`}>
+    <button onClick={onClick} className={`tab-flash relative shrink-0 flex items-center gap-2 px-5 py-2.5 rounded-2xl text-[13px] font-black transition-all ${active ? "bg-primary text-white shadow-lg" : "bg-white text-slate-500 border border-slate-100 hover:border-primary/30"}`}>
       <Icon className="h-4 w-4" /> 
       {label}
       {badge && <span className="absolute -top-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-600 text-[10px] font-black text-white animate-pulse shadow-md px-1">{badge}</span>}
@@ -714,4 +715,17 @@ function InfoCard({ label, value }: { label: string; value: string }) {
 }
 function EmptyState({ icon: Icon, text }: { icon: any; text: string }) {
   return (<div className="bg-white p-16 rounded-[2.5rem] border-2 border-dashed border-slate-100 text-center"><Icon className="mx-auto h-16 w-16 text-muted/20 mb-4" /><p className="text-slate-400 font-black text-lg">{text}</p></div>);
+}
+function StudentHWAttachments({ code, homeworkId }: { code: string; homeworkId: string }) {
+  const fn = useServerFn(getHomeworkAttachmentsPortal);
+  const [files, setFiles] = useState<{ path: string; url: string }[]>([]);
+  useEffect(() => { fn({ data: { code, homeworkId } }).then(setFiles).catch(() => setFiles([])); }, [code, homeworkId]);
+  if (!files.length) return null;
+  return (
+    <div className="mt-3 flex flex-wrap gap-2">
+      {files.map((f, i) => /\.pdf$/i.test(f.path)
+        ? <a key={f.path} href={f.url} target="_blank" rel="noreferrer" className="rounded-xl bg-primary/10 px-3 py-2 text-xs font-black text-primary">📄 ملف الواجب {i + 1} (PDF)</a>
+        : <a key={f.path} href={f.url} target="_blank" rel="noreferrer"><img src={f.url} alt={`صورة الواجب ${i + 1}`} className="h-28 rounded-xl border object-cover" /></a>)}
+    </div>
+  );
 }
