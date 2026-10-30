@@ -345,3 +345,18 @@ export const getLessonsPortal = createServerFn({ method: "POST" })
     }));
     return { lessons };
   });
+
+/** مرفقات الواجب (صورة / PDF) للطالب */
+export const getHomeworkAttachmentsPortal = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) => d as { code: string; homeworkId: string })
+  .handler(async ({ data }) => {
+    const { requireStudent } = await import("./student.server");
+    const { db } = await requireStudent(data.code);
+    const { data: hw } = await db.from("homework").select("attachment_paths").eq("id", String(data.homeworkId)).maybeSingle();
+    const paths: string[] = Array.isArray((hw as any)?.attachment_paths) ? (hw as any).attachment_paths : [];
+    const out = await Promise.all(paths.map(async (path) => {
+      const { data: s } = await db.storage.from("lesson-files").createSignedUrl(path, 3600);
+      return s?.signedUrl ? { path, url: s.signedUrl } : null;
+    }));
+    return out.filter(Boolean) as { path: string; url: string }[];
+  });

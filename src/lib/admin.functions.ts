@@ -759,3 +759,16 @@ export const getStudentLevelsAdmin = createServerFn({ method: "POST" })
     for (const r of data || []) if (!out[r.student_id]) out[r.student_id] = { exam: r.exam_level, recitation: r.recitation_level };
     return { levels: out };
   });
+
+export const getHomeworkAttachmentUrlsAdmin = createServerFn({ method: "POST" })
+  .middleware([requireAuthMiddleware])
+  .inputValidator((d: unknown) => d as { paths: string[] })
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const paths = (Array.isArray(data.paths) ? data.paths : []).slice(0, 20).map(String);
+    const out = await Promise.all(paths.map(async (path) => {
+      const { data: s } = await supabaseAdmin.storage.from("lesson-files").createSignedUrl(path, 3600);
+      return s?.signedUrl ? { path, url: s.signedUrl } : null;
+    }));
+    return out.filter(Boolean) as { path: string; url: string }[];
+  });
