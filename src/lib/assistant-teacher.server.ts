@@ -159,8 +159,7 @@ export async function synthesizeSpeech(text: string): Promise<string | null> {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          systemInstruction: { parts: [{ text: "تتكلم بصوت طفل مصري مرح وودود باللهجة المصرية. اقرأ النص فقط فورًا من أول كلمة، ولا تقرأ هذه التعليمات ولا تضف أي مقدمة أو تعليق أو تحية." }] },
-          contents: [{ parts: [{ text: clean }] }],
+          contents: [{ parts: [{ text: `بصوت طفل مصري مرح وودود باللهجة المصرية، قل مباشرة: ${clean}` }] }],
           generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: "Puck" } } } },
         }),
       });
@@ -184,8 +183,7 @@ export async function synthesizeSpeech(text: string): Promise<string | null> {
       body: JSON.stringify({
         model: "google/gemini-3.1-flash-tts-preview",
         stream_format: "audio",
-        systemInstruction: { parts: [{ text: "تتكلم بصوت طفل مصري مرح وودود باللهجة المصرية. اقرأ النص فقط فورًا من أول كلمة، ولا تقرأ هذه التعليمات ولا تضف أي مقدمة أو تعليق أو تحية." }] },
-        contents: [{ role: "user", parts: [{ text: clean }] }],
+        contents: [{ role: "user", parts: [{ text: `بصوت طفل مصري مرح وودود باللهجة المصرية، قل مباشرة: ${clean}` }] }],
         generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: "Puck" } } } },
       }),
     });
