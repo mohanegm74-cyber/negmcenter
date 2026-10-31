@@ -262,7 +262,7 @@ export async function executeActions(actions: AssistantAction[]): Promise<string
         if (ex) {
           const mx = max ?? (Number(ex.total_score) || score || 1);
           const now = new Date().toISOString();
-          const { error } = await db.from("exam_attempts").insert({ student_id: r.s.id, exam_id: ex.id, score, max_score: mx, percentage: Math.round((score / mx) * 100), status: "graded", started_at: now, submitted_at: now, analysis: a.note || "درجة مسجلة عبر المساعد" } as any);
+          const { error } = await db.from("exam_attempts").insert({ student_id: r.s.id, exam_id: ex.id, score, max_score: mx, percentage: Math.round((score / mx) * 100), status: "submitted", started_at: now, submitted_at: now, analysis: a.note || "درجة مسجلة عبر المساعد" } as any);
           if (error) throw new Error(error.message);
           out.push(`✅ اتسجلت درجة ${r.s.full_name} في اختبار «${ex.title}»: ${score} من ${mx}`);
         } else {
