@@ -7,7 +7,7 @@ export function BrandLogo({ size = 96, className = "" }: { size?: number; classN
       alt="سنتر الأستاذ محمد نجم"
       width={size}
       height={size}
-      className={`inline-block rounded-2xl object-contain shadow-lg ${className}`}
+      className={`logo-pulse inline-block rounded-2xl object-contain shadow-lg ${className}`}
       style={{ width: size, height: size }}
     />
   );
