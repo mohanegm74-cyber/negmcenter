@@ -18,7 +18,8 @@ export type AssistantAction =
   | { type: "delete_group"; group: string }
   | { type: "publish_exam"; exam: string; publish?: boolean }
   | { type: "certificate"; student: string; title?: string; reason?: string }
-  | { type: "restore_student"; student: string };
+  | { type: "restore_student"; student: string }
+  | { type: "exam_score"; student: string; score: number; max_score?: number; exam?: string; note?: string; date?: string };
 
 const norm = (s: string) =>
   String(s || "").trim().toLowerCase()
@@ -245,6 +246,32 @@ export async function executeActions(actions: AssistantAction[]): Promise<string
         if (!s) { out.push(`❌ مش لاقي طالب مؤرشف «${a.student}»`); continue; }
         await db.from("students").update({ archived: false, active: true }).eq("id", s.id);
         out.push(`✅ رجع ${s.full_name} للطلاب النشطين`);
+      } else if (a.type === "exam_score") {
+        const r = findStudent(a.student);
+        if (!r.s) { out.push(`❌ ${r.err}`); continue; }
+        const score = Number(a.score);
+        if (!Number.isFinite(score) || score < 0) { out.push("❌ الدرجة غير صحيحة"); continue; }
+        const max = Number(a.max_score) > 0 ? Number(a.max_score) : null;
+        if (max != null && score > max) { out.push("❌ الدرجة أكبر من النهاية العظمى"); continue; }
+        let ex: any = null;
+        if (a.exam) {
+          const { data: exs } = await db.from("exams").select("id,title,total_score").limit(500);
+          const n = norm(a.exam);
+          ex = (exs || []).find((e: any) => norm(e.title) === n) || (exs || []).find((e: any) => norm(e.title).includes(n)) || null;
+        }
+        if (ex) {
+          const mx = max ?? (Number(ex.total_score) || score || 1);
+          const now = new Date().toISOString();
+          const { error } = await db.from("exam_attempts").insert({ student_id: r.s.id, exam_id: ex.id, score, max_score: mx, percentage: Math.round((score / mx) * 100), status: "graded", started_at: now, submitted_at: now, analysis: a.note || "درجة مسجلة عبر المساعد" } as any);
+          if (error) throw new Error(error.message);
+          out.push(`✅ اتسجلت درجة ${r.s.full_name} في اختبار «${ex.title}»: ${score} من ${mx}`);
+        } else {
+          const date = isDate(a.date) ? a.date! : today;
+          const lvl = `${score}${max ? ` من ${max}` : ""}${a.exam ? ` - ${a.exam}` : ""}`;
+          const { error } = await db.from("student_records").insert({ student_id: r.s.id, group_id: r.s.group_id, date, exam_level: lvl, recitation_level: null, note: a.note || null });
+          if (error) throw new Error(error.message);
+          out.push(`✅ اتسجلت درجة اختبار ${r.s.full_name}: ${lvl} (في الملاحظات والتقييمات)`);
+        }
       } else {
         out.push("❌ أمر غير مدعوم");
       }
