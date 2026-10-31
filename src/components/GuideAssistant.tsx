@@ -181,7 +181,7 @@ export function GuideAssistant() {
     let done = false;
     let timer: any = null;
     let rec: any = null;
-    const SILENCE_MS = 3000; // ينتظر 3 ثوانٍ صمت بعد آخر كلمة قبل الإرسال
+    const SILENCE_MS = 4500; // ينتظر انتهاء أمر الأدمن كاملًا قبل الإرسال
     const finish = () => {
       if (done) return;
       done = true;
