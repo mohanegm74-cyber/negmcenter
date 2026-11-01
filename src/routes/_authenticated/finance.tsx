@@ -296,6 +296,9 @@ function FinancePage() {
                       <div className="text-[10px] text-muted-foreground font-mono">{r.student.code}</div>
                     </td>
                     <td className="p-4"><span className="rounded bg-muted px-2 py-1 text-[10px] font-bold">{r.groupName}</span></td>
+                    <td className="p-4 text-center">
+                      <span className="inline-flex items-center rounded-full px-3 py-1 text-xs font-bold" style={{ backgroundColor: r.status.color + "20", color: r.status.color }}>{r.status.label}</span>
+                    </td>
                     <td className="p-4 text-center font-mono font-bold">{r.totalDue.toLocaleString("ar-EG")}</td>
                     <td className="p-4 text-center font-mono font-bold text-secondary">{r.paid.toLocaleString("ar-EG")}</td>
                     <td className="p-4 text-center font-mono font-bold text-sky-700">{r.exempt.toLocaleString("ar-EG")}</td>
@@ -309,7 +312,7 @@ function FinancePage() {
                   </tr>
                   {addingFor?.id === r.student.id && (
                     <tr key={r.student.id + "-form"} className="border-t">
-                      <td colSpan={7} className="bg-primary/5 p-4">
+                      <td colSpan={8} className="bg-primary/5 p-4">
                         <form onSubmit={handleAdd} className="rounded-2xl bg-white p-5 shadow-xl border-2 border-primary">
                           <div className="mb-4 flex items-center justify-between">
                             <h3 className="text-lg font-black text-primary">تسجيل حركة لـ: {addingFor.full_name}</h3>
