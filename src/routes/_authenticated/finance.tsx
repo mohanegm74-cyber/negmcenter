@@ -253,6 +253,25 @@ function FinancePage() {
         </div>
       )}
 
+      <div className="flex flex-wrap items-center gap-2 rounded-2xl border bg-white p-3 shadow-sm" dir="rtl">
+        <span className="text-xs font-black text-muted-foreground">تصفية حسب حالة السداد:</span>
+        {([
+          { key: "", label: "الكل", count: statusCounts.paid + statusCounts.unpaid + statusCounts.exempt, color: "#1e3a8a" },
+          { key: "paid", label: "سدد", count: statusCounts.paid, color: "#059669" },
+          { key: "unpaid", label: "لم يسدد", count: statusCounts.unpaid, color: "#dc2626" },
+          { key: "exempt", label: "تم الإعفاء", count: statusCounts.exempt, color: "#0284c7" },
+        ] as const).map(f => (
+          <button
+            key={f.key}
+            onClick={() => setStatusFilter(f.key)}
+            className={`rounded-full border px-4 py-1.5 text-xs font-black transition-all ${statusFilter === f.key ? "text-white" : "bg-card hover:bg-muted"}`}
+            style={statusFilter === f.key ? { backgroundColor: f.color, borderColor: f.color } : { borderColor: f.color + "60", color: f.color }}
+          >
+            {f.label} ({f.count})
+          </button>
+        ))}
+      </div>
+
       <div className="overflow-hidden rounded-2xl border bg-white shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-right text-sm">
@@ -260,6 +279,7 @@ function FinancePage() {
               <tr>
                 <th className="p-4">الطالب</th>
                 <th className="p-4">المجموعة</th>
+                <th className="p-4 text-center">الحالة</th>
                 <th className="p-4 text-center">المستحق</th>
                 <th className="p-4 text-center">المدفوع</th>
                 <th className="p-4 text-center">المعفى</th>
