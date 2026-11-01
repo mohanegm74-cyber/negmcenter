@@ -177,7 +177,7 @@ function GroupListsPage() {
                 {list.length === 0 ? (
                   <tr><td colSpan={5} className="p-10 text-center text-muted-foreground">لا يوجد طلاب مسجلين في هذه المجموعة.</td></tr>
                 ) : list.map((s) => (
-                  <tr key={s.id} className="hover:bg-muted/30 transition-colors">
+                  <tr key={s.id} className="hover:brightness-95 transition-colors" style={{ backgroundColor: s.statusColor + "14" }}>
                     <td className="p-4 text-center font-bold text-muted-foreground">{s.index}</td>
                     <td className="p-4 font-bold text-primary">{s.full_name}</td>
                     <td className="p-4 text-center font-semibold">{s.grade || "—"}</td>
