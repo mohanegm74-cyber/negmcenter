@@ -38,6 +38,7 @@ function FinancePage() {
   const [loading, setLoading] = useState(true);
   const [groupFilter, setGroupFilter] = useState("");
   const [studentSearch, setStudentSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
   const [month, setMonth] = useState(currentMonth());
   const [addingFor, setAddingFor] = useState<Student | null>(null);
   const [editingPayment, setEditingPayment] = useState<Payment | null>(null);
@@ -80,6 +81,15 @@ function FinancePage() {
     return { duesM, paidM, exemptM, outstandingM, label: month ? `شهر ${month}` : "كل الشهور" };
   }, [payments, month, students, groupMap, groupFilter]);
 
+  // حالة السداد لكل طالب في الفترة المختارة: paid = سدد، unpaid = لم يسدد (يشمل السداد الجزئي)، exempt = معفى
+  function statusOf(totalDue: number, paid: number, exempt: number) {
+    if (exempt > 0 && paid === 0 && exempt >= totalDue) return { key: "exempt", label: "تم الإعفاء", color: "#0284c7" };
+    if (totalDue > 0 && paid + exempt >= totalDue) return { key: "paid", label: "سدد", color: "#059669" };
+    if (totalDue <= 0) return { key: "paid", label: "لا مستحق", color: "#059669" };
+    if (paid > 0) return { key: "unpaid", label: "سداد جزئي", color: "#d97706" };
+    return { key: "unpaid", label: "لم يسدد", color: "#dc2626" };
+  }
+
   const rows = useMemo(() => {
     return students
       .filter(s => (!s.archived || payments.some(p => p.student_id === s.id)) && (!groupFilter || s.group_id === groupFilter) && (!studentSearch || `${s.full_name} ${s.code}`.toLocaleLowerCase().includes(studentSearch.toLocaleLowerCase())))
@@ -87,9 +97,25 @@ function FinancePage() {
         const fee = s.group_id ? Number(groupMap[s.group_id]?.monthly_fee || 0) : 0;
         const c = calcStudent(s, payments, fee, month);
         const totalDue = c.due, paid = c.paid, exempt = c.exempt, balance = c.late;
-         return { student: s, groupName: s.group_id ? groupMap[s.group_id]?.name : "—", totalDue, paid, exempt, balance };
-      });
-  }, [students, groupMap, payments, month, groupFilter, studentSearch]);
+        const status = statusOf(totalDue, paid, exempt);
+         return { student: s, groupName: s.group_id ? groupMap[s.group_id]?.name : "—", totalDue, paid, exempt, balance, status };
+      })
+      .filter(r => !statusFilter || r.status.key === statusFilter)
+      .sort((a, b) => a.student.full_name.localeCompare(b.student.full_name, "ar"));
+  }, [students, groupMap, payments, month, groupFilter, studentSearch, statusFilter]);
+
+  const statusCounts = useMemo(() => {
+    const counts = { paid: 0, unpaid: 0, exempt: 0 };
+    for (const s of students) {
+      if (s.archived && !payments.some(p => p.student_id === s.id)) continue;
+      if (groupFilter && s.group_id !== groupFilter) continue;
+      const fee = s.group_id ? Number(groupMap[s.group_id]?.monthly_fee || 0) : 0;
+      const c = calcStudent(s, payments, fee, month);
+      const st = statusOf(c.due, c.paid, c.exempt);
+      counts[st.key as keyof typeof counts]++;
+    }
+    return counts;
+  }, [students, groupMap, payments, month, groupFilter]);
 
   async function handleAdd(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
