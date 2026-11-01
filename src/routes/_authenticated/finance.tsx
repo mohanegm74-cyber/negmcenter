@@ -38,6 +38,7 @@ function FinancePage() {
   const [loading, setLoading] = useState(true);
   const [groupFilter, setGroupFilter] = useState("");
   const [studentSearch, setStudentSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
   const [month, setMonth] = useState(currentMonth());
   const [addingFor, setAddingFor] = useState<Student | null>(null);
   const [editingPayment, setEditingPayment] = useState<Payment | null>(null);
@@ -80,6 +81,15 @@ function FinancePage() {
     return { duesM, paidM, exemptM, outstandingM, label: month ? `شهر ${month}` : "كل الشهور" };
   }, [payments, month, students, groupMap, groupFilter]);
 
+  // حالة السداد لكل طالب في الفترة المختارة: paid = سدد، unpaid = لم يسدد (يشمل السداد الجزئي)، exempt = معفى
+  function statusOf(totalDue: number, paid: number, exempt: number) {
+    if (exempt > 0 && paid === 0 && exempt >= totalDue) return { key: "exempt", label: "تم الإعفاء", color: "#0284c7" };
+    if (totalDue > 0 && paid + exempt >= totalDue) return { key: "paid", label: "سدد", color: "#059669" };
+    if (totalDue <= 0) return { key: "paid", label: "لا مستحق", color: "#059669" };
+    if (paid > 0) return { key: "unpaid", label: "سداد جزئي", color: "#d97706" };
+    return { key: "unpaid", label: "لم يسدد", color: "#dc2626" };
+  }
+
   const rows = useMemo(() => {
     return students
       .filter(s => (!s.archived || payments.some(p => p.student_id === s.id)) && (!groupFilter || s.group_id === groupFilter) && (!studentSearch || `${s.full_name} ${s.code}`.toLocaleLowerCase().includes(studentSearch.toLocaleLowerCase())))
@@ -87,9 +97,25 @@ function FinancePage() {
         const fee = s.group_id ? Number(groupMap[s.group_id]?.monthly_fee || 0) : 0;
         const c = calcStudent(s, payments, fee, month);
         const totalDue = c.due, paid = c.paid, exempt = c.exempt, balance = c.late;
-         return { student: s, groupName: s.group_id ? groupMap[s.group_id]?.name : "—", totalDue, paid, exempt, balance };
-      });
-  }, [students, groupMap, payments, month, groupFilter, studentSearch]);
+        const status = statusOf(totalDue, paid, exempt);
+         return { student: s, groupName: s.group_id ? groupMap[s.group_id]?.name : "—", totalDue, paid, exempt, balance, status };
+      })
+      .filter(r => !statusFilter || r.status.key === statusFilter)
+      .sort((a, b) => a.student.full_name.localeCompare(b.student.full_name, "ar"));
+  }, [students, groupMap, payments, month, groupFilter, studentSearch, statusFilter]);
+
+  const statusCounts = useMemo(() => {
+    const counts = { paid: 0, unpaid: 0, exempt: 0 };
+    for (const s of students) {
+      if (s.archived && !payments.some(p => p.student_id === s.id)) continue;
+      if (groupFilter && s.group_id !== groupFilter) continue;
+      const fee = s.group_id ? Number(groupMap[s.group_id]?.monthly_fee || 0) : 0;
+      const c = calcStudent(s, payments, fee, month);
+      const st = statusOf(c.due, c.paid, c.exempt);
+      counts[st.key as keyof typeof counts]++;
+    }
+    return counts;
+  }, [students, groupMap, payments, month, groupFilter]);
 
   async function handleAdd(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -227,6 +253,25 @@ function FinancePage() {
         </div>
       )}
 
+      <div className="flex flex-wrap items-center gap-2 rounded-2xl border bg-white p-3 shadow-sm" dir="rtl">
+        <span className="text-xs font-black text-muted-foreground">تصفية حسب حالة السداد:</span>
+        {([
+          { key: "", label: "الكل", count: statusCounts.paid + statusCounts.unpaid + statusCounts.exempt, color: "#1e3a8a" },
+          { key: "paid", label: "سدد", count: statusCounts.paid, color: "#059669" },
+          { key: "unpaid", label: "لم يسدد", count: statusCounts.unpaid, color: "#dc2626" },
+          { key: "exempt", label: "تم الإعفاء", count: statusCounts.exempt, color: "#0284c7" },
+        ] as const).map(f => (
+          <button
+            key={f.key}
+            onClick={() => setStatusFilter(f.key)}
+            className={`rounded-full border px-4 py-1.5 text-xs font-black transition-all ${statusFilter === f.key ? "text-white" : "bg-card hover:bg-muted"}`}
+            style={statusFilter === f.key ? { backgroundColor: f.color, borderColor: f.color } : { borderColor: f.color + "60", color: f.color }}
+          >
+            {f.label} ({f.count})
+          </button>
+        ))}
+      </div>
+
       <div className="overflow-hidden rounded-2xl border bg-white shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-right text-sm">
@@ -234,6 +279,7 @@ function FinancePage() {
               <tr>
                 <th className="p-4">الطالب</th>
                 <th className="p-4">المجموعة</th>
+                <th className="p-4 text-center">الحالة</th>
                 <th className="p-4 text-center">المستحق</th>
                 <th className="p-4 text-center">المدفوع</th>
                 <th className="p-4 text-center">المعفى</th>
@@ -250,6 +296,9 @@ function FinancePage() {
                       <div className="text-[10px] text-muted-foreground font-mono">{r.student.code}</div>
                     </td>
                     <td className="p-4"><span className="rounded bg-muted px-2 py-1 text-[10px] font-bold">{r.groupName}</span></td>
+                    <td className="p-4 text-center">
+                      <span className="inline-flex items-center rounded-full px-3 py-1 text-xs font-bold" style={{ backgroundColor: r.status.color + "20", color: r.status.color }}>{r.status.label}</span>
+                    </td>
                     <td className="p-4 text-center font-mono font-bold">{r.totalDue.toLocaleString("ar-EG")}</td>
                     <td className="p-4 text-center font-mono font-bold text-secondary">{r.paid.toLocaleString("ar-EG")}</td>
                     <td className="p-4 text-center font-mono font-bold text-sky-700">{r.exempt.toLocaleString("ar-EG")}</td>
@@ -263,7 +312,7 @@ function FinancePage() {
                   </tr>
                   {addingFor?.id === r.student.id && (
                     <tr key={r.student.id + "-form"} className="border-t">
-                      <td colSpan={7} className="bg-primary/5 p-4">
+                      <td colSpan={8} className="bg-primary/5 p-4">
                         <form onSubmit={handleAdd} className="rounded-2xl bg-white p-5 shadow-xl border-2 border-primary">
                           <div className="mb-4 flex items-center justify-between">
                             <h3 className="text-lg font-black text-primary">تسجيل حركة لـ: {addingFor.full_name}</h3>
