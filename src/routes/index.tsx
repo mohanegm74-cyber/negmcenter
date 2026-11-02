@@ -8,6 +8,10 @@ export const Route = createFileRoute("/")({
     meta: [
       { title: "سنتر الأستاذ محمد نجم — الرئيسية" },
       { name: "description", content: "منصة سنتر الأستاذ محمد نجم لإدارة الطلاب والمجموعات والحضور." },
+      { property: "og:title", content: "سنتر الأستاذ محمد نجم — الرئيسية" },
+      { property: "og:description", content: "منصة سنتر الأستاذ محمد نجم لإدارة الطلاب والمجموعات والحضور." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: Landing,
