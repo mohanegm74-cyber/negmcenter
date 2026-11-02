@@ -1,9 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Trophy, Loader2, Play, Users, Swords, User, Shuffle } from "lucide-react";
+import { Trophy, Loader2, Play, Users, Swords, User, Shuffle, Volume2 } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { getFinanceDataAdmin } from "@/lib/admin.functions";
 import { toast } from "sonner";
+import { speakContestFn } from "@/lib/contest-speech.functions";
+import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/_authenticated/contests")({
   head: () => ({
@@ -52,18 +54,6 @@ function beep(freq: number, duration = 180) {
   } catch {}
 }
 
-function speak(text: string) {
-  try {
-    const synth = window.speechSynthesis;
-    if (!synth) return;
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = "ar-EG";
-    u.rate = 0.95;
-    synth.cancel();
-    synth.speak(u);
-  } catch {}
-}
-
 function ContestsPage() {
   const [students, setStudents] = useState<Student[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
@@ -83,8 +73,32 @@ function ContestsPage() {
 
   const timerRef = useRef<any>(null);
   const rollRef = useRef<any>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const voiceRequestRef = useRef(0);
+  const [voiceLoading, setVoiceLoading] = useState(false);
+  const [voiceReady, setVoiceReady] = useState(false);
 
   const loadFn = useServerFn(getFinanceDataAdmin);
+  const speakFn = useServerFn(speakContestFn);
+
+  async function speak(text: string) {
+    const request = ++voiceRequestRef.current;
+    setVoiceLoading(true);
+    setVoiceReady(false);
+    try {
+      const result = await speakFn({ data: { text } });
+      if (request !== voiceRequestRef.current) return;
+      const audio = audioRef.current || new Audio();
+      audioRef.current = audio;
+      audio.src = result.audio;
+      setVoiceReady(true);
+      await audio.play().catch(() => toast.error("اضغط زر الصوت لسماع إعلان النتيجة."));
+    } catch (error) {
+      if (request === voiceRequestRef.current) toast.error(error instanceof Error ? error.message : "تعذر تشغيل صوت المسابقة.");
+    } finally {
+      if (request === voiceRequestRef.current) setVoiceLoading(false);
+    }
+  }
 
   useEffect(() => {
     (async () => {
@@ -98,7 +112,7 @@ function ContestsPage() {
         setLoading(false);
       }
     })();
-    return () => { clearInterval(timerRef.current); clearInterval(rollRef.current); };
+    return () => { clearInterval(timerRef.current); clearInterval(rollRef.current); voiceRequestRef.current++; audioRef.current?.pause(); };
   }, []);
 
   const gradeOptions = useMemo(
@@ -137,13 +151,13 @@ function ContestsPage() {
       setUsedNames((prev) => [...prev, names[0].trim().replace(/\s+/g, " ")]);
       setTeams([]);
       beep(880, 400);
-      speak(`أهلاً يا بطل ${names[0]}`);
+      void speak(`أَهْلًا يا بَطَل، ${names[0]}.`);
     } else if (mode === "duo") {
       setWinners(names.slice(0, 2));
       setUsedNames((prev) => [...prev, ...names.slice(0, 2).map((name) => name.trim().replace(/\s+/g, " "))]);
       setTeams([]);
       beep(880, 400);
-      speak(`تحدي بين ${names[0]} و ${names[1]}`);
+      void speak(`تحدي بين ${names[0]} و ${names[1]}`);
     } else {
       const n = Math.max(2, Math.min(teamsCount, names.length));
       const buckets: { name: string; members: string[] }[] = Array.from({ length: n }, (_, i) => ({
@@ -154,7 +168,7 @@ function ContestsPage() {
       setTeams(buckets);
       setWinners([]);
       beep(880, 400);
-      speak("تم تقسيم الفرق");
+      void speak("تم تقسيم الفرق");
     }
   }
 
@@ -163,6 +177,11 @@ function ContestsPage() {
     if (mode === "duo" && drawPool.length < 2) return toast.error("التحدي يحتاج طالبين على الأقل");
     clearInterval(timerRef.current);
     clearInterval(rollRef.current);
+    voiceRequestRef.current++;
+    audioRef.current?.pause();
+    audioRef.current = new Audio();
+    setVoiceReady(false);
+    setVoiceLoading(false);
     setWinners([]);
     setTeams([]);
 
@@ -256,6 +275,13 @@ function ContestsPage() {
       </div>
 
       <div className="rounded-2xl border bg-card p-8 text-center shadow-sm">
+        {(voiceLoading || voiceReady) && (
+          <div className="mb-4 flex justify-center">
+            <Button variant="outline" size="icon" disabled={voiceLoading} aria-label={voiceLoading ? "جاري تجهيز صوت النتيجة" : "إعادة سماع النتيجة"} title="إعادة سماع النتيجة" onClick={() => { const audio = audioRef.current; if (audio) { audio.currentTime = 0; void audio.play().catch(() => toast.error("تعذر تشغيل الصوت. تأكد من السماح بالصوت في المتصفح.")); } }}>
+              {voiceLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Volume2 className="h-4 w-4" />}
+            </Button>
+          </div>
+        )}
         {counter !== null ? (
           <div className="space-y-4">
             <div className="text-7xl font-black text-primary tabular-nums animate-pulse">{counter}</div>
