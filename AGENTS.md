@@ -12,4 +12,4 @@
 - Keep paper-exam grounding and evidence retrieval in dedicated modules; online exam generation and lesson retrieval remain unchanged to prevent cross-feature regressions.
 - Verify paper citations against retrieved excerpts and derive source labels from stored metadata; AI-supplied source names and page numbers are never trusted.
 - Keep contest speech in dedicated authenticated modules, separate from assistant speech, so pronunciation changes cannot regress assistant behavior.
-- Derive student settlement status from the existing remaining balance, including payments and exemptions, without changing fee calculations for presentation changes.
+- Student finance summaries use a dedicated browser-safe helper mirroring teacher monthly-ledger rules (recorded charges or academic defaults, then payments/exemptions); settlement derives from all-month remaining to keep both views consistent.

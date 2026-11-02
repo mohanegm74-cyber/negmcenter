@@ -17,6 +17,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { GRADES } from "@/lib/exam-constants";
 import { TEACHER_WHATSAPP_DISPLAY } from "@/lib/contact";
 import { isStudentSettled } from "@/lib/student-payment-status";
+import { studentFinanceSummary } from "@/lib/student-finance";
 
 export const Route = createFileRoute("/student/portal")({
   head: () => ({ meta: [
@@ -232,11 +233,8 @@ function Portal() {
   }
 
   const { student, group, payments, notes, records, homework, certificates, questions, subs, counts, attendance } = data;
-  const totalPaid = (payments || []).filter((p: any) => p.kind === "payment").reduce((acc: number, p: any) => acc + Number(p.amount), 0);
-  const totalExempt = (payments || []).filter((p: any) => p.kind === "exempt").reduce((acc: number, p: any) => acc + Number(p.amount), 0);
-  const totalDues = (payments || []).filter((p: any) => p.kind === "charge").reduce((acc: number, p: any) => acc + Number(p.amount), 0);
-  const estimatedDues = totalDues > 0 ? totalDues : (group?.monthly_fee || 0);
-  const balance = estimatedDues - totalPaid - totalExempt;
+  const finance = studentFinanceSummary(payments || [], Number(group?.monthly_fee || 0), student.active !== false);
+  const balance = finance.remaining;
 
   const lastQuestionAt = questions?.[0]?.created_at ? new Date(questions[0].created_at).getTime() : 0;
   const msLeft = lastQuestionAt ? lastQuestionAt + 24 * 60 * 60 * 1000 - Date.now() : 0;
@@ -463,10 +461,11 @@ function Portal() {
                 {isStudentSettled(balance) ? "سدد" : "لم يسدد"}
               </span>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="bg-muted p-5 rounded-2xl border text-center"><div className="text-xs font-black text-muted-foreground">إجمالي المستحق</div><div className="text-2xl font-black break-words">{estimatedDues} جنيه مصري</div></div>
-              <div className={`p-5 rounded-2xl border text-center ${isStudentSettled(balance) ? "bg-secondary/10" : "bg-destructive/10"}`}><div className="text-xs font-black">المتبقي</div><div className="text-2xl font-black break-words">{balance} جنيه مصري</div></div>
-              <div className="bg-primary/5 p-5 rounded-2xl border text-center"><div className="text-xs font-black text-primary">إجمالي الإعفاءات</div><div className="text-2xl font-black text-primary break-words">{totalExempt} جنيه مصري</div></div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="bg-muted p-5 rounded-2xl border text-center"><div className="text-xs font-black text-muted-foreground">المستحق هذا الشهر</div><div className="text-2xl font-black break-words">{finance.current.due} جنيه مصري</div></div>
+              <div className="bg-secondary/10 p-5 rounded-2xl border text-center"><div className="text-xs font-black text-secondary">المدفوع هذا الشهر</div><div className="text-2xl font-black break-words">{finance.current.paid} جنيه مصري</div></div>
+              <div className="bg-primary/5 p-5 rounded-2xl border text-center"><div className="text-xs font-black text-primary">الإعفاء هذا الشهر</div><div className="text-2xl font-black text-primary break-words">{finance.current.exempt} جنيه مصري</div></div>
+              <div className={`p-5 rounded-2xl border text-center ${isStudentSettled(balance) ? "bg-secondary/10" : "bg-destructive/10"}`}><div className="text-xs font-black">إجمالي المتبقي كل الشهور</div><div className="text-2xl font-black break-words">{balance} جنيه مصري</div></div>
             </div>
           </section>
         )}
