@@ -14,3 +14,4 @@
 - Keep contest speech in dedicated authenticated modules, separate from assistant speech, so pronunciation changes cannot regress assistant behavior.
 - Student finance summaries use a dedicated browser-safe helper mirroring teacher monthly-ledger rules (recorded charges or academic defaults, then payments/exemptions); settlement derives from all-month remaining to keep both views consistent.
 - Group-list filtering and print sizing stay in a dedicated browser-safe helper; print styles and fit-to-page behavior apply only to group lists to preserve other documents.
+- Exam-tab grade/group filtering stays in a dedicated browser-safe helper: an exam matches when its grade matches or is unset and its group matches or is unset (all-groups exam), while a student result matches the student's own grade and group.
