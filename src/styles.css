@@ -31,6 +31,14 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-list-paid: var(--list-paid);
+  --color-list-paid-soft: var(--list-paid-soft);
+  --color-list-unpaid: var(--list-unpaid);
+  --color-list-unpaid-soft: var(--list-unpaid-soft);
+  --color-list-exempt: var(--list-exempt);
+  --color-list-exempt-soft: var(--list-exempt-soft);
+  --color-list-partial: var(--list-partial);
+  --color-list-partial-soft: var(--list-partial-soft);
 
   --gradient-hero: var(--gradient-hero);
   --gradient-primary: var(--gradient-primary);
@@ -40,6 +48,14 @@
 }
 
 :root {
+  --list-paid: #047857;
+  --list-paid-soft: #e2f5eb;
+  --list-unpaid: #b91c1c;
+  --list-unpaid-soft: #fde8e8;
+  --list-exempt: #0369a1;
+  --list-exempt-soft: #e0f2fe;
+  --list-partial: #b45309;
+  --list-partial-soft: #fff1dc;
   --radius: 0.75rem;
   --background: oklch(0.99 0.005 240);
   --foreground: oklch(0.2 0.04 260);
