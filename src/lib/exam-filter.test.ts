@@ -49,4 +49,12 @@ describe("exam tab grade/group filter", () => {
     expect(groupsForExamFilter(groups, { grade: "الخامس الابتدائي", group: "" }).map((g) => g.id)).toEqual([G1]);
     expect(groupsForExamFilter(groups, { grade: "", group: "" })).toHaveLength(2);
   });
+
+  it("lists third-preparatory groups despite hamza spelling differences", () => {
+    const groups = [
+      { id: G1, name: "تالتة بنات", grade: "الثالث الاعدادي" },
+      { id: G2, name: "تانية بنين", grade: "الثاني الإعدادي" },
+    ];
+    expect(groupsForExamFilter(groups, { grade: "الثالث الإعدادي", group: "" }).map((g) => g.id)).toEqual([G1]);
+  });
 });

@@ -8,7 +8,7 @@ import { updateExamStatusAdmin, getExamsDataAdmin, saveExamFullAdmin, deleteExam
 import { QUESTION_KINDS, TERMS, GRADES, DIFFICULTIES } from "@/lib/exam-constants";
 import { PaperExamButtons, SourcePicker } from "@/components/PaperExamTools";
 import { ExamGradeGroupFilter } from "@/components/ExamGradeGroupFilter";
-import { filterExams, resultMatchesFilter, type ExamFilterValue } from "@/lib/exam-filter";
+import { filterExams, groupsForExamFilter, resultMatchesFilter, type ExamFilterValue } from "@/lib/exam-filter";
 
 export const Route = createFileRoute("/_authenticated/exams")({
   head: () => ({
@@ -72,7 +72,7 @@ function ExamsPage() {
   useEffect(() => { load(); }, []);
 
   const groupsForGrade = useMemo(
-    () => groups.filter((g) => !g.grade || !form.grade || g.grade === form.grade),
+    () => groupsForExamFilter(groups, { grade: form.grade, group: "" }),
     [groups, form.grade],
   );
 
