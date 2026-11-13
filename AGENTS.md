@@ -10,6 +10,7 @@
 <!-- LOVABLE:END -->
 
 - Keep paper-exam grounding and evidence retrieval in dedicated modules; online exam generation and lesson retrieval remain unchanged to prevent cross-feature regressions.
+- Keep exam formatting, adapters, pagination and exports in browser-safe dedicated modules that consume existing exam data without generating or altering questions, answers or scores; store format presets locally per signed-in teacher and grade family.
 - Verify paper citations against retrieved excerpts and derive source labels from stored metadata; AI-supplied source names and page numbers are never trusted.
 - Keep contest speech in dedicated authenticated modules, separate from assistant speech, so pronunciation changes cannot regress assistant behavior.
 - Student finance summaries use a dedicated browser-safe helper mirroring teacher monthly-ledger rules (recorded charges or academic defaults, then payments/exemptions); settlement derives from all-month remaining to keep both views consistent.

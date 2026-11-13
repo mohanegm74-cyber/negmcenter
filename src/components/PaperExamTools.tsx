@@ -6,6 +6,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { TERMS, GRADES } from "@/lib/exam-constants";
 import { Button } from "@/components/ui/button";
 import { reviewPaper } from "@/lib/paper-grounding";
+import { ExamPaperFormat } from "@/components/ExamPaperFormat";
+import { paperToFormat } from "@/lib/exam-format";
 import {
   createSourceUploadUrl, indexSource, saveSpec, createSourceRecord, saveSourcePages, finalizeSource, ocrPageImage, updateSource, getSourceFiles, getSourcePages, listSources, deleteSource, analyzeSpecs, generatePaperExam,
   type ExamSpec, type PaperSection,
@@ -398,6 +400,7 @@ function PaperExamBuilder({ onClose }: { onClose: () => void }) {
   const [busy, setBusy] = useState(false);
   const [strictSources, setStrictSources] = useState(true);
   const [evidenceView, setEvidenceView] = useState<{ title: string; locator: string; quote: string } | null>(null);
+  const [paperTab, setPaperTab] = useState<"build" | "format">("build");
   const paperReview = spec && sections ? reviewPaper(spec, sections, strictSources) : null;
 
   useEffect(() => {
@@ -462,6 +465,12 @@ function PaperExamBuilder({ onClose }: { onClose: () => void }) {
 
   return (
     <Modal title="توليد امتحان ورقي (للمدرس فقط)" onClose={onClose}>
+      <div className="mb-4 flex gap-2 border-b pb-3" role="tablist">
+        <Button role="tab" aria-selected={paperTab === "build"} variant={paperTab === "build" ? "default" : "outline"} onClick={() => setPaperTab("build")}>إعداد الامتحان</Button>
+        <Button role="tab" aria-selected={paperTab === "format"} variant={paperTab === "format" ? "default" : "outline"} onClick={() => setPaperTab("format")}>تنسيق ورقة الامتحان</Button>
+      </div>
+      {paperTab === "format" && <ExamPaperFormat exam={spec && sections ? paperToFormat(spec, sections, info) : null} />}
+      <div hidden={paperTab !== "build"}>
       {/* Step 1 */}
       <div className="grid gap-3 rounded-2xl border p-4 sm:grid-cols-3">
         <select className={inputCls} value={info.grade} onChange={(e) => setInfo({ ...info, grade: e.target.value })}>{GRADES.map((g) => <option key={g}>{g}</option>)}</select>
@@ -580,6 +589,7 @@ function PaperExamBuilder({ onClose }: { onClose: () => void }) {
         <div className="flex items-center justify-between gap-3"><h3 className="text-sm font-bold">{evidenceView.title} — {evidenceView.locator}</h3><Button variant="ghost" size="icon" aria-label="إغلاق المرجع" onClick={() => setEvidenceView(null)}><X /></Button></div>
         <blockquote className="mt-2 whitespace-pre-wrap border-s-2 border-primary ps-3 text-sm leading-7">{evidenceView.quote}</blockquote>
       </div>}
+      </div>
     </Modal>
   );
 }

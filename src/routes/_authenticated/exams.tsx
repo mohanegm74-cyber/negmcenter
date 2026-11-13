@@ -9,6 +9,9 @@ import { QUESTION_KINDS, TERMS, GRADES, DIFFICULTIES } from "@/lib/exam-constant
 import { PaperExamButtons, SourcePicker } from "@/components/PaperExamTools";
 import { ExamGradeGroupFilter } from "@/components/ExamGradeGroupFilter";
 import { filterExams, groupsForExamFilter, resultMatchesFilter, type ExamFilterValue } from "@/lib/exam-filter";
+import { Button } from "@/components/ui/button";
+import { ExamPaperFormat } from "@/components/ExamPaperFormat";
+import { onlineToFormat, type FormatExam } from "@/lib/exam-format";
 
 export const Route = createFileRoute("/_authenticated/exams")({
   head: () => ({
@@ -43,6 +46,10 @@ function ExamsPage() {
   const [previewExam, setPreviewExam] = useState<{ id?: string; exam: any; questions: any[] } | null>(null);
   const [analysisExamId, setAnalysisExamId] = useState<string>("");
   const [filter, setFilter] = useState<ExamFilterValue>({ grade: "", group: "" });
+  const [pageTab, setPageTab] = useState<"exams" | "format">("exams");
+  const [formatExamId, setFormatExamId] = useState("");
+  const [formatExam, setFormatExam] = useState<FormatExam | null>(null);
+  const [formatLoading, setFormatLoading] = useState(false);
 
   const gen = useServerFn(generateExam);
   const updateStatusFn = useServerFn(updateExamStatusAdmin);
@@ -70,6 +77,16 @@ function ExamsPage() {
     finally { setLoading(false); }
   }
   useEffect(() => { load(); }, []);
+
+  useEffect(() => {
+    if (!formatExamId) { setFormatExam(null); return; }
+    let cancelled = false;
+    const selected = exams.find(e => e.id === formatExamId);
+    if (!selected) return;
+    setFormatLoading(true); setFormatExam(null);
+    loadQuestionsFn({ data: { examId: formatExamId } }).then(res => { if (!cancelled) setFormatExam(onlineToFormat(selected, res.questions || [])); }).catch(() => { if (!cancelled) toast.error("تعذر تحميل الامتحان للتنسيق"); }).finally(() => { if (!cancelled) setFormatLoading(false); });
+    return () => { cancelled = true; };
+  }, [formatExamId, exams]);
 
   const groupsForGrade = useMemo(
     () => groupsForExamFilter(groups, { grade: form.grade, group: "" }),
@@ -231,6 +248,20 @@ function ExamsPage() {
         </div>
       </div>
 
+      <div className="flex flex-wrap gap-2 border-b pb-3" role="tablist" aria-label="تبويبات الاختبارات">
+        <Button role="tab" aria-selected={pageTab === "exams"} variant={pageTab === "exams" ? "default" : "outline"} onClick={() => setPageTab("exams")}>الاختبارات ونتائجها</Button>
+        <Button role="tab" aria-selected={pageTab === "format"} variant={pageTab === "format" ? "default" : "outline"} onClick={() => setPageTab("format")}>تنسيق ورقة الامتحان</Button>
+      </div>
+      {pageTab === "format" && <div className="space-y-4">
+        <label className="block text-sm font-bold">الامتحان الحالي
+          <select aria-label="اختيار الامتحان للتنسيق" className="mt-2 w-full rounded-lg border bg-background p-3" value={formatExamId} onChange={e => setFormatExamId(e.target.value)}>
+            <option value="">{previewExam ? "الامتحان الجاري تحريره" : "اختر امتحانًا محفوظًا"}</option>
+            {exams.map(ex => <option key={ex.id} value={ex.id}>{ex.title} — {ex.grade || "عام"}</option>)}
+          </select>
+        </label>
+        {formatLoading ? <Loader2 className="h-6 w-6 animate-spin text-primary" /> : <ExamPaperFormat exam={formatExamId ? formatExam : previewExam ? onlineToFormat(previewExam.exam, previewExam.questions) : null} />}
+      </div>}
+      <div hidden={pageTab !== "exams"} className="space-y-6">
       {(createMode || previewExam) && (
         <section className="rounded-3xl border-2 border-primary/10 bg-white p-6 shadow-sm animate-in slide-in-from-top-4">
           <div className="mb-6 flex items-center justify-between">
@@ -477,6 +508,7 @@ function ExamsPage() {
           </div>
         )}
       </section>
+      </div>
     </div>
   );
 }

@@ -48,6 +48,11 @@
 }
 
 :root {
+  --paper-ink: #173e61;
+  --paper-accent: #b8202d;
+  --paper-band: #e1e9f2;
+  --paper-background: #ffffff;
+  --paper-text: #171717;
   --list-paid: #047857;
   --list-paid-soft: #e2f5eb;
   --list-unpaid: #b91c1c;

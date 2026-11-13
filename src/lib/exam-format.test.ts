@@ -1,0 +1,13 @@
+import { describe, it, expect } from "vitest";
+import { defaultFormat, orderedSections, answerLines, onlineToFormat, examBlocks, formatWarnings, type FormatExam } from "./exam-format";
+const exam: FormatExam = { title: "امتحان", grade: "الأول الإعدادي", subject: "عربي", duration: 90, total: 12, notes: "", sections: ["النحو", "نص الاستماع", "القراءة الأول", "القراءة الثاني"].map(title => ({ title, instructions: "", questions: [{ prompt: "سؤال", answer: "الإجابة الأصلية", options: [], score: 3, lines: 2 }] })) };
+describe("existing exam formatting rules", () => {
+  it("places existing listening first for first and second grades", () => { for (const grade of ["الأول الإعدادي", "الثاني الإعدادي"]) expect(orderedSections({ ...exam, grade }, defaultFormat())[0].title).toBe("نص الاستماع"); });
+  it("starts third grade with both reading sections without adding listening", () => { const third = { ...exam, grade: "الثالث الإعدادي", sections: exam.sections.filter(s => !s.title.includes("استماع")) }; expect(orderedSections(third, defaultFormat()).map(s => s.title)).toEqual(["القراءة الأول", "القراءة الثاني", "النحو"]); });
+  it("never deletes incompatible source sections and warns", () => { const third = { ...exam, grade: "الثالث الإعدادي" }; expect(formatWarnings(third)).toHaveLength(1); expect(orderedSections(third, defaultFormat())).toHaveLength(4); });
+  it("compact layout removes only answer spaces", () => { expect(answerLines(exam.sections[0].questions[0], "النحو", { ...defaultFormat(), mode: "compact" })).toBe(0); });
+  it("provides writing space proportional to score", () => { expect(answerLines({ ...exam.sections[0].questions[0], score: 8 }, "التعبير الكتابي", defaultFormat())).toBe(12); });
+  it("preserves original answer and score in existing-data adapter", () => { const out = onlineToFormat({ title: "اختبار", total_score: 7 }, [{ prompt: "سؤال", correct_answer: "إجابة معتمدة", score: 7, rationale: "عنصر معتمد" }]); expect(out.sections[0].questions[0]).toMatchObject({ answer: "إجابة معتمدة", score: 7, details: "عنصر معتمد" }); });
+  it("exports existing answers only without fabricating model answers", () => { const blocks = examBlocks(exam, defaultFormat(), true); expect(blocks.filter(b => b.kind === "answer").map(b => b.text)).toEqual(Array(4).fill("الإجابة الأصلية")); });
+  it("keeps shared passages before associated questions once", () => { const shared = { ...exam, sections: [{ ...exam.sections[0], questions: Array(2).fill({ ...exam.sections[0].questions[0], passage: "قطعة أصلية" }) }] }; const blocks = examBlocks(shared, defaultFormat(), false); expect(blocks.filter(b => b.kind === "passage")).toHaveLength(1); expect(blocks[1].text).toBe("قطعة أصلية"); });
+});
