@@ -9,7 +9,7 @@ import { reviewPaper } from "@/lib/paper-grounding";
 import { ExamPaperFormat } from "@/components/ExamPaperFormat";
 import { paperToFormat } from "@/lib/exam-format";
 import {
-  createSourceUploadUrl, indexSource, saveSpec, createSourceRecord, saveSourcePages, finalizeSource, ocrPageImage, updateSource, getSourceFiles, getSourcePages, listSources, deleteSource, analyzeSpecs, generatePaperExam,
+  createSourceUploadUrl, indexSource, saveSpec, createSourceRecord, saveSourcePages, finalizeSource, ocrPageImage, updateSource, getSourceFiles, getSourcePages, listSources, deleteSource, analyzeSpecs, generatePaperExam, savePaperExam, listPaperExams, deletePaperExam,
   type ExamSpec, type PaperSection,
 } from "@/lib/paper-exam.functions";
 
@@ -101,7 +101,7 @@ function SourcesManager({ onClose }: { onClose: () => void }) {
   const updFn = useServerFn(updateSource);
   const filesFn = useServerFn(getSourceFiles);
   const viewFn = useServerFn(getSourcePages);
-  const [meta, setMeta] = useState({ grade: GRADES[0] as string, term: "", subject: "", lesson: "", title: "" });
+  const [meta, setMeta] = useState({ grade: GRADES[0] as string, term: "", subject: "اللغة العربية", lesson: "", title: "" });
   const [files, setFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState("");
@@ -390,7 +390,13 @@ function PaperExamBuilder({ onClose }: { onClose: () => void }) {
   const [savedSpecs, setSavedSpecs] = useState<any[]>([]);
   const [specPath, setSpecPath] = useState<string | undefined>();
   const loadSpecs = () => listFn({ data: { grade: info.grade, term: info.term, kind: "spec" } }).then((r: any) => setSavedSpecs(Array.isArray(r) ? r : [])).catch(() => setSavedSpecs([]));
-  const [info, setInfo] = useState({ grade: GRADES[0] as string, term: "", subject: "", lessons: "" });
+  const [info, setInfo] = useState({ grade: GRADES[0] as string, term: "", subject: "اللغة العربية", lessons: "" });
+  const savePaperFn = useServerFn(savePaperExam);
+  const listPaperFn = useServerFn(listPaperExams);
+  const delPaperFn = useServerFn(deletePaperExam);
+  const [savedPapers, setSavedPapers] = useState<any[]>([]);
+  const [paperId, setPaperId] = useState<string | undefined>();
+  const loadPapers = () => listPaperFn().then((r: any) => setSavedPapers(Array.isArray(r) ? r : [])).catch(() => setSavedPapers([]));
   const [sources, setSources] = useState<any[]>([]);
   const [picked, setPicked] = useState<string[]>([]);
   const [specText, setSpecText] = useState("");
@@ -413,6 +419,21 @@ function PaperExamBuilder({ onClose }: { onClose: () => void }) {
     loadSpecs();
     return () => { cancelled = true; };
   }, [info.grade, info.term, info.subject]);
+
+  useEffect(() => { loadPapers(); }, []);
+  async function storePaper() {
+    if (!spec || !sections) return;
+    try {
+      const r = await savePaperFn({ data: { id: paperId, title: spec.title, grade: info.grade, term: info.term, subject: info.subject, lessons: info.lessons, sourceIds: picked, spec, sections } });
+      setPaperId(r.id); toast.success("تم حفظ الامتحان الورقي"); loadPapers();
+    } catch (e: any) { toast.error(e.message); }
+  }
+  function openPaper(p: any) {
+    setInfo({ grade: p.grade || GRADES[0], term: p.term || "", subject: p.subject || "اللغة العربية", lessons: p.lessons || "" });
+    setTimeout(() => setPicked(p.source_ids || []), 300);
+    setSpec(p.spec); setSections(p.sections); setPaperId(p.id);
+    toast.success(`تم فتح «${p.title}»`);
+  }
 
   async function storeSpec() {
     if (!spec) return;
@@ -448,7 +469,7 @@ function PaperExamBuilder({ onClose }: { onClose: () => void }) {
     const t = toast.loading("جاري توليد الامتحان من المصادر...");
     try {
       const r = await genFn({ data: { grade: info.grade, term: info.term, subject: info.subject, lessons: info.lessons, sourceIds: picked, spec, strictSources } });
-      setSections(r.sections);
+      setSections(r.sections); setPaperId(undefined);
       r.warnings.forEach((w: string) => toast.warning(w));
       toast.success("تم توليد الامتحان", { id: t });
     } catch (e: any) { toast.error(e.message || "فشل التوليد", { id: t }); }
@@ -471,6 +492,19 @@ function PaperExamBuilder({ onClose }: { onClose: () => void }) {
       </div>
       {paperTab === "format" && <ExamPaperFormat exam={spec && sections ? paperToFormat(spec, sections, info) : null} />}
       <div hidden={paperTab !== "build"}>
+      {savedPapers.length > 0 && (
+        <div className="mb-3 rounded-2xl border p-3">
+          <div className="mb-2 text-xs font-black text-muted-foreground">الامتحانات الورقية المحفوظة ({savedPapers.length})</div>
+          <div className="flex max-h-32 flex-wrap gap-2 overflow-y-auto">
+            {savedPapers.map((p) => (
+              <span key={p.id} className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-bold ${paperId === p.id ? "border-primary bg-primary/10 text-primary" : ""}`}>
+                <button onClick={() => openPaper(p)}>{p.title}{p.grade ? ` • ${p.grade}` : ""}</button>
+                <button aria-label="حذف" className="text-destructive" onClick={async () => { if (!confirm(`حذف «${p.title}»؟`)) return; await delPaperFn({ data: { id: p.id } }); if (paperId === p.id) setPaperId(undefined); loadPapers(); }}><Trash2 className="h-3 w-3" /></button>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
       {/* Step 1 */}
       <div className="grid gap-3 rounded-2xl border p-4 sm:grid-cols-3">
         <select className={inputCls} value={info.grade} onChange={(e) => setInfo({ ...info, grade: e.target.value })}>{GRADES.map((g) => <option key={g}>{g}</option>)}</select>
@@ -579,6 +613,7 @@ function PaperExamBuilder({ onClose }: { onClose: () => void }) {
             </div>
           ))}
           <div className="flex flex-wrap gap-2 border-t pt-4">
+            <Button variant="secondary" onClick={storePaper}><FolderPlus className="h-4 w-4" /> {paperId ? "حفظ التعديلات" : "حفظ الامتحان"}</Button>
             <Button onClick={() => { if (allowExport()) exportDocx(spec, sections, info, false).catch((e) => toast.error(e.message)); }}><FileDown className="h-4 w-4" /> تصدير Word</Button>
             <Button variant="outline" onClick={() => { if (allowExport()) exportDocx(spec, sections, info, true).catch((e) => toast.error(e.message)); }}><FileDown className="h-4 w-4" /> نموذج الإجابة Word</Button>
             <Button variant="outline" onClick={() => { if (allowExport()) printPreview(spec, sections, info); }}><Printer className="h-4 w-4" /> معاينة الطباعة</Button>

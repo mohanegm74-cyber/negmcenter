@@ -116,11 +116,13 @@ export async function askTeacherAssistant(history: { role: string; content: stri
 {"type":"delete_homework","homework":"العنوان بالظبط"}
 {"type":"delete_group","group":"اسم"}
 {"type":"publish_exam","exam":"عنوان الاختبار","publish":true}
+{"type":"paper_exam","title":"","grade":"","term":"اختياري","subject":"اللغة العربية افتراضياً","lessons":"اختياري","duration_minutes":60,"header_notes":"تعليمات عامة","sections":[{"title":"السؤال الأول: القراءة","kind":"اختيار من متعدد|أكمل|صح وخطأ|مقالي|تعبير","count":5,"score_each":1,"instructions":"تعليمات القسم كما قالها الأستاذ"}]}
 {"type":"certificate","student":"اسم","title":"شهادة تقدير","reason":"اختياري"}
 {"type":"restore_student","student":"اسم أو كود طالب مؤرشف"}
 {"type":"exam_score","student":"اسم","score":18,"max_score":20,"exam":"اسم الاختبار اختياري","note":"اختياري","date":"اختياري"}
 الماليات: الدفع kind=payment، الإعفاء kind=exempt، إضافة مستحق/رسوم kind=charge؛ لعدة طلاب ضع action منفصلة لكل طالب.
 ملاحظات التسميع: استخدم record مع recitation_level و note. تقييم الواجب: grade_homework. درجات الاختبار (ورقي أو إلكتروني): exam_score.
+الامتحان الورقي: لو الأستاذ طلب امتحان ورقي أو أملى تعليمات امتحان (أقسام، عدد أسئلة، درجات، زمن، تعليمات) استخدم paper_exam وحوّل كل جزء لقسم في sections بالترتيب، والمادة الافتراضية اللغة العربية. الاختبار الإلكتروني فقط يستخدم exam.
 الحذف: نفّذه فقط لو الأستاذ قال صراحة احذف وحدد الطالب/المجموعة/الواجب بوضوح. نشر الاختبار فقط لو قال انشر صراحة.
 اكتب reply دائمًا باللهجة المصرية العامية بجمل قصيرة مناسبة للقراءة بالصوت، بدون رموز أو جداول.
 لو الأمر ناقص معلومة أساسية (مثلاً المبلغ أو اسم الطالب) أو الاسم غامض، اسأل ولا تضع actions. لو مجرد سؤال، اجعل actions فارغة.

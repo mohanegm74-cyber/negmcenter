@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { cleanArabic } from "./paper-text";
 import { paperGenerationSchema, type PaperCitation } from "./paper-grounding";
 
 export type SpecSection = { title: string; kind: string; count: number; score_each: number; instructions?: string };
@@ -275,14 +276,15 @@ ${spec.sections.map((s, i) => `${i + 1}) ${s.title} — النوع: ${s.kind} �
 المجموع الكلي: ${spec.total_score}
 ${sourceText ? `اعتمد في صياغة الأسئلة على المصادر التالية فقط قدر الإمكان:\n${sourceText}` : "اعتمد على المنهج المصري الرسمي."}
 
+اكتب الأسئلة بصياغتك العربية الواضحة السليمة ولا تنسخ نص المصادر حرفياً.
 أرجع JSON فقط: {"sections":[{"questions":[{"prompt":"نص البند","options":["أ","ب"],"answer":"الإجابة النموذجية"}]}]}
 عدد عناصر sections يساوي ${spec.sections.length} وبنفس الترتيب. options فارغة إذا لم يكن السؤال اختيارياً.`;
     const out = parseJson(await callAi("أنت معلم أول خبير في وضع الامتحانات المصرية. ترجع JSON صالحاً فقط.", prompt, true));
     const gen = Array.isArray(out?.sections) ? out.sections : [];
     const sections: PaperSection[] = spec.sections.map((s, i) => {
       const qs = (Array.isArray(gen[i]?.questions) ? gen[i].questions : []).slice(0, s.count).map((q: any) => ({
-        prompt: String(q?.prompt || ""), options: Array.isArray(q?.options) ? q.options.map(String) : [],
-        answer: String(q?.answer || ""), score: s.score_each, lines: Array.isArray(q?.options) && q.options.length ? 0 : 2,
+        prompt: cleanArabic(q?.prompt), options: Array.isArray(q?.options) ? q.options.map(cleanArabic) : [],
+        answer: cleanArabic(q?.answer), score: s.score_each, lines: Array.isArray(q?.options) && q.options.length ? 0 : 2,
       }));
       while (qs.length < s.count) qs.push({ prompt: "", options: [], answer: "", score: s.score_each, lines: 2 });
       return { ...s, questions: qs };
@@ -303,6 +305,46 @@ export const saveSpec = createServerFn({ method: "POST" })
       path: data.path || "", status: "indexed", spec: spec as any,
       extracted_text: spec.sections.map((s) => `${s.title} ${s.kind} ${s.count}×${s.score_each}`).join("\n"),
     });
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+const paperExamSchema = (d: unknown) => d as { id?: string; title: string; grade: string; term?: string; subject: string; lessons?: string; sourceIds?: string[]; spec: ExamSpec; sections: PaperSection[] };
+
+export async function storePaperExam(d: ReturnType<typeof paperExamSchema>, userId?: string) {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const row = { title: (d.title || d.spec?.title || "امتحان ورقي").slice(0, 200), grade: d.grade || null, term: d.term || null, subject: d.subject || null, lessons: d.lessons || null, source_ids: d.sourceIds || [], spec: d.spec as any, sections: d.sections as any, updated_at: new Date().toISOString() };
+  const q = d.id ? supabaseAdmin.from("paper_exams").update(row).eq("id", d.id) : supabaseAdmin.from("paper_exams").insert({ ...row, created_by: userId || null });
+  const { data, error } = await q.select("id").single();
+  if (error) throw new Error(error.message);
+  return { id: data.id as string };
+}
+
+export const savePaperExam = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(paperExamSchema)
+  .handler(async ({ data, context }) => {
+    await assertTeacher(context);
+    return storePaperExam(data, (context as any).userId);
+  });
+
+export const listPaperExams = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await assertTeacher(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data, error } = await supabaseAdmin.from("paper_exams").select("id,title,grade,term,subject,lessons,source_ids,spec,sections,updated_at").order("updated_at", { ascending: false }).limit(100);
+    if (error) throw new Error(error.message);
+    return data || [];
+  });
+
+export const deletePaperExam = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => d as { id: string })
+  .handler(async ({ data, context }) => {
+    await assertTeacher(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await supabaseAdmin.from("paper_exams").delete().eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true };
   });

@@ -17,6 +17,7 @@ export type AssistantAction =
   | { type: "delete_homework"; homework: string }
   | { type: "delete_group"; group: string }
   | { type: "publish_exam"; exam: string; publish?: boolean }
+  | { type: "paper_exam"; title?: string; grade?: string; term?: string; subject?: string; lessons?: string; duration_minutes?: number; header_notes?: string; sections?: { title: string; kind?: string; count?: number; score_each?: number; instructions?: string }[] }
   | { type: "certificate"; student: string; title?: string; reason?: string }
   | { type: "restore_student"; student: string }
   | { type: "exam_score"; student: string; score: number; max_score?: number; exam?: string; note?: string; date?: string };
@@ -193,6 +194,25 @@ export async function executeActions(actions: AssistantAction[]): Promise<string
         if (error) throw new Error(error.message);
         await db.from("exam_questions").insert(qs.map((q: any, i: number) => ({ exam_id: ex.id, position: i, kind: q.kind || "اختيار من متعدد", prompt: String(q.prompt || ""), options: Array.isArray(q.options) ? q.options : [], correct_answer: q.correct_answer ?? null, rationale: q.rationale || null, skill: q.skill || null, difficulty: q.difficulty || "متوسط", score: Number(q.score) || 1 })));
         out.push(`✅ اتكتب اختبار «${ex.title}» (${qs.length} سؤال) كمسودة في تبويب الاختبارات — راجعه وانشره بنفسك`);
+      } else if (a.type === "paper_exam") {
+        const secs = (a.sections || []).filter((x) => x?.title).map((x) => ({ title: String(x.title), kind: String(x.kind || "مقالي"), count: Math.min(20, Math.max(1, Number(x.count) || 1)), score_each: Math.max(0.5, Number(x.score_each) || 1), instructions: String(x.instructions || "") }));
+        if (!secs.length) { out.push("❌ قولّي أقسام الامتحان وعدد الأسئلة ودرجة كل سؤال"); continue; }
+        const grade = a.grade || "", subject = a.subject || "اللغة العربية";
+        const spec = { title: String(a.title || `امتحان ${subject}`).slice(0, 200), duration_minutes: Number(a.duration_minutes) || 60, total_score: secs.reduce((t, x) => t + x.count * x.score_each, 0), header_notes: String(a.header_notes || ""), sections: secs } as any;
+        let sq = db.from("exam_sources").select("id").eq("kind", "source").eq("status", "indexed").limit(20);
+        if (grade) sq = sq.eq("grade", grade);
+        sq = sq.ilike("subject", `%${subject.replace(/^اللغة\s*/, "")}%`);
+        const { data: srcs } = await sq;
+        const ids = (srcs || []).map((x: any) => x.id);
+        if (!ids.length) { out.push(`❌ مفيش مصادر مفهرسة لـ${subject}${grade ? ` ${grade}` : ""}، ارفع المصدر الأول`); continue; }
+        const info = { grade, term: a.term || "", subject, lessons: a.lessons || "" };
+        const { retrievePaperEvidence } = await import("./paper-sources.server");
+        const { generateGroundedPaper } = await import("./paper-generation.server");
+        const { storePaperExam } = await import("./paper-exam.functions");
+        const evidence = await retrievePaperEvidence(ids, info.lessons, info);
+        const r = await generateGroundedPaper(info, spec, evidence);
+        await storePaperExam({ ...info, title: spec.title, sourceIds: ids, spec: r.spec, sections: r.sections });
+        out.push(`✅ اتعمل الامتحان الورقي «${spec.title}» من المصادر واتحفظ، افتحه من زر امتحان ورقي عشان تراجعه وتنسقه`);
       } else if (a.type === "grade_homework") {
         const { data: hws } = await db.from("homework").select("id,title").limit(500);
         const n = norm(a.homework);

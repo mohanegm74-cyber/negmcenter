@@ -724,6 +724,51 @@ export type Database = {
           },
         ]
       }
+      paper_exams: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          grade: string | null
+          id: string
+          lessons: string | null
+          sections: Json
+          source_ids: string[]
+          spec: Json
+          subject: string | null
+          term: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          grade?: string | null
+          id?: string
+          lessons?: string | null
+          sections: Json
+          source_ids?: string[]
+          spec: Json
+          subject?: string | null
+          term?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          grade?: string | null
+          id?: string
+          lessons?: string | null
+          sections?: Json
+          source_ids?: string[]
+          spec?: Json
+          subject?: string | null
+          term?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       payments: {
         Row: {
           amount: number
