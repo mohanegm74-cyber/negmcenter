@@ -1,4 +1,4 @@
-import fontAsset from "@/assets/exam-arabic.ttf.asset.json";
+import fontAsset from "@/assets/exam-amiri.ttf.asset.json";
 import { examBlocks, type FormatExam, type FormatSettings } from "./exam-format";
 
 // Document colors are shared with the semantic paper tokens in styles.css.
@@ -26,8 +26,23 @@ export async function createFormatPdf(exam: FormatExam, settings: FormatSettings
   const palette = settings.template === "mono" ? PAPER_PALETTES.mono : PAPER_PALETTES[settings.heading];
   const m = settings.margin + 4, width = 210 - 2 * m, bottom = 297 - m - 12;
   let y = m;
+  const wrap = (value: string, size: number) => {
+    pdf.setFontSize(size);
+    const result: string[] = [];
+    for (const paragraph of value.split(/\r?\n/)) {
+      let line = "";
+      for (const word of paragraph.split(/\s+/)) {
+        const candidate = line ? `${line} ${word}` : word;
+        // Measure shaped Arabic, not the unshaped codepoints used by splitTextToSize.
+        if (line && pdf.getTextWidth(pdf.processArabic(candidate)) > width - 4) { result.push(line); line = word; }
+        else line = candidate;
+      }
+      result.push(line);
+    }
+    return result;
+  };
   const text = (value: string, top: number, size: number, color = palette.text, center = false) => {
-    pdf.setFontSize(size); pdf.setTextColor(color); pdf.text(value, center ? 105 : 210 - m, top, { align: center ? "center" : "right" });
+    pdf.setFontSize(size); pdf.setTextColor(color); pdf.text(value, center ? 105 : 210 - m, top, { align: center ? "center" : "right", isInputVisual: false, isOutputVisual: true, isInputRtl: true, isOutputRtl: false });
   };
   const frame = () => {
     pdf.setDrawColor(palette.ink); if (settings.border) pdf.roundedRect(settings.margin, settings.margin, 210 - settings.margin * 2, 297 - settings.margin * 2, 3, 3);
@@ -38,7 +53,7 @@ export async function createFormatPdf(exam: FormatExam, settings: FormatSettings
   frame();
   const write = (value: string, size: number, color: string, centered = false) => {
     pdf.setFontSize(size);
-    const lines: string[] = pdf.splitTextToSize(value, width);
+    const lines = wrap(value, size);
     const height = size * 0.3528 * 1.45;
     for (const line of lines) { if (y + height > bottom) next(); text(line, y, size, color, centered); y += height; }
     y += settings.spacing;
@@ -52,7 +67,7 @@ export async function createFormatPdf(exam: FormatExam, settings: FormatSettings
   blocks.forEach((block, i) => {
     const size = block.kind === "section" ? settings.size + 1 : settings.size;
     pdf.setFontSize(size);
-    const lines: string[] = pdf.splitTextToSize(block.text, width - 4);
+    const lines = wrap(block.text, size);
     const height = size * 0.3528 * 1.45;
     // Keep headings/passages with at least the first associated question line.
     const needed = block.kind === "line" ? 7 : lines.length * height + settings.spacing + (block.keepNext && blocks[i + 1] ? height * 2 : 0);

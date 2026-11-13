@@ -12,7 +12,7 @@ export function ExamPaperFormat({ exam }: { exam: FormatExam | null }) {
   const [settings, setSettings] = useState(defaultFormat);
   const [grade, setGrade] = useState(exam?.grade || GRADES[0]);
   const [answers, setAnswers] = useState(false);
-  const [pdfUrl, setPdfUrl] = useState("");
+  const [pages, setPages] = useState<string[]>([]);
   const [previewBusy, setPreviewBusy] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -27,12 +27,30 @@ export function ExamPaperFormat({ exam }: { exam: FormatExam | null }) {
   const current = exam ? { ...exam, grade } : null;
   useEffect(() => {
     if (!current) return;
-    let cancelled = false; let url = "";
+    let cancelled = false;
     setPreviewBusy(true); setError("");
     const timer = setTimeout(() => {
-      createFormatPdf(current, settings, answers).then(blob => { if (!cancelled) { url = URL.createObjectURL(blob); setPdfUrl(url); } }).catch(e => { if (!cancelled) setError(e.message); }).finally(() => { if (!cancelled) setPreviewBusy(false); });
+      createFormatPdf(current, settings, answers).then(async blob => {
+        const pdfjs = await import("pdfjs-dist");
+        const worker = await import("pdfjs-dist/build/pdf.worker.min.mjs?url");
+        pdfjs.GlobalWorkerOptions.workerSrc = worker.default;
+        const task = pdfjs.getDocument({ data: new Uint8Array(await blob.arrayBuffer()) });
+        const pdf = await task.promise;
+        const images: string[] = [];
+        try {
+          for (let n = 1; n <= pdf.numPages; n++) {
+            if (cancelled) return;
+            const page = await pdf.getPage(n); const viewport = page.getViewport({ scale: 1.4 });
+            const canvas = document.createElement("canvas"); canvas.width = Math.ceil(viewport.width); canvas.height = Math.ceil(viewport.height);
+            const context = canvas.getContext("2d"); if (!context) throw new Error("تعذر عرض صفحة الامتحان");
+            await page.render({ canvas, canvasContext: context, viewport }).promise;
+            images.push(canvas.toDataURL("image/png")); page.cleanup();
+          }
+          if (!cancelled) setPages(images);
+        } finally { await task.destroy(); }
+      }).catch(e => { if (!cancelled) setError(e.message); }).finally(() => { if (!cancelled) setPreviewBusy(false); });
     }, 350);
-    return () => { cancelled = true; clearTimeout(timer); if (url) URL.revokeObjectURL(url); };
+    return () => { cancelled = true; clearTimeout(timer); };
   }, [exam, grade, settings, answers]);
   const update = <K extends keyof FormatSettings>(key: K, value: FormatSettings[K]) => setSettings(s => ({ ...s, [key]: value }));
   async function save() {
@@ -78,7 +96,7 @@ export function ExamPaperFormat({ exam }: { exam: FormatExam | null }) {
         {current && formatWarnings(current).map(w => <p key={w} className="text-sm text-destructive">{w}</p>)}
         {!current ? <div className="flex min-h-80 items-center justify-center border border-dashed p-6 text-center text-sm text-muted-foreground">اختر امتحانًا محفوظًا، أو أكمل إنشاء الامتحان الحالي لعرضه هنا.</div> : <div className="relative">
           {previewBusy && <div className="absolute end-3 top-3 z-10 rounded-lg bg-background p-2"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>}
-          {error ? <p role="alert" className="p-6 text-destructive">{error}</p> : pdfUrl && <iframe title="معاينة ورقة الامتحان" src={pdfUrl} className="h-[780px] w-full rounded-lg border bg-muted" />}
+          {error ? <p role="alert" className="p-6 text-destructive">{error}</p> : <div className="max-h-[900px] min-h-80 space-y-4 overflow-y-auto rounded-lg border bg-muted p-2">{pages.map((src, i) => <img key={i} src={src} alt={`معاينة ورقة الامتحان — صفحة ${i + 1}`} className="h-auto w-full" />)}</div>}
         </div>}
         <div className="grid grid-cols-2 gap-2">{([false, true] as const).flatMap(model => (["docx", "pdf"] as const).map(ext => <Button key={`${model}-${ext}`} variant={model ? "outline" : "default"} disabled={!current || busy} className="h-auto whitespace-normal py-3" onClick={() => exportFile(ext, model)}><FileDown className="h-4 w-4 shrink-0" /> {model ? "نموذج الإجابة" : "الامتحان"} {ext === "docx" ? "Word" : "PDF"}</Button>))}</div>
       </div>
